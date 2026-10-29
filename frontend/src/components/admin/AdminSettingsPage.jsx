@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building, Check, Save, Globe, Info, Loader2, HardDrive, Trash2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUp, ArrowDown, UploadCloud, Eye } from 'lucide-react';
+import { Check, Save, Globe, Info, Loader2, HardDrive, Trash2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUp, ArrowDown, UploadCloud, Eye } from 'lucide-react';
 import { getWebsiteSettings, saveWebsiteSettings, getAllHeroImages, createHeroImage, updateHeroImageOrder, updateHeroImage, deleteHeroImage } from '../../api/websiteSettingsApi';
 import { getStorageMetrics, triggerStorageCleanup, updateStorageSettings } from '../../api/storageApi';
 import { uploadFile, resolveFileUrl } from '../../api/fileApi';
@@ -35,6 +35,8 @@ export default function AdminSettingsPage() {
 
   // Website Content State
   const [landingPageContent, setLandingPageContent] = useState({
+    academyName: 'Zoro English Academy',
+    tagline: 'Small Steps Big Communication',
     heroBadge: 'Learn Today. Grow Tomorrow.',
     heroHeading: 'Skills for a Brighter Tomorrow',
     heroDescription: 'Build skills. Boost confidence. Unlock potential through world-class interactive live classes tailored for children aged 5 to 16.',
@@ -73,10 +75,23 @@ export default function AdminSettingsPage() {
     try {
       const webRes = await getWebsiteSettings();
       if (webRes.data) {
-        if (webRes.data.landingPageContent) setLandingPageContent(webRes.data.landingPageContent);
+        const loadedGen = webRes.data.generalInfo || {};
+        const loadedLanding = webRes.data.landingPageContent || {};
+        const resolvedName = loadedLanding.academyName || loadedGen.academyName || 'Zoro English Academy';
+        const resolvedTagline = loadedLanding.tagline || loadedGen.tagline || 'Small Steps Big Communication';
+
+        setLandingPageContent({
+          ...loadedLanding,
+          academyName: resolvedName,
+          tagline: resolvedTagline
+        });
+        setGeneralInfo({
+          ...loadedGen,
+          academyName: resolvedName,
+          tagline: resolvedTagline
+        });
         if (webRes.data.aboutPageContent) setAboutPageContent(webRes.data.aboutPageContent);
         if (webRes.data.contactPageContent) setContactPageContent(webRes.data.contactPageContent);
-        if (webRes.data.generalInfo) setGeneralInfo(webRes.data.generalInfo);
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -87,11 +102,24 @@ export default function AdminSettingsPage() {
     if (e) e.preventDefault();
     setIsSaving(true);
     try {
+      const resolvedName = landingPageContent.academyName || generalInfo.academyName || 'Zoro English Academy';
+      const resolvedTagline = landingPageContent.tagline !== undefined ? landingPageContent.tagline : (generalInfo.tagline || 'Small Steps Big Communication');
+      const payloadGeneral = {
+        ...generalInfo,
+        academyName: resolvedName,
+        tagline: resolvedTagline
+      };
+      const payloadLanding = {
+        ...landingPageContent,
+        academyName: resolvedName,
+        tagline: resolvedTagline
+      };
+
       const res = await saveWebsiteSettings({
-        landingPageContent,
+        landingPageContent: payloadLanding,
         aboutPageContent,
         contactPageContent,
-        generalInfo
+        generalInfo: payloadGeneral
       });
 
       if (res && res.success) {
@@ -355,16 +383,6 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('general')}
-          className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
-            activeTab === 'general' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Building className="w-4 h-4" />
-          General Information
-        </button>
-
-        <button
           onClick={() => setActiveTab('storage')}
           className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'storage' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -403,6 +421,43 @@ export default function AdminSettingsPage() {
       {activeTab === 'landing_content' && (
         <form onSubmit={handleSaveAll} className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs max-w-3xl space-y-6">
           <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">Brand Identity & Academy Name</h3>
+            <p className="text-slate-500 text-xs font-medium">Configure the core academy name and tagline displayed across all public pages, headers, footers, and portals.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Academy Name *</label>
+              <input
+                type="text"
+                required
+                value={landingPageContent.academyName || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLandingPageContent(prev => ({ ...prev, academyName: val }));
+                  setGeneralInfo(prev => ({ ...prev, academyName: val }));
+                }}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tagline *</label>
+              <input
+                type="text"
+                required
+                value={landingPageContent.tagline !== undefined ? landingPageContent.tagline : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLandingPageContent(prev => ({ ...prev, tagline: val }));
+                  setGeneralInfo(prev => ({ ...prev, tagline: val }));
+                }}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
+              />
+            </div>
+          </div>
+
+          <div className="border-b border-slate-100 pb-3 pt-2">
             <h3 className="text-base font-black text-slate-900">Hero & Spotlight Section Content</h3>
             <p className="text-slate-500 text-xs font-medium">Customize text content dynamically shown on the public homepage without changing source code.</p>
           </div>
@@ -655,79 +710,6 @@ export default function AdminSettingsPage() {
               type="submit"
               disabled={isSaving}
               className="bg-[#0F52BA] hover:bg-blue-700 text-white font-extrabold px-6 py-3 rounded-xl shadow-md inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>{isSaving ? 'Saving...' : 'Save and Publish'}</span>
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* 3. GENERAL TAB */}
-      {activeTab === 'general' && (
-        <form onSubmit={handleSaveAll} className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs max-w-2xl space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Academy Name</label>
-              <input
-                type="text"
-                required
-                value={generalInfo.academyName}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, academyName: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Tagline</label>
-              <input
-                type="text"
-                value={generalInfo.tagline}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, tagline: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Official Contact Email</label>
-              <input
-                type="email"
-                required
-                value={generalInfo.contactEmail}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, contactEmail: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Official Phone Number</label>
-              <input
-                type="text"
-                required
-                value={generalInfo.contactPhone}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, contactPhone: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Academy Physical Address</label>
-            <textarea
-              rows={2}
-              value={generalInfo.address}
-              onChange={(e) => setGeneralInfo({ ...generalInfo, address: e.target.value })}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-            />
-          </div>
-
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="bg-[#0F52BA] hover:bg-blue-700 text-white font-extrabold px-6 py-2.5 rounded-xl shadow-xs inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>{isSaving ? 'Saving...' : 'Save and Publish'}</span>

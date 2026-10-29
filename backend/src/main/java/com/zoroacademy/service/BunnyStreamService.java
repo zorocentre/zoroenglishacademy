@@ -22,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -164,7 +169,8 @@ public class BunnyStreamService {
     }
 
     /**
-     * Directly uploads a video binary to Bunny Stream and saves the Video entity.
+     * Directly streams a video binary to Bunny Stream and saves the Video entity.
+     * Uses HttpURLConnection with fixed-length streaming to eliminate JVM memory buffering.
      */
     @Transactional
     public Map<String, Object> uploadVideoBinary(MultipartFile file, String title) {
@@ -179,54 +185,92 @@ public class BunnyStreamService {
             }
         } catch (NumberFormatException ignored) {}
 
+        if (properties.getApiKey() == null || properties.getApiKey().isBlank() || libraryId <= 0) {
+            log.error("Bunny Stream configuration missing: libraryId={}, apiKey present={}",
+                    libraryId, (properties.getApiKey() != null && !properties.getApiKey().isBlank()));
+            throw new com.zoroacademy.exception.BadRequestException("Bunny Stream is not configured: library-id or api-key is missing or invalid.");
+        }
+
         String videoId = null;
         boolean uploadedToBunny = false;
 
         // Step 1: Create Video entry in Bunny Stream API
-        if (properties.getApiKey() != null && !properties.getApiKey().isBlank() && libraryId > 0) {
-            try {
-                String createUrl = String.format("https://video.bunnycdn.com/library/%d/videos", libraryId);
-                HttpHeaders createHeaders = new HttpHeaders();
-                createHeaders.setContentType(MediaType.APPLICATION_JSON);
-                createHeaders.set("AccessKey", properties.getApiKey());
-                createHeaders.set("Accept", "application/json");
+        try {
+            String createUrl = String.format("https://video.bunnycdn.com/library/%d/videos", libraryId);
+            HttpHeaders createHeaders = new HttpHeaders();
+            createHeaders.setContentType(MediaType.APPLICATION_JSON);
+            createHeaders.set("AccessKey", properties.getApiKey());
+            createHeaders.set("Accept", "application/json");
 
-                Map<String, String> body = new HashMap<>();
-                body.put("title", videoTitle);
+            Map<String, String> body = new HashMap<>();
+            body.put("title", videoTitle);
 
-                HttpEntity<Map<String, String>> createEntity = new HttpEntity<>(body, createHeaders);
-                String response = restTemplate.postForObject(createUrl, createEntity, String.class);
-                if (response != null) {
-                    JsonNode root = objectMapper.readTree(response);
-                    videoId = root.path("guid").asText();
-                }
-            } catch (Exception e) {
-                log.warn("Could not create video on Bunny Stream API: {}", e.getMessage());
+            HttpEntity<Map<String, String>> createEntity = new HttpEntity<>(body, createHeaders);
+            ResponseEntity<String> createResp = restTemplate.postForEntity(createUrl, createEntity, String.class);
+            if (!createResp.getStatusCode().is2xxSuccessful() || createResp.getBody() == null) {
+                throw new RuntimeException("Bunny Stream video creation failed with HTTP " + createResp.getStatusCode().value() + ": " + createResp.getBody());
             }
+            JsonNode root = objectMapper.readTree(createResp.getBody());
+            videoId = root.path("guid").asText();
+            if (videoId == null || videoId.isBlank()) {
+                throw new RuntimeException("Bunny Stream video creation response did not contain guid: " + createResp.getBody());
+            }
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            String respBody = e.getResponseBodyAsString();
+            log.error("Failed to create video on Bunny Stream API: HTTP {} - {}", e.getStatusCode().value(), respBody);
+            throw new RuntimeException("Failed to initialize video on Bunny Stream (HTTP " + e.getStatusCode().value() + "): " + respBody, e);
+        } catch (Exception e) {
+            log.error("Could not create video on Bunny Stream API: {}", e.getMessage(), e);
+            throw new RuntimeException("Could not create video on Bunny Stream: " + e.getMessage(), e);
         }
 
-        if (videoId == null || videoId.isBlank()) {
-            videoId = UUID.randomUUID().toString();
-        }
+        // Step 2: Stream raw video binary to Bunny Stream via fixed-length streaming
+        try {
+            String uploadUrl = String.format("https://video.bunnycdn.com/library/%d/videos/%s", libraryId, videoId);
+            URI uri = URI.create(uploadUrl);
+            HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(60000);
+            conn.setReadTimeout(600000); // 10 minutes for larger video files
+            conn.setRequestProperty("AccessKey", properties.getApiKey());
+            conn.setRequestProperty("Content-Type", "application/octet-stream");
 
-        // Step 2: Upload raw video bytes to Bunny Stream
-        if (properties.getApiKey() != null && !properties.getApiKey().isBlank() && libraryId > 0) {
-            try {
-                String uploadUrl = String.format("https://video.bunnycdn.com/library/%d/videos/%s", libraryId, videoId);
-                HttpHeaders uploadHeaders = new HttpHeaders();
-                uploadHeaders.set("AccessKey", properties.getApiKey());
-                uploadHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-
-                byte[] bytes = file.getBytes();
-                HttpEntity<byte[]> uploadEntity = new HttpEntity<>(bytes, uploadHeaders);
-                ResponseEntity<String> uploadResp = restTemplate.exchange(uploadUrl, org.springframework.http.HttpMethod.PUT, uploadEntity, String.class);
-                if (uploadResp.getStatusCode().is2xxSuccessful()) {
-                    uploadedToBunny = true;
-                    log.info("Successfully uploaded video binary to Bunny Stream: videoId={}", videoId);
-                }
-            } catch (Exception e) {
-                log.warn("Direct binary upload to Bunny Stream failed: {}", e.getMessage());
+            long fileSize = file.getSize();
+            if (fileSize > 0) {
+                conn.setFixedLengthStreamingMode(fileSize);
+            } else {
+                conn.setChunkedStreamingMode(65536);
             }
+
+            try (InputStream in = file.getInputStream();
+                 OutputStream out = conn.getOutputStream()) {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+                out.flush();
+            }
+
+            int responseCode = conn.getResponseCode();
+            String responseBody = "";
+            try (InputStream respStream = (responseCode >= 200 && responseCode < 300) ? conn.getInputStream() : conn.getErrorStream()) {
+                if (respStream != null) {
+                    responseBody = new String(respStream.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+
+            if (responseCode >= 200 && responseCode < 300) {
+                uploadedToBunny = true;
+                log.info("Successfully streamed video binary to Bunny Stream: videoId={}, bytes={}", videoId, fileSize);
+            } else {
+                log.error("Bunny Stream binary upload failed for videoId {}: HTTP {} - {}", videoId, responseCode, responseBody);
+                throw new RuntimeException("Bunny Stream binary upload failed (HTTP " + responseCode + "): " + responseBody);
+            }
+        } catch (Exception e) {
+            log.error("Direct binary upload to Bunny Stream failed for videoId {}: {}", videoId, e.getMessage(), e);
+            throw new RuntimeException("Bunny Stream upload failed: " + e.getMessage(), e);
         }
 
         String streamUrl = String.format("https://%s/%s/playlist.m3u8", properties.getCdnHost(), videoId);

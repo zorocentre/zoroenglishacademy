@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Download, FileText, Film, Music, Image as ImageIcon, FileSpreadsheet, Archive, AlertCircle } from 'lucide-react';
 import { resolveFileUrl, getFileLink, openFileWithSignedLink } from '../../api/fileApi';
+import { useAuth } from '../../context/AuthContext';
 import SafeImage from './SafeImage';
+import CustomPdfViewer from './CustomPdfViewer';
 
 export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDownload = true }) {
+  const auth = useAuth?.() || {};
+  const user = auth.user;
   const [resolvedUrl, setResolvedUrl] = useState('');
   const [resolvedInfo, setResolvedInfo] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -133,23 +137,39 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
             <>
               {/* 1. IMAGE VIEWER */}
               {isImage && (
-                <div className="max-h-full max-w-full flex items-center justify-center">
+                <div 
+                  className="max-h-full max-w-full flex items-center justify-center relative select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
                   <SafeImage
                     src={fileUrl}
                     alt={fileName}
-                    className="max-h-[70vh] w-auto max-w-full object-contain rounded-2xl shadow-lg border border-slate-200 bg-white"
+                    draggable={false}
+                    className="max-h-[70vh] w-auto max-w-full object-contain rounded-2xl shadow-lg border border-slate-200 bg-white select-none pointer-events-auto"
                     fallbackSrc="/assets/course-placeholder.svg"
                   />
+                  {user?.role?.toUpperCase() !== 'ADMIN' && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                      <span className="transform -rotate-45 text-slate-900/10 font-black text-2xl tracking-widest uppercase select-none">
+                        {user?.name || user?.email || 'View Only'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* 2. VIDEO PLAYER */}
               {isVideo && (
-                <div className="w-full max-w-3xl flex flex-col items-center">
+                <div 
+                  className="w-full max-w-3xl flex flex-col items-center select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
                   <video
                     src={fileUrl}
                     controls
                     controlsList="nodownload"
+                    disablePictureInPicture
+                    onContextMenu={(e) => e.preventDefault()}
                     className="w-full max-h-[70vh] rounded-2xl shadow-xl bg-black border border-slate-800"
                   >
                     Your browser does not support HTML5 video playback.
@@ -159,7 +179,10 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
 
               {/* 3. AUDIO PLAYER */}
               {isAudio && (
-                <div className="w-full max-w-md bg-white p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6 text-center">
+                <div 
+                  className="w-full max-w-md bg-white p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6 text-center select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
                   <div className="w-20 h-20 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
                     <Music className="w-10 h-10" />
                   </div>
@@ -167,19 +190,25 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                     <h4 className="font-extrabold text-slate-900 text-base">{fileName}</h4>
                     <p className="text-xs font-semibold text-slate-400 mt-1">Audio File • Ready to Play</p>
                   </div>
-                  <audio src={fileUrl} controls controlsList="nodownload" className="w-full">
+                  <audio 
+                    src={fileUrl} 
+                    controls 
+                    controlsList="nodownload" 
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="w-full"
+                  >
                     Your browser does not support HTML5 audio playback.
                   </audio>
                 </div>
               )}
 
-              {/* 4. PDF EMBED */}
+              {/* 4. PDF CUSTOM CANVAS VIEWER */}
               {isPdf && (
-                <div className="w-full h-[70vh] bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-200">
-                  <iframe
-                    src={pdfSrc}
+                <div className="w-full h-[72vh] rounded-2xl overflow-hidden shadow-lg border border-slate-700">
+                  <CustomPdfViewer
+                    url={fileUrl}
                     title={fileName}
-                    className="w-full h-full"
+                    watermarkText={user?.role?.toUpperCase() !== 'ADMIN' ? (user?.name || user?.email || 'Zoro English Academy') : ''}
                   />
                 </div>
               )}
@@ -196,7 +225,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                       {ext ? `${ext.toUpperCase()} File` : 'Office Document'} • {fileSize}
                     </p>
                     <p className="text-xs text-slate-400 pt-2">
-                      Office files cannot be previewed in the browser. Please download to view.
+                      {hideDownload ? 'Document preview is protected in view-only mode.' : 'Office files cannot be previewed in the browser. Please download to view.'}
                     </p>
                   </div>
 

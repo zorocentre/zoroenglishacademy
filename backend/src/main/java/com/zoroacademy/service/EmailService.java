@@ -3,61 +3,228 @@ package com.zoroacademy.service;
 import com.zoroacademy.entity.Competition;
 import com.zoroacademy.entity.CompetitionRegistration;
 import com.zoroacademy.entity.Enquiry;
-import jakarta.mail.internet.MimeMessage;
+import com.zoroacademy.service.email.BrevoEmailProvider;
+import com.zoroacademy.service.email.EmailProvider;
+import com.zoroacademy.service.email.SesEmailProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.ITemplateEngine;
 import org.thymeleaf.context.Context;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender mailSender;
+    private final BrevoEmailProvider brevoProvider;
+    private final SesEmailProvider sesProvider;
     private final ITemplateEngine templateEngine;
 
-    @Value("${spring.mail.host:}")
-    private String smtpHost;
+    @Value("${EMAIL_PROVIDER:${app.mail.provider:}}")
+    private String preferredProvider;
 
-    @Value("${app.mail.from-email:noreply@zoroacademy.com}")
-    private String fromEmail;
-
-    @Value("${app.mail.from-name:Zoro Academy}")
-    private String fromName;
-
-    @Value("${app.frontend.url:http://localhost:5173}")
+    @Value("${app.frontend.url:https://zoroenglish.com}")
     private String frontendUrl;
 
     @Autowired
-    public EmailService(@Autowired(required = false) JavaMailSender mailSender,
-                        ITemplateEngine templateEngine) {
-        this.mailSender = mailSender;
+    public EmailService(
+            BrevoEmailProvider brevoProvider,
+            SesEmailProvider sesProvider,
+            ITemplateEngine templateEngine) {
+        this.brevoProvider = brevoProvider;
+        this.sesProvider = sesProvider;
         this.templateEngine = templateEngine;
     }
 
+    /**
+     * Resolves the active email provider based on configuration priority:
+     * 1. Explicit override via EMAIL_PROVIDER (brevo | ses)
+     * 2. Brevo (if BREVO_API_KEY is configured)
+     * 3. AWS SES (if AWS_SES_HOST is configured)
+     */
+    public EmailProvider getActiveProvider() {
+        String pref = preferredProvider != null ? preferredProvider.trim().toLowerCase() : "";
+        if ("brevo".equals(pref)) {
+            return brevoProvider;
+        } else if ("ses".equals(pref)) {
+            return sesProvider;
+        }
+
+        if (brevoProvider != null && brevoProvider.isConfigured()) {
+            return brevoProvider;
+        }
+        if (sesProvider != null && sesProvider.isConfigured()) {
+            return sesProvider;
+        }
+        return null;
+    }
+
     public boolean isMailConfigured() {
-        return mailSender != null && smtpHost != null && !smtpHost.trim().isEmpty();
+        EmailProvider provider = getActiveProvider();
+        return provider != null && provider.isConfigured();
+    }
+
+    /**
+     * Core send method with automatic single retry and safe failure handling.
+     */
+    public boolean sendEmail(String to, String subject, String htmlContent, String textContent) {
+        if (to == null || to.isBlank()) {
+            log.warn("Cannot send email: recipient address is empty.");
+            return false;
+        }
+
+        EmailProvider provider = getActiveProvider();
+        if (provider == null || !provider.isConfigured()) {
+            log.info("Email service not configured (neither Brevo nor AWS SES); skipping email to '{}' with subject '{}'", to, subject);
+            return false;
+        }
+
+        String providerName = provider.getProviderName();
+        try {
+            log.info("Attempting to send email via {} to '{}' [Subject: '{}']", providerName, to, subject);
+            return provider.sendEmail(to, subject, htmlContent, textContent);
+        } catch (Exception primaryEx) {
+            log.warn("Primary attempt failed sending email via {} to '{}': {}. Retrying once...", providerName, to, primaryEx.getMessage());
+            try {
+                // Single retry attempt
+                Thread.sleep(1000);
+                return provider.sendEmail(to, subject, htmlContent, textContent);
+            } catch (Exception retryEx) {
+                log.error("Failed to send email via {} to '{}' after retry: {}", providerName, to, retryEx.getMessage(), retryEx);
+                return false;
+            }
+        }
+    }
+
+    // =========================================================================
+    // 1. COMPETITION REGISTRATION SUCCESS & PAYMENT RECEIPT (Sent only after payment SUCCESS)
+    // =========================================================================
+    @Async
+    public void sendCompetitionRegistrationSuccess(
+            String email,
+            String name,
+            String plainPassword,
+            String competitionTitle,
+            String paymentId,
+            String amount,
+            String date) {
+        if (email == null || email.isBlank()) return;
+
+        try {
+            Context context = new Context();
+            context.setVariable("name", name != null && !name.isBlank() ? name : "Participant");
+            context.setVariable("email", email.trim());
+            context.setVariable("plainPassword", plainPassword);
+            context.setVariable("competitionTitle", competitionTitle != null ? competitionTitle : "Competition");
+            context.setVariable("paymentId", paymentId != null ? paymentId : "N/A");
+            context.setVariable("amount", amount != null ? amount : "₹199");
+            context.setVariable("date", date != null && !date.isBlank() ? date : "Recent");
+            context.setVariable("loginUrl", frontendUrl + "/login");
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/competition-registration-success", context);
+            String subject = "Payment Confirmed & Competition Credentials - " + (competitionTitle != null ? competitionTitle : "Zoro English Academy");
+            sendEmail(email.trim(), subject, html, null);
+        } catch (Exception e) {
+            log.error("Error creating competition registration success email for {}: {}", email, e.getMessage());
+        }
+    }
+
+    // =========================================================================
+    // 2. ADMIN ADDS A STUDENT (Welcome + Enrolled Courses + Credentials)
+    // =========================================================================
+    @Async
+    public void sendStudentWelcomeEmail(String email, String name, String plainPassword, List<String> enrolledCourses) {
+        if (email == null || email.isBlank()) return;
+
+        try {
+            Context context = new Context();
+            context.setVariable("name", name != null && !name.isBlank() ? name : "Student");
+            context.setVariable("email", email.trim());
+            context.setVariable("plainPassword", plainPassword);
+            context.setVariable("courses", (enrolledCourses != null && !enrolledCourses.isEmpty()) ? String.join(", ", enrolledCourses) : "");
+            context.setVariable("loginUrl", frontendUrl + "/login");
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/student-welcome", context);
+            String subject = "Welcome to Zoro English Academy - Your Student Portal Account";
+            sendEmail(email.trim(), subject, html, null);
+        } catch (Exception e) {
+            log.error("Error creating student welcome email for {}: {}", email, e.getMessage());
+        }
     }
 
     @Async
-    public void sendEnquiryAcknowledgement(Enquiry enquiry) {
-        if (enquiry == null || enquiry.getEmail() == null || enquiry.getEmail().isBlank()) {
-            return;
-        }
+    public void sendStudentWelcomeEmail(String email, String name, String plainPassword) {
+        sendStudentWelcomeEmail(email, name, plainPassword, Collections.emptyList());
+    }
 
-        if (!isMailConfigured()) {
-            log.info("AWS SES SMTP not configured; skipping enquiry acknowledgement email to {}", enquiry.getEmail());
-            return;
+    // =========================================================================
+    // 3. ADMIN ADDS A TRAINER (Welcome + Role Info + Credentials)
+    // =========================================================================
+    @Async
+    public void sendTrainerWelcomeEmail(String email, String name, String plainPassword, String specialty) {
+        if (email == null || email.isBlank()) return;
+
+        try {
+            Context context = new Context();
+            context.setVariable("name", name != null && !name.isBlank() ? name : "Trainer");
+            context.setVariable("email", email.trim());
+            context.setVariable("plainPassword", plainPassword);
+            context.setVariable("specialty", specialty);
+            context.setVariable("loginUrl", frontendUrl + "/login");
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/trainer-welcome", context);
+            String subject = "Welcome to Zoro English Academy Faculty - Your Account Details";
+            sendEmail(email.trim(), subject, html, null);
+        } catch (Exception e) {
+            log.error("Error creating trainer welcome email for {}: {}", email, e.getMessage());
         }
+    }
+
+    public void sendTrainerWelcomeEmail(String email, String name, String plainPassword) {
+        sendTrainerWelcomeEmail(email, name, plainPassword, null);
+    }
+
+    // =========================================================================
+    // 4. ADMIN UPDATES STUDENT OR TRAINER RECORD (Changed Fields, Password only if reset)
+    // =========================================================================
+    @Async
+    public void sendProfileUpdatedEmail(String email, String name, String role, Map<String, Object> changedFields, String newPassword) {
+        if (email == null || email.isBlank()) return;
+
+        try {
+            Context context = new Context();
+            context.setVariable("name", name != null && !name.isBlank() ? name : "User");
+            context.setVariable("role", role != null ? role : "Account");
+            context.setVariable("changedFields", changedFields != null ? changedFields : Collections.emptyMap());
+            context.setVariable("newPassword", newPassword);
+            context.setVariable("loginUrl", frontendUrl + "/login");
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/profile-updated", context);
+            String subject = "Your Zoro English Academy Profile Has Been Updated";
+            sendEmail(email.trim(), subject, html, null);
+        } catch (Exception e) {
+            log.error("Error creating profile updated email for {}: {}", email, e.getMessage());
+        }
+    }
+
+    // =========================================================================
+    // LEGACY & RETROFIT METHODS FOR BACKWARD COMPATIBILITY
+    // =========================================================================
+    @Async
+    public void sendEnquiryAcknowledgement(Enquiry enquiry) {
+        if (enquiry == null || enquiry.getEmail() == null || enquiry.getEmail().isBlank()) return;
 
         try {
             Context context = new Context();
@@ -67,149 +234,33 @@ public class EmailService {
             context.setVariable("phone", enquiry.getPhone());
             context.setVariable("message", enquiry.getMessage());
 
-            String htmlBody = templateEngine.process("email/enquiry-acknowledgement", context);
-            sendHtmlEmail(enquiry.getEmail().trim(), "We received your enquiry - Zoro Academy", htmlBody);
-            log.info("Enquiry acknowledgement email sent to {}", enquiry.getEmail());
+            String html = templateEngine.process("email/enquiry-acknowledgement", context);
+            sendEmail(enquiry.getEmail().trim(), "We received your enquiry - Zoro English Academy", html, null);
         } catch (Exception e) {
-            handleMailException(enquiry.getEmail(), "enquiry acknowledgement email", e);
-        }
-    }
-
-    @Async
-    public void sendCompetitionRegistrationConfirmation(CompetitionRegistration registration) {
-        if (registration == null || registration.getStudentEmail() == null || registration.getStudentEmail().isBlank()) {
-            return;
-        }
-
-        if (!isMailConfigured()) {
-            log.info("AWS SES SMTP not configured; skipping competition confirmation email to {}", registration.getStudentEmail());
-            return;
-        }
-
-        try {
-            Competition comp = registration.getCompetition();
-            Context context = new Context();
-            context.setVariable("studentName", registration.getStudentName() != null ? registration.getStudentName() : "Participant");
-            context.setVariable("registrationId", registration.getId());
-            context.setVariable("competitionTitle", comp != null && comp.getTitle() != null ? comp.getTitle() : "Annual Competition");
-            context.setVariable("category", comp != null ? comp.getCategory() : "");
-            context.setVariable("startDate", comp != null ? comp.getStartDate() : "");
-            context.setVariable("venue", comp != null ? comp.getVenue() : "Online");
-            context.setVariable("paymentStatus", registration.getPaymentStatus() != null ? registration.getPaymentStatus() : "Confirmed");
-
-            String htmlBody = templateEngine.process("email/competition-confirmation", context);
-            String title = comp != null && comp.getTitle() != null ? comp.getTitle() : "Competition";
-            sendHtmlEmail(registration.getStudentEmail().trim(), "Registration Confirmed: " + title + " - Zoro Academy", htmlBody);
-            log.info("Competition confirmation email sent to {}", registration.getStudentEmail());
-        } catch (Exception e) {
-            handleMailException(registration.getStudentEmail(), "competition confirmation email", e);
+            log.error("Error creating enquiry acknowledgement email for {}: {}", enquiry.getEmail(), e.getMessage());
         }
     }
 
     @Async
     public void sendCompetitionCredentials(String email, String name, String plainPassword, String competitionTitle) {
-        if (email == null || email.isBlank()) {
-            return;
-        }
-
-        if (!isMailConfigured()) {
-            log.info("AWS SES SMTP not configured; skipping competition credentials email to {}", email);
-            return;
-        }
-
-        try {
-            Context context = new Context();
-            context.setVariable("name", name != null && !name.isBlank() ? name : "Participant");
-            context.setVariable("email", email.trim());
-            context.setVariable("plainPassword", plainPassword);
-            context.setVariable("competitionTitle", competitionTitle != null ? competitionTitle : "Competition");
-            context.setVariable("loginUrl", frontendUrl + "/login");
-
-            String htmlBody = templateEngine.process("email/competition-credentials", context);
-            sendHtmlEmail(email.trim(), "Your Zoro Academy Competition Login Credentials - " + competitionTitle, htmlBody);
-            log.info("Competition credentials email sent to {}", email);
-        } catch (Exception e) {
-            handleMailException(email, "competition credentials email", e);
-        }
+        sendCompetitionRegistrationSuccess(email, name, plainPassword, competitionTitle, "N/A", "₹199", "N/A");
     }
 
     @Async
-    public void sendStudentWelcomeEmail(String email, String name, String plainPassword) {
-        if (email == null || email.isBlank()) {
-            return;
-        }
-
-        if (!isMailConfigured()) {
-            log.info("AWS SES SMTP not configured; skipping student welcome email to {}", email);
-            return;
-        }
-
-        try {
-            Context context = new Context();
-            context.setVariable("name", name != null && !name.isBlank() ? name : "Student");
-            context.setVariable("email", email.trim());
-            context.setVariable("plainPassword", plainPassword);
-            context.setVariable("loginUrl", frontendUrl + "/login");
-
-            String htmlBody = templateEngine.process("email/student-welcome", context);
-            sendHtmlEmail(email.trim(), "Welcome to Zoro Academy - Your Student Portal Account", htmlBody);
-            log.info("Student welcome email sent to {}", email);
-        } catch (Exception e) {
-            handleMailException(email, "student welcome email", e);
-        }
-    }
-
-    @Async
-    public void sendTrainerWelcomeEmail(String email, String name, String plainPassword, String specialty) {
-        if (email == null || email.isBlank()) {
-            return;
-        }
-
-        if (!isMailConfigured()) {
-            log.info("AWS SES SMTP not configured; skipping trainer welcome email to {}", email);
-            return;
-        }
-
-        try {
-            Context context = new Context();
-            context.setVariable("name", name != null && !name.isBlank() ? name : "Trainer");
-            context.setVariable("email", email.trim());
-            context.setVariable("plainPassword", plainPassword);
-            context.setVariable("specialty", specialty);
-            context.setVariable("loginUrl", frontendUrl + "/login");
-
-            String htmlBody = templateEngine.process("email/trainer-welcome", context);
-            sendHtmlEmail(email.trim(), "Welcome to Zoro Academy Faculty - Your Account Details", htmlBody);
-            log.info("Trainer welcome email sent to {}", email);
-        } catch (Exception e) {
-            handleMailException(email, "trainer welcome email", e);
-        }
-    }
-
-    public void sendTrainerWelcomeEmail(String email, String name, String plainPassword) {
-        sendTrainerWelcomeEmail(email, name, plainPassword, null);
-    }
-
-    private void handleMailException(String email, String emailType, Exception e) {
-        String msg = e.getMessage() != null ? e.getMessage() : "";
-        if (msg.contains("Email address is not verified") || msg.contains("identities failed the check")) {
-            log.warn("Amazon SES Sandbox Mode: Cannot send {} to unverified recipient {}. " +
-                    "To send emails in Sandbox mode, verify '{}' in the AWS SES Console (AP-SOUTH-1 -> Verified Identities). " +
-                    "To send to any recipient, request Production Access in the AWS SES Account Dashboard.", emailType, email, email);
-        } else {
-            log.error("Failed to send {} to {}: {}", emailType, email, msg);
-        }
-    }
-
-    private void sendHtmlEmail(String to, String subject, String htmlContent) throws Exception {
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED, StandardCharsets.UTF_8.name());
-
-        helper.setFrom(fromEmail, fromName);
-        helper.setTo(to);
-        helper.setSubject(subject);
-        helper.setText(htmlContent, true);
-
-        mailSender.send(message);
+    public void sendCompetitionRegistrationConfirmation(CompetitionRegistration registration) {
+        if (registration == null || registration.getStudentEmail() == null) return;
+        Competition comp = registration.getCompetition();
+        String title = comp != null && comp.getTitle() != null ? comp.getTitle() : "Annual Competition";
+        String feeStr = (registration.getAmountPaise() != null) ? "₹" + (registration.getAmountPaise() / 100) : "₹199";
+        String dateStr = registration.getPaidAt() != null ? registration.getPaidAt().toString() : (registration.getCreatedAt() != null ? registration.getCreatedAt().toString() : "");
+        sendCompetitionRegistrationSuccess(
+                registration.getStudentEmail(),
+                registration.getStudentName(),
+                null,
+                title,
+                registration.getRazorpayPaymentId(),
+                feeStr,
+                dateStr
+        );
     }
 }

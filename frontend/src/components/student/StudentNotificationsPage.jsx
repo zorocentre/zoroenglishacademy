@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Bell, Calendar, BookOpen, HelpCircle, CheckCircle2, MessageSquare, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getMyNotifications } from '../../api/notificationApi';
+import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import PageLoader from '../common/PageLoader';
 
 export default function StudentNotificationsPage({ setActiveScreen }) {
@@ -96,6 +97,7 @@ export default function StudentNotificationsPage({ setActiveScreen }) {
         ) : (
           filtered.map(item => {
             const Icon = getIcon(item);
+            const timeInfo = formatNotificationTime(item.createdAt || item.date || item.time);
             return (
               <div key={item.id} className="p-5 hover:bg-slate-50/80 transition-colors flex items-start gap-4">
                 <div className="p-2.5 rounded-2xl border bg-blue-50 text-blue-600 border-blue-200/60 shrink-0">
@@ -104,7 +106,12 @@ export default function StudentNotificationsPage({ setActiveScreen }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-black text-slate-900 text-sm">{item.title}</h3>
-                    <span className="text-[11px] text-slate-400 shrink-0 font-semibold">{item.date || item.time || 'Recent'}</span>
+                    <span
+                      className="text-[11px] text-slate-400 shrink-0 font-semibold cursor-help"
+                      title={timeInfo.exact}
+                    >
+                      {timeInfo.relative}
+                    </span>
                   </div>
                   <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed">{item.message || item.desc}</p>
                 </div>

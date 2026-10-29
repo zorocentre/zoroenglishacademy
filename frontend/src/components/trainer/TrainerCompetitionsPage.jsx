@@ -1426,6 +1426,9 @@ export default function TrainerCompetitionsPage() {
                                     <video
                                       src={resolveFileUrl(ans.videoUrl)}
                                       controls
+                                      controlsList="nodownload"
+                                      disablePictureInPicture
+                                      onContextMenu={(e) => e.preventDefault()}
                                       className="rounded-xl border border-slate-200 max-w-md"
                                     />
                                   ) : (

@@ -64,14 +64,20 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
     let assignedTrainer = null;
 
     if (formData.mode === 'Online' || formData.mode === 'Hybrid') {
-      normalizedMeetUrl = normalizeGoogleMeetUrl(formData.googleMeetUrl || '');
+      const rawMeet = formData.googleMeetUrl ? formData.googleMeetUrl.trim() : '';
+      if (!rawMeet) {
+        await showError(`Google Meet Link is required for ${formData.mode} courses.`, 'Validation Error: Google Meet Link');
+        return;
+      }
+      normalizedMeetUrl = normalizeGoogleMeetUrl(rawMeet);
       if (!isValidGoogleMeetUrl(normalizedMeetUrl)) {
-        await showError(`A valid Google Meet URL is required for ${formData.mode} courses (e.g. https://meet.google.com/xxx-xxxx-xxx).`, 'Validation Error');
+        await showError(`Invalid Google Meet Link: "${formData.googleMeetUrl}". Please enter a valid URL (e.g. https://meet.google.com/abc-defg-hij).`, 'Validation Error: Google Meet Link');
         return;
       }
       trainerId = null;
       assignedTrainer = null;
     } else {
+      normalizedMeetUrl = null;
       // Recorded
       if (formData.audience === 'trainer') {
         trainerId = 'admin';

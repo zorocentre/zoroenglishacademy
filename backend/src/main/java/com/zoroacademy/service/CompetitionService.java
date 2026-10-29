@@ -221,9 +221,13 @@ public class CompetitionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Competition not found: " + id));
     }
 
+    private boolean isPaid(String status) {
+        return status != null && ("PAID".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status));
+    }
+
     /**
      * Validates that the current user has paid registration access to the specified competition.
-     * Admins and trainers are permitted; students must have a PAID registration.
+     * Admins and trainers are permitted; students must have a PAID or SUCCESS registration.
      */
     public void validateUserCompetitionAccess(String compId, User user) {
         if (user == null) {
@@ -239,7 +243,7 @@ public class CompetitionService {
         if (reg.isEmpty() && user.getEmail() != null) {
             reg = registrationRepository.findByCompetitionIdAndStudentEmailIgnoreCase(compId, user.getEmail());
         }
-        if (reg.isEmpty() || !"PAID".equalsIgnoreCase(reg.get().getPaymentStatus())) {
+        if (reg.isEmpty() || !isPaid(reg.get().getPaymentStatus())) {
             throw new ForbiddenException("Access denied: You do not have a paid registration for this competition");
         }
     }
@@ -1700,7 +1704,7 @@ public class CompetitionService {
         Competition comp = getCompetitionById(compId);
         List<CompetitionRegistration> regs = registrationRepository.findByCompetitionId(compId);
         long totalRegs = regs.size();
-        long paidRegs = regs.stream().filter(r -> "PAID".equalsIgnoreCase(r.getPaymentStatus())).count();
+        long paidRegs = regs.stream().filter(r -> isPaid(r.getPaymentStatus())).count();
         long pendingRegs = totalRegs - paidRegs;
 
         List<Map<String, Object>> setsDetails = getSetsWithDetails(compId);
@@ -1741,6 +1745,10 @@ public class CompetitionService {
 
         List<Map<String, Object>> list = new ArrayList<>();
         for (CompetitionRegistration r : regs) {
+            // Strictly include only paid/confirmed registrations
+            if (!isPaid(r.getPaymentStatus())) {
+                continue;
+            }
             Map<String, Object> item = new HashMap<>();
             item.put("id", r.getId());
             item.put("studentId", r.getStudentId());
@@ -1846,7 +1854,7 @@ public class CompetitionService {
         return regs.stream()
                 .filter(r -> (r.getCompetition() != null && compId.equals(r.getCompetition().getId()))
                         || compId.equals(r.getCompetitionId()))
-                .filter(r -> "PAID".equalsIgnoreCase(r.getPaymentStatus()))
+                .filter(r -> isPaid(r.getPaymentStatus()))
                 .findFirst()
                 .orElse(null);
     }
@@ -2154,7 +2162,7 @@ public class CompetitionService {
                 secondsToEnd = java.time.Duration.between(now, finalAsmt.getEndAt()).getSeconds();
             }
         } else {
-            windowStatus = isPublished ? "LIVE" : "DRAFT";
+            windowStatus = isPublished ? "UPCOMING" : "DRAFT";
         }
         item.put("windowStatus", windowStatus);
         item.put("secondsToStart", secondsToStart);

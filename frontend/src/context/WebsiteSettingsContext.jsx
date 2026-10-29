@@ -29,8 +29,8 @@ export function WebsiteSettingsProvider({ children }) {
     reloadSettings();
   }, [reloadSettings]);
 
-  const academyName = settings?.generalInfo?.academyName || 'Zoro English Academy';
-  const tagline = settings?.generalInfo?.tagline || 'Small Steps Big Communication';
+  const academyName = settings?.landingPageContent?.academyName || settings?.generalInfo?.academyName || 'Zoro English Academy';
+  const tagline = settings?.landingPageContent?.tagline || settings?.generalInfo?.tagline || 'Small Steps Big Communication';
   const contactEmail = settings?.contactPageContent?.contactEmail || settings?.generalInfo?.contactEmail || 'contact@zoroacademy.com';
   const contactPhone = settings?.contactPageContent?.contactPhone || settings?.generalInfo?.contactPhone || '+91 98765 43210';
   const address = settings?.contactPageContent?.contactAddress || settings?.generalInfo?.address || 'No. 12, Main Road, Skill Nagar, Chennai - 600001';

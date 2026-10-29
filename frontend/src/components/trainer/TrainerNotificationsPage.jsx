@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Calendar, BookOpen, HelpCircle, AlertTriangle, Info, Wallet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getTrainerNotifications } from '../../api/notificationApi';
+import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import PageLoader from '../common/PageLoader';
 
 export default function TrainerNotificationsPage() {
@@ -77,6 +78,7 @@ export default function TrainerNotificationsPage() {
         ) : (
           filteredNotifications.map(item => {
             const IconComponent = getIcon(item.type);
+            const timeInfo = formatNotificationTime(item.createdAt || item.date || item.time);
             return (
               <div key={item.id} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start gap-4">
                 <div className="p-2.5 rounded-full border bg-blue-50 text-[#0F52BA] border-blue-200 shrink-0">
@@ -85,7 +87,12 @@ export default function TrainerNotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-bold text-slate-900 text-base">{item.title}</h3>
-                    <span className="text-xs text-slate-400 shrink-0 font-medium">{item.date || 'Recent'}</span>
+                    <span
+                      className="text-xs text-slate-400 shrink-0 font-medium cursor-help"
+                      title={timeInfo.exact}
+                    >
+                      {timeInfo.relative}
+                    </span>
                   </div>
                   <p className="text-sm text-slate-600 mt-0.5">{item.message}</p>
                 </div>

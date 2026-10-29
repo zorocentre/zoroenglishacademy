@@ -454,14 +454,35 @@ export default function ManageStudentsPage() {
   };
 
   const handleToggleStudentStatus = async (student) => {
-    const newStatus = student.status === 'Inactive' ? 'Active' : 'Inactive';
-    const res = await updateUserStatus(student.id, newStatus);
-    if (!res.success) {
-      showError(res.message || 'Failed to update student status', 'Status Update Error');
-      return;
+    const newStatus = (student.status || 'Active').toLowerCase() === 'active' ? 'Inactive' : 'Active';
+
+    // Optimistic UI updates across both views
+    setStudents(prev => prev.map(s => s.id === student.id ? { ...s, status: newStatus } : s));
+    setRecordedStudents(prev => prev.map(s => s.id === student.id ? { ...s, status: newStatus } : s));
+
+    try {
+      const res = await updateUserStatus(student.id, newStatus);
+      if (!res.success) {
+        await showError(res.message || 'Failed to update student status', 'Status Update Error');
+        await loadData();
+        if (selectedRecordedCourseId) {
+          await loadRecordedStudents(selectedRecordedCourseId);
+        }
+        return;
+      }
+      await showSuccess(`Student status successfully updated to ${newStatus}`, 'Status Updated');
+      logActivity('Student Status Changed', `Changed status of student "${student.name}" to ${newStatus}`, 'Student');
+      await loadData();
+      if (selectedRecordedCourseId) {
+        await loadRecordedStudents(selectedRecordedCourseId);
+      }
+    } catch (err) {
+      await showError(err.message || 'Error updating student status', 'Status Update Error');
+      await loadData();
+      if (selectedRecordedCourseId) {
+        await loadRecordedStudents(selectedRecordedCourseId);
+      }
     }
-    logActivity('Student Status Changed', `Changed status of student "${student.name}" to ${newStatus}`, 'Student');
-    loadData();
   };
 
   const handleConfirmDelete = async (force = false) => {
@@ -1245,7 +1266,7 @@ export default function ManageStudentsPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Melisha"
+                  placeholder="e.g. John"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-600"
@@ -1258,7 +1279,7 @@ export default function ManageStudentsPage() {
                 <input
                   type="email"
                   required
-                  placeholder="melisha@gmail.com"
+                  placeholder="john@gmail.com"
                   value={formData.email}
                   onChange={(e) => {
                     const val = e.target.value;

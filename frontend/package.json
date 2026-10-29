@@ -17,6 +17,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "autoprefixer": "^10.6.0",
     "lucide-react": "^1.46.0",
+    "pdfjs-dist": "^6.4.299",
     "player.js": "^0.1.0",
     "postcss": "^8.5.28",
     "react": "^19.2.8",

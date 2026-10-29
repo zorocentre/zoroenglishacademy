@@ -14,6 +14,7 @@ import CompetitionPage from './components/public/CompetitionPage';
 import ContactPage from './components/public/ContactPage';
 import EnquireModal from './components/public/EnquireModal';
 import LoginModal from './components/public/LoginModal';
+import PolicyModal from './components/common/PolicyModal';
 import { getWebsiteSettings } from './api/websiteSettingsApi';
 import { getMyPortals } from './api/competitionApi';
 
@@ -305,12 +306,18 @@ function ProtectedRoute({ allowedRoles, portalType, children }) {
   return children;
 }
 
+
+const PRIVACY_POLICY_TEXT = `At Zoro English Academy, we are dedicated to protecting your privacy and personal information. We collect necessary details such as your name, contact information, and academic background solely for admission, training, and competition coordination purposes. We do not sell or share your data with external third parties without your explicit consent, except as required by law. All data is securely stored and processed in compliance with applicable data protection regulations. By using our website, programs, and competition portals, you agree to the collection and handling of your information as outlined in this policy. For any privacy queries or data removal requests, please contact our support team.`;
+
+const TERMS_OF_SERVICE_TEXT = `Welcome to Zoro English Academy. By registering for our courses, competitions, or using our online portals, you agree to adhere to our standard terms and conditions. All course materials, syllabi, guidance videos, and assessment content remain the exclusive intellectual property of Zoro English Academy and may not be reproduced, shared, or distributed without written permission. Fees paid for courses and competitions are non-refundable once registration is confirmed, except where explicitly noted. Participants are expected to maintain professional conduct, academic integrity, and respect toward trainers and peers during all sessions and assessments. We reserve the right to modify course offerings, schedules, and policies when necessary to maintain our high academic standards.`;
+
 // Public website layout
 function PublicLayout({ onOpenLogin, onOpenEnquire }) {
   const location = useLocation();
   const navigate = useNavigate();
   const activeScreen = getActiveScreenFromPath(location.pathname);
   const { settings: siteSettings, academyName, contactEmail, contactPhone, address } = useWebsiteSettings();
+  const [policyModal, setPolicyModal] = useState({ isOpen: false, title: "", content: "", type: "privacy" });
 
   const handleSetActiveScreen = (screen) => {
     if (screen === 'public-login') {
@@ -359,8 +366,30 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
             )}
           </div>
           <div className="flex space-x-6 text-slate-400 font-semibold">
-            <a href="#" className="hover:text-white">Privacy Policy</a>
-            <a href="#" className="hover:text-white">Terms of Service</a>
+            <button
+              type="button"
+              onClick={() => setPolicyModal({
+                isOpen: true,
+                title: 'Privacy Policy',
+                content: PRIVACY_POLICY_TEXT,
+                type: 'privacy'
+              })}
+              className="hover:text-white cursor-pointer font-semibold transition-colors"
+            >
+              Privacy Policy
+            </button>
+            <button
+              type="button"
+              onClick={() => setPolicyModal({
+                isOpen: true,
+                title: 'Terms of Service',
+                content: TERMS_OF_SERVICE_TEXT,
+                type: 'terms'
+              })}
+              className="hover:text-white cursor-pointer font-semibold transition-colors"
+            >
+              Terms of Service
+            </button>
             <button 
               onClick={() => navigate('/contact')}
               className="hover:text-white cursor-pointer"
@@ -370,6 +399,13 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
           </div>
         </div>
       </footer>
+      <PolicyModal
+        isOpen={policyModal.isOpen}
+        onClose={() => setPolicyModal(prev => ({ ...prev, isOpen: false }))}
+        title={policyModal.title}
+        content={policyModal.content}
+        type={policyModal.type}
+      />
     </div>
   );
 }

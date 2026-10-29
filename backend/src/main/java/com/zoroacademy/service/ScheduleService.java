@@ -441,7 +441,7 @@ public class ScheduleService {
                 }
             });
         }
-        if (schedule.getCourseId() != null && enrollmentRepository != null) {
+        if (recipientStudentIds.isEmpty() && schedule.getCourseId() != null && enrollmentRepository != null) {
             enrollmentRepository.findByCourseId(schedule.getCourseId()).stream()
                 .filter(e -> "Active".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null)
                 .forEach(e -> {
@@ -472,45 +472,30 @@ public class ScheduleService {
         if (notificationService == null) return;
         java.util.Set<String> recipientTrainerIds = new java.util.HashSet<>();
 
-        if (schedule.getCourseId() != null) {
-            if (trainerCourseRequestRepository != null) {
-                trainerCourseRequestRepository.findByCourseId(schedule.getCourseId()).stream()
-                    .filter(r -> "Approved".equalsIgnoreCase(r.getStatus()))
-                    .forEach(r -> {
-                        if (r.getTrainerId() != null && !r.getTrainerId().isBlank()) {
-                            recipientTrainerIds.add(r.getTrainerId());
-                        }
-                    });
-            }
-            if (enrollmentRepository != null) {
-                enrollmentRepository.findByCourseId(schedule.getCourseId()).stream()
-                    .filter(e -> "Active".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null)
-                    .forEach(e -> {
-                        if (e.getStudentId() != null && !e.getStudentId().isBlank()) {
-                            recipientTrainerIds.add(e.getStudentId());
-                        }
-                    });
-            }
+        if (schedule.getTrainerId() != null && !schedule.getTrainerId().isBlank()) {
+            recipientTrainerIds.add(schedule.getTrainerId());
+        } else if (schedule.getCourseId() != null && trainerCourseRequestRepository != null) {
+            trainerCourseRequestRepository.findByCourseId(schedule.getCourseId()).stream()
+                .filter(r -> "Approved".equalsIgnoreCase(r.getStatus()))
+                .forEach(r -> {
+                    if (r.getTrainerId() != null && !r.getTrainerId().isBlank()) {
+                        recipientTrainerIds.add(r.getTrainerId());
+                    }
+                });
+        }
+
+        if (recipientTrainerIds.isEmpty()) {
+            return;
         }
 
         String title = "New Trainer Session Scheduled: " + schedule.getTitle();
         String message = "A new session for course '" + schedule.getCourse() + "' has been scheduled on "
                 + schedule.getDate() + " (" + schedule.getTime() + ").";
 
-        if (!recipientTrainerIds.isEmpty()) {
-            for (String tId : recipientTrainerIds) {
-                notificationService.createNotification(com.zoroacademy.entity.Notification.builder()
-                    .id("notif_" + java.util.UUID.randomUUID())
-                    .recipientId(tId)
-                    .recipientRole("TRAINER")
-                    .title(title)
-                    .message(message)
-                    .readStatus(false)
-                    .build());
-            }
-        } else {
+        for (String tId : recipientTrainerIds) {
             notificationService.createNotification(com.zoroacademy.entity.Notification.builder()
                 .id("notif_" + java.util.UUID.randomUUID())
+                .recipientId(tId)
                 .recipientRole("TRAINER")
                 .title(title)
                 .message(message)

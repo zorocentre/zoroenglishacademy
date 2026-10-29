@@ -1,9 +1,12 @@
 package com.zoroacademy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zoroacademy.entity.Competition;
 import com.zoroacademy.entity.CompetitionRegistration;
 import com.zoroacademy.entity.Enquiry;
 import com.zoroacademy.service.EmailService;
+import com.zoroacademy.service.email.BrevoEmailProvider;
+import com.zoroacademy.service.email.SesEmailProvider;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +21,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,6 +35,8 @@ class EmailServiceTest {
     private JavaMailSender mailSender;
 
     private TemplateEngine templateEngine;
+    private BrevoEmailProvider brevoProvider;
+    private SesEmailProvider sesProvider;
     private EmailService emailService;
 
     @BeforeEach
@@ -44,28 +51,35 @@ class EmailServiceTest {
         springEngine.setTemplateResolver(resolver);
         this.templateEngine = springEngine;
 
-        emailService = new EmailService(mailSender, templateEngine);
-        ReflectionTestUtils.setField(emailService, "smtpHost", "email-smtp.ap-south-1.amazonaws.com");
-        ReflectionTestUtils.setField(emailService, "fromEmail", "noreply@zoroacademy.com");
-        ReflectionTestUtils.setField(emailService, "fromName", "Zoro Academy");
-        ReflectionTestUtils.setField(emailService, "frontendUrl", "http://localhost:5173");
+        // Brevo with unconfigured key by default
+        brevoProvider = new BrevoEmailProvider("", "zorocentre@gmail.com", "Zoro English Academy", new ObjectMapper());
+
+        // SES with active host
+        sesProvider = new SesEmailProvider(mailSender, "email-smtp.ap-south-1.amazonaws.com", "zorocentre@gmail.com", "Zoro English Academy");
+
+        emailService = new EmailService(brevoProvider, sesProvider, templateEngine);
+        ReflectionTestUtils.setField(emailService, "preferredProvider", "ses");
+        ReflectionTestUtils.setField(emailService, "frontendUrl", "https://zoroenglish.com");
     }
 
     @Test
-    @DisplayName("Email sending is safely skipped when SMTP host is unconfigured")
-    void testEmailSkippedWhenHostNotConfigured() {
-        ReflectionTestUtils.setField(emailService, "smtpHost", "");
-        assertFalse(emailService.isMailConfigured());
+    @DisplayName("Email sending is safely skipped when neither provider is configured")
+    void testEmailSkippedWhenNoProviderConfigured() {
+        SesEmailProvider emptySes = new SesEmailProvider(mailSender, "", "zorocentre@gmail.com", "Zoro");
+        BrevoEmailProvider emptyBrevo = new BrevoEmailProvider("", "zorocentre@gmail.com", "Zoro", new ObjectMapper());
+        EmailService unconfigured = new EmailService(emptyBrevo, emptySes, templateEngine);
+
+        assertFalse(unconfigured.isMailConfigured());
 
         Enquiry enq = new Enquiry();
         enq.setEmail("test@example.com");
-        emailService.sendEnquiryAcknowledgement(enq);
+        unconfigured.sendEnquiryAcknowledgement(enq);
 
         verifyNoInteractions(mailSender);
     }
 
     @Test
-    @DisplayName("Enquiry acknowledgement email is generated and sent")
+    @DisplayName("Enquiry acknowledgement email is generated and sent via SES")
     void testSendEnquiryAcknowledgement() {
         MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
@@ -86,25 +100,20 @@ class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("Competition registration confirmation email is generated and sent")
-    void testSendCompetitionRegistrationConfirmation() {
+    @DisplayName("Competition registration success email with receipt and credentials is sent")
+    void testSendCompetitionRegistrationSuccess() {
         MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
 
-        Competition comp = new Competition();
-        comp.setTitle("Spell Bee 2026");
-        comp.setCategory("Juniors");
-        comp.setStartDate("2026-11-20");
-        comp.setVenue("Online");
-
-        CompetitionRegistration reg = new CompetitionRegistration();
-        reg.setId("reg_test_999");
-        reg.setStudentName("Alice Smith");
-        reg.setStudentEmail("alice@example.com");
-        reg.setPaymentStatus("Paid");
-        reg.setCompetition(comp);
-
-        emailService.sendCompetitionRegistrationConfirmation(reg);
+        emailService.sendCompetitionRegistrationSuccess(
+                "alice@example.com",
+                "Alice Smith",
+                "SecretPass123!",
+                "Annual English Competition",
+                "pay_xyz123",
+                "₹199",
+                "2026-10-29"
+        );
 
         ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender, times(1)).send(captor.capture());
@@ -112,12 +121,12 @@ class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("Student welcome email with credentials is generated and sent")
+    @DisplayName("Student welcome email with enrolled courses and credentials is sent")
     void testSendStudentWelcomeEmail() {
         MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
 
-        emailService.sendStudentWelcomeEmail("student@example.com", "Bob Williams", "TempPass123!");
+        emailService.sendStudentWelcomeEmail("student@example.com", "Bob Williams", "TempPass123!", Collections.singletonList("Spoken English Mastery"));
 
         ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender, times(1)).send(captor.capture());
@@ -130,10 +139,40 @@ class EmailServiceTest {
         MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
 
-        emailService.sendTrainerWelcomeEmail("trainer@example.com", "Jane Trainer", "TrainerPass123!", "IELTS");
+        emailService.sendTrainerWelcomeEmail("trainer@example.com", "Jane Trainer", "TrainerPass123!", "IELTS Preparation");
 
         ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender, times(1)).send(captor.capture());
         assertNotNull(captor.getValue());
+    }
+
+    @Test
+    @DisplayName("Profile updated email with changed fields and password reset is sent")
+    void testSendProfileUpdatedEmail() {
+        MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
+        emailService.sendProfileUpdatedEmail(
+                "student@example.com",
+                "Charlie",
+                "STUDENT",
+                Map.of("Full Name", "Charlie Davis", "Phone", "9988776655"),
+                "NewTempPass123!"
+        );
+
+        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender, times(1)).send(captor.capture());
+        assertNotNull(captor.getValue());
+    }
+
+    @Test
+    @DisplayName("Provider selection prefers Brevo when configured")
+    void testProviderSelectionPrefersBrevo() {
+        BrevoEmailProvider configuredBrevo = new BrevoEmailProvider("xkeysib-dummy-key", "zorocentre@gmail.com", "Zoro", new ObjectMapper());
+        EmailService service = new EmailService(configuredBrevo, sesProvider, templateEngine);
+        ReflectionTestUtils.setField(service, "preferredProvider", "");
+
+        assertTrue(service.isMailConfigured());
+        assertEquals("BREVO", service.getActiveProvider().getProviderName());
     }
 }

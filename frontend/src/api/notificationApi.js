@@ -11,6 +11,7 @@ export const getMyNotifications = async () => {
       desc: n.message || '',
       message: n.message || '',
       readStatus: n.readStatus || false,
+      createdAt: n.createdAt,
       time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
       date: n.createdAt ? new Date(n.createdAt).toISOString().split('T')[0] : '',
       type: 'system'
@@ -31,6 +32,7 @@ export const getNotifications = async () => {
       desc: n.message || '',
       message: n.message || '',
       readStatus: n.readStatus || false,
+      createdAt: n.createdAt,
       time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
       date: n.createdAt ? new Date(n.createdAt).toISOString().split('T')[0] : '',
       type: 'system'
@@ -98,13 +100,17 @@ export const notifyScheduleChange = async (schedule, actionType, originalDate, o
 };
 
 export const getTrainerNotifications = async (trainerNameOrEmail) => {
-  const res = await getNotifications();
-  if (!res.success) {
-    return apiResponse([], false, res?.message || 'Failed to fetch trainer notifications');
+  const res = await getMyNotifications();
+  if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+    return res;
+  }
+  const fallbackRes = await getNotifications();
+  if (!fallbackRes.success) {
+    return apiResponse([], false, fallbackRes?.message || 'Failed to fetch trainer notifications');
   }
   const lowerQuery = (trainerNameOrEmail || '').toLowerCase().trim();
 
-  const trainerNotifs = (res.data || []).filter(n => {
+  const trainerNotifs = (fallbackRes.data || []).filter(n => {
     if (!n.trainerName) return true;
     const nLower = n.trainerName.toLowerCase();
     return nLower.includes(lowerQuery) || lowerQuery.includes(nLower);

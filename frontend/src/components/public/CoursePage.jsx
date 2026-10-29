@@ -181,7 +181,7 @@ export default function CoursePage({ onOpenEnquire }) {
                         </button>
                       </div>
                       <div className="absolute bottom-3 left-3 right-3 text-center text-xs font-bold text-white bg-slate-900/80 backdrop-blur-sm py-1.5 px-3 rounded-lg">
-                        Watch Course Demo & Syllabus Overview
+                      
                       </div>
                     </div>
                   </div>

@@ -29,7 +29,11 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public List<Notification> getNotificationsForRoleOrUser(String role, String userId) {
         String effectiveRole = role != null && !role.isBlank() ? role.toUpperCase() : "ALL";
-        List<Notification> roleNotifs = notificationRepository.findByRecipientRoleIgnoreCaseOrRecipientRoleIgnoreCase("ALL", effectiveRole);
+        List<Notification> allRoleNotifs = notificationRepository.findByRecipientRoleIgnoreCaseOrRecipientRoleIgnoreCase("ALL", effectiveRole);
+        // Only broadcast notifications (without a specific recipientId) apply to the whole role
+        List<Notification> broadcastRoleNotifs = allRoleNotifs.stream()
+                .filter(n -> n.getRecipientId() == null || n.getRecipientId().isBlank())
+                .toList();
 
         java.util.List<Notification> userNotifs = new java.util.ArrayList<>();
         if (userId != null && !userId.isBlank()) {
@@ -53,7 +57,7 @@ public class NotificationService {
         for (Notification n : userNotifs) {
             if (seenIds.add(n.getId())) merged.add(n);
         }
-        for (Notification n : roleNotifs) {
+        for (Notification n : broadcastRoleNotifs) {
             if (seenIds.add(n.getId())) merged.add(n);
         }
         merged.sort((a, b) -> {

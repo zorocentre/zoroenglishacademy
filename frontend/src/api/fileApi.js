@@ -254,20 +254,26 @@ export async function uploadFile(file, category = 'document', onProgress = null)
             contentType: data.contentType || file.type
           });
         } else {
-          const msg = response.message || `Upload failed with status ${xhr.status}`;
+          const msg = response.message || response.error || `Upload failed with status ${xhr.status}`;
           reject(new Error(msg));
         }
       } catch (err) {
-        reject(new Error('Failed to parse upload server response'));
+        if (xhr.status === 413) {
+          reject(new Error('File size exceeds server limit (HTTP 413 Payload Too Large).'));
+        } else if (xhr.status >= 400) {
+          reject(new Error(`Server error during upload (${xhr.status}: ${xhr.statusText || 'Error'})`));
+        } else {
+          reject(new Error('Failed to parse upload server response'));
+        }
       }
     };
 
     xhr.onerror = () => {
-      reject(new Error('Network error during file upload'));
+      reject(new Error('Network error during file upload. Please check your connection or file size.'));
     };
 
     xhr.ontimeout = () => {
-      reject(new Error('Upload request timed out'));
+      reject(new Error('Upload request timed out. Please try again.'));
     };
 
     xhr.send(formData);
@@ -353,20 +359,26 @@ export async function unifiedUpload(file, { category = 'auto', title = '', onPro
             contentType: data.contentType || file.type
           });
         } else {
-          const msg = response.message || `Upload failed with status ${xhr.status}`;
+          const msg = response.message || response.error || `Upload failed with status ${xhr.status}`;
           reject(new Error(msg));
         }
       } catch {
-        reject(new Error('Failed to parse upload server response'));
+        if (xhr.status === 413) {
+          reject(new Error('File size exceeds server limit (HTTP 413 Payload Too Large).'));
+        } else if (xhr.status >= 400) {
+          reject(new Error(`Server error during upload (${xhr.status}: ${xhr.statusText || 'Error'})`));
+        } else {
+          reject(new Error('Failed to parse upload server response'));
+        }
       }
     };
 
     xhr.onerror = () => {
-      reject(new Error('Network error during file upload'));
+      reject(new Error('Network error during file upload. Please check your connection or file size.'));
     };
 
     xhr.ontimeout = () => {
-      reject(new Error('Upload request timed out'));
+      reject(new Error('Upload request timed out. Please try again.'));
     };
 
     xhr.onabort = () => {

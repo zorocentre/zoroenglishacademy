@@ -201,9 +201,15 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
         async (paymentResponse) => {
           try {
             const verifyPayload = {
-              razorpayOrderId: paymentResponse.razorpayOrderId || paymentResponse.razorpay_order_id,
-              razorpayPaymentId: paymentResponse.razorpayPaymentId || paymentResponse.razorpay_payment_id,
-              razorpaySignature: paymentResponse.razorpaySignature || paymentResponse.razorpay_signature,
+              orderId: paymentResponse.razorpay_order_id || paymentResponse.razorpayOrderId || orderData.orderId,
+              paymentId: paymentResponse.razorpay_payment_id || paymentResponse.razorpayPaymentId,
+              signature: paymentResponse.razorpay_signature || paymentResponse.razorpaySignature,
+              razorpayOrderId: paymentResponse.razorpay_order_id || paymentResponse.razorpayOrderId || orderData.orderId,
+              razorpayPaymentId: paymentResponse.razorpay_payment_id || paymentResponse.razorpayPaymentId,
+              razorpaySignature: paymentResponse.razorpay_signature || paymentResponse.razorpaySignature,
+              razorpay_order_id: paymentResponse.razorpay_order_id || paymentResponse.razorpayOrderId || orderData.orderId,
+              razorpay_payment_id: paymentResponse.razorpay_payment_id || paymentResponse.razorpayPaymentId,
+              razorpay_signature: paymentResponse.razorpay_signature || paymentResponse.razorpaySignature,
               competitionId: competition.id,
               studentEmail: cleanEmail,
               registrationId: orderData.registrationId

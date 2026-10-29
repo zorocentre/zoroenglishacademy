@@ -32,6 +32,8 @@ public interface CompetitionRegistrationRepository extends JpaRepository<Competi
 
     List<CompetitionRegistration> findByPaymentStatusAndCreatedAtBefore(String paymentStatus, LocalDateTime cutoff);
 
-    @Query("SELECT COALESCE(SUM(COALESCE(r.amount, c.registrationFee, 0)), 0) FROM CompetitionRegistration r JOIN r.competition c WHERE LOWER(r.paymentStatus) = 'paid'")
+    List<CompetitionRegistration> findByPaymentStatusInAndCreatedAtBefore(List<String> statuses, LocalDateTime cutoff);
+
+    @Query("SELECT COALESCE(SUM(COALESCE(r.amount, c.registrationFee, 0)), 0) FROM CompetitionRegistration r JOIN r.competition c WHERE LOWER(r.paymentStatus) IN ('paid', 'success')")
     java.math.BigDecimal sumPaidCompetitionFees();
 }

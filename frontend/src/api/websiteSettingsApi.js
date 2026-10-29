@@ -2,6 +2,8 @@ import { apiGet, apiPost, apiPut, apiDelete, apiResponse } from './client';
 
 export const DEFAULT_WEBSITE_SETTINGS = {
   landingPageContent: {
+    academyName: 'Zoro English Academy',
+    tagline: 'Small Steps Big Communication',
     heroBadge: 'Learn Today. Grow Tomorrow.',
     heroHeading: 'Skills for a Brighter Tomorrow',
     heroDescription: 'Build skills. Boost confidence. Unlock potential through world-class interactive live classes tailored for children aged 5 to 16.',

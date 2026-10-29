@@ -77,6 +77,9 @@ sudo usermod -aG docker $USER
 # 4. Install Node.js 20+ & npm for compiling frontend assets
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
+
+# 5. Install LibreOffice Headless for PPT/PPTX auto-conversion to PDF (Section 9b)
+sudo apt install -y libreoffice-core libreoffice-common libreoffice-writer libreoffice-impress
 ```
 
 Verify installation:
@@ -85,6 +88,7 @@ docker --version
 docker compose version
 node -v
 npm -v
+soffice --version
 ```
 
 ---
@@ -216,54 +220,28 @@ npm -v
 
 ## 4. Nginx Configuration on Hostinger VPS
 
-Keep your existing SSL certificates and coming-soon page untouched until you are ready to switch live. When ready, configure Nginx virtual hosts as described below.
+The production Nginx configuration file is maintained directly in the repository at [`deploy/nginx.conf`](./deploy/nginx.conf).
 
-### 4.1. API Virtual Host: `api.zoroenglish.com`
-Create `/etc/nginx/sites-available/api.zoroenglish.com`:
+To deploy or update Nginx on Ubuntu VPS:
+```bash
+# 1. Copy configuration to sites-available
+sudo cp /opt/zoro-academy-app/deploy/nginx.conf /etc/nginx/sites-available/zoroenglish.com
 
-```nginx
-server {
-    listen 80;
-    server_name api.zoroenglish.com;
-    return 301 https://$host$request_uri;
-}
+# 2. Enable virtual host symlink
+sudo ln -sf /etc/nginx/sites-available/zoroenglish.com /etc/nginx/sites-enabled/
 
-server {
-    listen 443 ssl http2;
-    server_name api.zoroenglish.com;
+# 3. Test syntax
+sudo nginx -t
 
-    # SSL Certificates (Use your existing Certbot paths)
-    ssl_certificate /etc/letsencrypt/live/api.zoroenglish.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.zoroenglish.com/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    # Maximum file upload size (matches Spring Boot multipart limit: 100MB)
-    client_max_body_size 100M;
-
-    # Forward requests to Docker container on localhost loopback
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-
-        # Reverse proxy headers required by Spring Boot ForwardedHeaderFilter
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port $server_port;
-
-        # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Timeouts for long uploads and stream requests
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 120s;
-        proxy_read_timeout 120s;
-    }
-}
+# 4. Reload Nginx without downtime
+sudo systemctl reload nginx
 ```
+
+### 4.1. Configuration Breakdown & Key Features
+- **SPA Fallback**: `location / { try_files $uri $uri/ /index.html; }` prevents 404 errors on browser page refresh across all client routes (`/admin`, `/student/courses`, `/competition/*`, `/trainer/*`).
+- **Dedicated API Proxy**: `location /api/ { proxy_pass http://127.0.0.1:8080/api/; }` is positioned strictly **above** the fallback so backend endpoints and API 404/403 responses are never swallowed by `index.html`.
+- **Large Upload Support**: `client_max_body_size 500M;` and `proxy_request_buffering off;` allow videos, high-resolution media prompts, and PDFs up to 500MB to stream directly to backend without buffering on VPS disk.
+- **Static Asset Caching**: `location /assets/` sets 1-year immutable caching for Vite bundle chunks with content hashes and terminates with `try_files $uri =404;`.
 
 ### 4.2. Frontend Virtual Host: `zoroenglish.com`
 Create `/etc/nginx/sites-available/zoroenglish.com`:

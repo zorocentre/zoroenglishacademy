@@ -192,16 +192,16 @@ export default function AdminCompetitionRegistrationsPage() {
     return matchesSearch && matchesComp && matchesStatus;
   });
 
-  // Calculate Revenue Stats - Count only PAID registrations
+  // Calculate Revenue Stats - Count only PAID & SUCCESS registrations
   const paidRegistrations = registrations.filter(r => 
-    (r.paymentStatus === 'Paid' || r.paymentStatus === 'PAID') && 
+    (r.paymentStatus === 'Paid' || r.paymentStatus === 'PAID' || r.paymentStatus === 'SUCCESS') && 
     r.registrationStatus !== 'Cancelled'
   );
   const totalRevenue = paidRegistrations.reduce((sum, r) => {
     const amt = r.amount != null ? Number(r.amount) : (r.amountPaise != null ? Number(r.amountPaise) / 100 : Number(r.registrationFee || 0));
     return sum + amt;
   }, 0);
-  const totalRegCount = registrations.filter(r => r.registrationStatus !== 'Cancelled').length;
+  const totalRegCount = paidRegistrations.length;
 
   // Group by Competition Name -> Array of Participants
   const groupedByCompetition = filteredRegistrations.reduce((acc, reg) => {
@@ -282,10 +282,9 @@ export default function AdminCompetitionRegistrationsPage() {
               className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
             >
               <option value="All">All Payment Statuses</option>
-              <option value="Paid">Paid</option>
-              <option value="Pending">Pending</option>
-              <option value="Failed">Failed</option>
-              <option value="Not Required">Not Required</option>
+              <option value="SUCCESS">SUCCESS</option>
+              <option value="PENDING">PENDING</option>
+              <option value="FAILED">FAILED</option>
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
@@ -323,13 +322,13 @@ export default function AdminCompetitionRegistrationsPage() {
                 </div>
               </div>
 
-              {/* Table of Registered Students */}
+              {/* Table of Registered Students with Horizontal Scroll (Section 5) */}
               <div className="p-6 pt-2 overflow-x-auto">
-                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="border border-slate-200 rounded-2xl overflow-hidden min-w-[1100px]">
                   <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                        <th className="py-3 px-4">Participant Name</th>
+                        <th className="py-3 px-4 sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-xs">Participant Name</th>
                         <th className="py-3 px-4">Email & Phone</th>
                         <th className="py-3 px-4">Password</th>
                         <th className="py-3 px-4">Age / School / City</th>
@@ -344,8 +343,8 @@ export default function AdminCompetitionRegistrationsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {studentList.map((student) => (
-                        <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3.5 px-4 font-black text-slate-900">
+                        <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="py-3.5 px-4 font-black text-slate-900 sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 shadow-xs">
                             {student.studentName}
                           </td>
                           <td className="py-3.5 px-4">
@@ -354,6 +353,12 @@ export default function AdminCompetitionRegistrationsPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             {(() => {
+                              const isPaid = student.paymentStatus === 'SUCCESS' || student.paymentStatus === 'PAID' || student.paymentStatus === 'Paid';
+                              if (!isPaid) {
+                                return (
+                                  <span className="text-[11px] text-slate-400 italic font-semibold">Available on payment</span>
+                                );
+                              }
                               const rev = revealedPasswords[student.id];
                               if (!rev || rev.hidden) {
                                 return (
@@ -443,17 +448,17 @@ export default function AdminCompetitionRegistrationsPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black ${
-                              student.paymentStatus === 'Paid' || student.paymentStatus === 'PAID'
+                              student.paymentStatus === 'Paid' || student.paymentStatus === 'PAID' || student.paymentStatus === 'SUCCESS'
                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : student.paymentStatus === 'PENDING_PAYMENT' || student.paymentStatus === 'Pending'
+                                : student.paymentStatus === 'PENDING_PAYMENT' || student.paymentStatus === 'Pending' || student.paymentStatus === 'PENDING'
                                 ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                : student.paymentStatus === 'EXPIRED'
-                                ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                : student.paymentStatus === 'Not Required'
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                 : 'bg-rose-100 text-rose-800 border border-rose-200'
                             }`}>
-                              {student.paymentStatus}
+                              {student.paymentStatus === 'Paid' || student.paymentStatus === 'PAID' || student.paymentStatus === 'SUCCESS'
+                                ? 'SUCCESS'
+                                : student.paymentStatus === 'PENDING_PAYMENT' || student.paymentStatus === 'Pending' || student.paymentStatus === 'PENDING'
+                                ? 'PENDING'
+                                : 'FAILED'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-[11px] text-slate-600 font-bold">
@@ -662,9 +667,9 @@ export default function AdminCompetitionRegistrationsPage() {
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, paymentStatus: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
                 >
-                  <option value="PAID">PAID</option>
-                  <option value="PENDING_PAYMENT">PENDING_PAYMENT</option>
-                  <option value="Failed">Failed</option>
+                  <option value="SUCCESS">SUCCESS</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="FAILED">FAILED</option>
                   <option value="Cancelled">Cancelled</option>
                 </select>
               </div>

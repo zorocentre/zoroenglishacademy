@@ -19,8 +19,8 @@ spring:
     open-in-view: false
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
+      max-file-size: 500MB
+      max-request-size: 500MB
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -45,24 +45,26 @@ spring:
 
 app:
   mail:
-    from-email: ${AWS_SES_FROM_EMAIL:noreply@zoroacademy.com}
-    from-name: ${AWS_SES_FROM_NAME:Zoro Academy}
+    provider: ${EMAIL_PROVIDER:}
+    brevo-api-key: ${BREVO_API_KEY:}
+    from-email: ${EMAIL_SENDER_EMAIL:${AWS_SES_FROM_EMAIL:zorocentre@gmail.com}}
+    from-name: ${EMAIL_SENDER_NAME:${AWS_SES_FROM_NAME:Zoro English Academy}}
   storage:
     provider: ${APP_STORAGE_PROVIDER:bunny}
     bunny:
-      host: ${BUNNY_STORAGE_HOST}
-      zone: ${BUNNY_STORAGE_ZONE}
-      password: ${BUNNY_STORAGE_PASSWORD}
-      cdn-host: ${BUNNY_STORAGE_CDN_HOST}
+      host: ${BUNNY_STORAGE_HOST:storage.bunnycdn.com}
+      zone: ${BUNNY_STORAGE_ZONE:}
+      password: ${BUNNY_STORAGE_PASSWORD:${BUNNY_STORAGE_ACCESS_KEY:}}
+      cdn-host: ${BUNNY_STORAGE_CDN_HOST:}
 
 bunny:
   stream:
-    library-id: ${BUNNY_LIBRARY_ID}
-    api-key: ${BUNNY_API_KEY}
-    cdn-host: ${BUNNY_CDN_HOST}
-    token-auth-key: ${BUNNY_TOKEN_AUTH_KEY}
+    library-id: ${BUNNY_STREAM_LIBRARY_ID:${BUNNY_LIBRARY_ID:}}
+    api-key: ${BUNNY_STREAM_API_KEY:${BUNNY_API_KEY:}}
+    cdn-host: ${BUNNY_STREAM_CDN_HOST:${BUNNY_CDN_HOST:}}
+    token-auth-key: ${BUNNY_STREAM_TOKEN_AUTH_KEY:${BUNNY_TOKEN_AUTH_KEY:}}
     token-expiration-seconds: 7200
-    webhook-secret: ${BUNNY_WEBHOOK_SECRET}
+    webhook-secret: ${BUNNY_STREAM_WEBHOOK_SECRET:${BUNNY_WEBHOOK_SECRET:}}
 
 admin:
   email: ${ADMIN_EMAIL}

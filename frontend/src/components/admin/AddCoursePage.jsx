@@ -51,14 +51,20 @@ export default function AddCoursePage({ setActiveScreen }) {
     let assignedTrainer = null;
 
     if (formData.mode === 'Online' || formData.mode === 'Hybrid') {
-      normalizedMeetUrl = normalizeGoogleMeetUrl(formData.googleMeetUrl || '');
+      const rawMeet = formData.googleMeetUrl ? formData.googleMeetUrl.trim() : '';
+      if (!rawMeet) {
+        setErrorMsg(`Google Meet Link is required for ${formData.mode} courses.`);
+        return;
+      }
+      normalizedMeetUrl = normalizeGoogleMeetUrl(rawMeet);
       if (!isValidGoogleMeetUrl(normalizedMeetUrl)) {
-        setErrorMsg(`A valid Google Meet URL is required for ${formData.mode} courses (e.g. https://meet.google.com/xxx-xxxx-xxx).`);
+        setErrorMsg(`Invalid Google Meet Link: "${formData.googleMeetUrl}". Please enter a valid URL (e.g. https://meet.google.com/abc-defg-hij).`);
         return;
       }
       trainerId = null;
       assignedTrainer = null;
     } else {
+      normalizedMeetUrl = null;
       // Recorded
       if (formData.audience === 'trainer') {
         trainerId = 'admin';

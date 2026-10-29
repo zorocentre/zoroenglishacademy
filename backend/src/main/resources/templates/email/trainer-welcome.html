@@ -3,81 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Zoro Academy Faculty</title>
+    <title>Welcome to Zoro English Academy Faculty</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #f8fafc;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: #334155;
-            -webkit-font-smoothing: antialiased;
-        }
-        table {
-            border-collapse: collapse;
-        }
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
+        table { border-collapse: collapse; }
     </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
         <tr>
             <td align="center">
-                <table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
-                    <!-- Header -->
+                <table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
+                    <!-- Brand Header -->
                     <tr>
-                        <td style="background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); padding: 32px 24px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">Zoro Academy</h1>
-                            <p style="color: #c7d2fe; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">Faculty &amp; Instructor Onboarding</p>
+                        <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 36px 24px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">ZORO ENGLISH ACADEMY</h1>
+                            <p style="color: #93c5fd; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">Faculty & Trainer Portal</p>
                         </td>
                     </tr>
 
                     <!-- Body Content -->
                     <tr>
                         <td style="padding: 32px 28px;">
-                            <h2 style="color: #1e293b; margin: 0 0 16px 0; font-size: 20px; font-weight: 600;">
-                                Welcome to the Faculty, <span th:text="${name}">Trainer</span>!
+                            <h2 style="color: #0f172a; margin: 0 0 14px 0; font-size: 20px; font-weight: 700;">
+                                Welcome, Trainer <span th:text="${name}">Trainer</span>!
                             </h2>
                             <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
-                                We are delighted to welcome you to the <strong>Zoro Academy</strong> teaching team! Your trainer account is now active. Through your portal, you can manage your schedules, conduct live sessions, review assignments, and guide students.
+                                We are pleased to welcome you to the faculty team at <strong>Zoro English Academy</strong>. Your trainer portal provides everything you need to manage your assigned batches, launch live classes via Google Meet, record student attendance, review assignments, and evaluate competition submissions.
                             </p>
 
+                            <!-- Role Info -->
+                            <div th:if="${specialty != null and !specialty.isEmpty()}" style="background-color: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 16px 20px; margin: 20px 0;">
+                                <h4 style="margin: 0 0 6px 0; color: #7e22ce; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Designation & Specialization</h4>
+                                <p style="margin: 0; color: #581c87; font-size: 14px; font-weight: 600;" th:text="${specialty}">Spoken English Specialist</p>
+                            </div>
+
                             <!-- Credentials Box -->
-                            <table role="presentation" width="100%" style="background-color: #f1f5f9; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+                            <table role="presentation" width="100%" style="background-color: #eff6ff; border-radius: 12px; margin: 20px 0; border: 1px solid #bfdbfe;">
                                 <tr>
                                     <td style="padding: 20px;">
-                                        <h3 style="color: #334155; margin: 0 0 12px 0; font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                                            Trainer Access Credentials
+                                        <h3 style="color: #1e3a8a; margin: 0 0 12px 0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            Trainer Portal Credentials
                                         </h3>
                                         <table role="presentation" width="100%">
                                             <tr>
-                                                <td style="padding: 6px 0; color: #64748b; font-size: 14px; width: 35%;">Username / Email:</td>
-                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px; font-weight: 600;" th:text="${email}">trainer@example.com</td>
-                                            </tr>
-                                            <tr th:if="${specialty != null and !specialty.isEmpty()}">
-                                                <td style="padding: 6px 0; color: #64748b; font-size: 14px; width: 35%;">Specialization:</td>
-                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px; font-weight: 500;" th:text="${specialty}">IELTS / Business Communication</td>
+                                                <td style="padding: 6px 0; color: #3b82f6; font-size: 14px; width: 35%;">Username / Email:</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px; font-weight: 700;" th:text="${email}">trainer@example.com</td>
                                             </tr>
                                             <tr th:if="${plainPassword != null and !plainPassword.isEmpty()}">
-                                                <td style="padding: 6px 0; color: #64748b; font-size: 14px; width: 35%;">Temporary Password:</td>
-                                                <td style="padding: 6px 0; color: #4338ca; font-size: 14px; font-weight: 600; font-family: monospace;" th:text="${plainPassword}">SecretPassword123!</td>
+                                                <td style="padding: 6px 0; color: #3b82f6; font-size: 14px; width: 35%;">Password:</td>
+                                                <td style="padding: 6px 0; color: #1e3a8a; font-size: 15px; font-weight: 800; font-family: monospace;" th:text="${plainPassword}">TrainerPass123!</td>
                                             </tr>
                                         </table>
-                                        <p th:if="${plainPassword != null and !plainPassword.isEmpty()}" style="margin: 12px 0 0 0; color: #dc2626; font-size: 12px; font-weight: 500;">
-                                            * Please change your password after logging in for the first time.
+                                        <p style="margin: 14px 0 0 0; color: #b91c1c; font-size: 12px; font-weight: 600; line-height: 1.4;">
+                                            🔒 Security Note: Do not share your faculty credentials. Please change your password upon logging into the portal.
                                         </p>
                                     </td>
                                 </tr>
                             </table>
 
                             <!-- CTA Button -->
-                            <div style="text-align: center; margin: 30px 0;">
-                                <a th:href="${loginUrl != null ? loginUrl : 'http://localhost:5173/login'}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">
-                                    Access Trainer Portal
+                            <div style="text-align: center; margin: 32px 0 24px 0;">
+                                <a th:href="${loginUrl != null ? loginUrl : 'https://zoroenglish.com/login'}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);">
+                                    Log In to Trainer Portal
                                 </a>
                             </div>
 
-                            <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
-                                Our academic coordinator will coordinate with you regarding your assigned batches and curriculum materials.
+                            <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0; text-align: center;">
+                                For curriculum queries or scheduling support, contact the academic administration office.
                             </p>
                         </td>
                     </tr>
@@ -85,11 +78,14 @@
                     <!-- Footer -->
                     <tr>
                         <td style="background-color: #0f172a; padding: 24px; text-align: center; border-top: 1px solid #1e293b;">
-                            <p style="color: #94a3b8; font-size: 13px; margin: 0 0 8px 0;">
-                                &copy; Zoro English Academy. All rights reserved.
+                            <p style="color: #94a3b8; font-size: 13px; font-weight: 600; margin: 0 0 6px 0;">
+                                Zoro English Academy
                             </p>
-                            <p style="color: #64748b; font-size: 12px; margin: 0;">
-                                This is an automated email sent to registered instructors at Zoro Academy.
+                            <p style="color: #64748b; font-size: 12px; margin: 0 0 10px 0;">
+                                Support: <a href="mailto:zorocentre@gmail.com" style="color: #93c5fd; text-decoration: none;">zorocentre@gmail.com</a> | <a th:href="${frontendUrl != null ? frontendUrl : 'https://zoroenglish.com'}" style="color: #93c5fd; text-decoration: none;">zoroenglish.com</a>
+                            </p>
+                            <p style="color: #475569; font-size: 11px; margin: 0;">
+                                &copy; 2026 Zoro English Academy. All rights reserved.
                             </p>
                         </td>
                     </tr>

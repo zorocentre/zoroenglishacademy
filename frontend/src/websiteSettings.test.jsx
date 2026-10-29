@@ -191,11 +191,7 @@ describe('Task 4: WebsiteSettings Context, Dynamic Rendering, Offline Fallback &
     // Offline banner should NOT be present
     expect(screen.queryByText(/Offline Mode: Server Unreachable/i)).toBeNull();
 
-    // Switch to General Information tab
-    const generalTabBtn = screen.getByRole('button', { name: /General Information/i });
-    fireEvent.click(generalTabBtn);
-
-    // Wait for Academy Name input
+    // Academy Name is directly managed in Landing Page Content tab (Section 8)
     await waitFor(() => {
       expect(screen.getByDisplayValue('Zoro English Academy')).toBeDefined();
     });
@@ -218,6 +214,7 @@ describe('Task 4: WebsiteSettings Context, Dynamic Rendering, Offline Fallback &
     expect(putPayload).toBeTruthy();
     const saved = JSON.parse(putPayload.settingsJson);
     expect(saved.generalInfo.academyName).toBe('Zoro Global Academy');
+    expect(saved.landingPageContent.academyName).toBe('Zoro Global Academy');
   });
 
   it('5. ContactPage dynamically links googleMapLink as "Get directions"', async () => {

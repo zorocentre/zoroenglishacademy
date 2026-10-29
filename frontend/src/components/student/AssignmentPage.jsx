@@ -541,7 +541,16 @@ export default function AssignmentPage({ setActiveScreen }) {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400">Batch / Trainer:</span>
-                      <span className="text-slate-700">{item.batchName} • {item.assignedTrainer}</span>
+                      <span className="text-slate-700">
+                        {(() => {
+                          const hasBatch = item.batchName && item.batchName !== 'Unassigned' && item.batchName.trim() !== '';
+                          const hasTrainer = item.assignedTrainer && item.assignedTrainer !== 'Course Trainer' && item.assignedTrainer.trim() !== '';
+                          if (hasBatch && hasTrainer) return `${item.batchName} • ${item.assignedTrainer}`;
+                          if (hasBatch) return item.batchName;
+                          if (hasTrainer) return item.assignedTrainer;
+                          return '-';
+                        })()}
+                      </span>
                     </div>
                     {item.sessionDate && (
                       <div className="flex justify-between items-center">

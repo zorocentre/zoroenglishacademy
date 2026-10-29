@@ -196,24 +196,26 @@ export function evaluateScheduleLocks(schedulesList, nowInKolkata = getNowInKolk
   });
 }
 
-export function isValidGoogleMeetUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  if (trimmed.includes('meet.google.com/new') || 
-      trimmed.includes('meet.google.com/zoro-live-class') || 
-      trimmed.includes('meet.google.com/abc-defg-hij')) {
-    return false;
-  }
-  return /^https:\/\/meet\.google\.com\/[a-zA-Z0-9_-]+(\?.*)?$/i.test(trimmed);
-}
-
 export function normalizeGoogleMeetUrl(url) {
   if (!url || typeof url !== 'string') return '';
   let trimmed = url.trim();
+  if (!trimmed) return '';
   if (!/^https?:\/\//i.test(trimmed)) {
     trimmed = 'https://' + trimmed;
   }
   return trimmed;
+}
+
+export function isValidGoogleMeetUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const normalized = normalizeGoogleMeetUrl(url);
+  if (!normalized) return false;
+  const lower = normalized.toLowerCase();
+  if (lower.includes('meet.google.com/new') || 
+      lower.includes('meet.google.com/zoro-live-class')) {
+    return false;
+  }
+  return /^https:\/\/meet\.google\.com\/[a-zA-Z0-9_-]+(\/)?(\?.*)?$/i.test(normalized);
 }
 
 export function getScheduleJoinState(sch, nowInKolkata = getNowInKolkata()) {

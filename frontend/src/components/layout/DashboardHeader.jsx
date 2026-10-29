@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Calendar as CalendarIcon, Menu, X, AlertTriangle, Clock, CheckCircle2, Info, User, Trophy, ArrowLeftRight } from 'lucide-react';
 import { getMyNotifications } from '../../api/notificationApi';
+import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import { resolveFileUrl } from '../../api/fileApi';
 import { getMyPortals } from '../../api/competitionApi';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
@@ -64,11 +65,13 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
       const items = [];
       const notifRes = await getMyNotifications();
       (notifRes.data || []).slice(0, 10).forEach(n => {
+        const timeInfo = formatNotificationTime(n.createdAt || n.time || n.date);
         items.push({
           id: `notif_${n.id}`,
           title: n.title || 'Notification',
           desc: n.desc || n.message || '',
-          time: n.time || (n.createdAt ? new Date(n.createdAt).toLocaleDateString() : 'Today'),
+          time: timeInfo.relative,
+          exactTime: timeInfo.exact,
           type: n.type === 'danger' ? 'danger' : n.type === 'warning' ? 'warning' : 'info'
         });
       });
@@ -183,7 +186,7 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
                         <div className="min-w-0">
                           <div className="font-black text-xs leading-tight">{item.title}</div>
                           <p className="text-[11px] font-medium opacity-90 mt-0.5 leading-snug">{item.desc}</p>
-                          <span className="text-[10px] font-bold opacity-75 mt-1 block">{item.time}</span>
+                          <span className="text-[10px] font-bold opacity-75 mt-1 block cursor-help" title={item.exactTime}>{item.time}</span>
                         </div>
                       </div>
 

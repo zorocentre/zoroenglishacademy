@@ -31,6 +31,7 @@ public class FileStorageService {
     private final StorageProvider storageProvider;
     private final BunnyTokenService bunnyTokenService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DocumentConversionService documentConversionService;
 
     @Value("${jwt.secret:defaultSecretForFileLinksOnlyNotForJwtAuthKey123}")
     private String linkSecret;
@@ -57,12 +58,14 @@ public class FileStorageService {
             StoredFileRepository storedFileRepository,
             StorageProvider storageProvider,
             @Autowired(required = false) BunnyTokenService bunnyTokenService,
-            @Autowired(required = false) ApplicationEventPublisher eventPublisher
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher,
+            @Autowired(required = false) DocumentConversionService documentConversionService
     ) {
         this.storedFileRepository = storedFileRepository;
         this.storageProvider = storageProvider;
         this.bunnyTokenService = bunnyTokenService;
         this.eventPublisher = eventPublisher;
+        this.documentConversionService = documentConversionService;
     }
 
     public StoredFile storeFile(MultipartFile file, String category, String ownerId) {
@@ -123,6 +126,16 @@ public class FileStorageService {
             fileBytes = file.getBytes();
         } catch (IOException e) {
             throw new RuntimeException("Failed to read file bytes: " + e.getMessage(), e);
+        }
+
+        // Automatic PPT/PPTX/Office document conversion to PDF (Section 9b)
+        if (documentConversionService != null && documentConversionService.isConvertibleOfficeDocument(originalFilename)) {
+            var conversion = documentConversionService.convertToPdfIfApplicable(fileBytes, originalFilename);
+            if (conversion != null) {
+                fileBytes = conversion.getPdfBytes();
+                originalFilename = conversion.getPdfFilename();
+                size = (long) fileBytes.length;
+            }
         }
 
         String ext = getFileExtension(originalFilename);
@@ -204,6 +217,16 @@ public class FileStorageService {
     public StoredFile storeRawBytes(byte[] data, String originalName, String category, String contentType, String ownerId) {
         if (data == null || data.length == 0) {
             return null;
+        }
+
+        // Automatic PPT/PPTX/Office document conversion to PDF (Section 9b)
+        if (documentConversionService != null && documentConversionService.isConvertibleOfficeDocument(originalName)) {
+            var conversion = documentConversionService.convertToPdfIfApplicable(data, originalName);
+            if (conversion != null) {
+                data = conversion.getPdfBytes();
+                originalName = conversion.getPdfFilename();
+                contentType = "application/pdf";
+            }
         }
 
         String normCategory = (category != null ? category.trim().toLowerCase(Locale.ROOT) : "document");

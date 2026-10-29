@@ -172,7 +172,7 @@ public class MeController {
         }
 
         List<Map<String, Object>> paidCompetitions = regs.stream()
-                .filter(r -> "PAID".equalsIgnoreCase(r.getPaymentStatus()))
+                .filter(r -> ("PAID".equalsIgnoreCase(r.getPaymentStatus()) || "SUCCESS".equalsIgnoreCase(r.getPaymentStatus())))
                 .map(r -> {
                     Map<String, Object> compMap = new HashMap<>();
                     if (r.getCompetition() != null) {
@@ -610,7 +610,9 @@ public class MeController {
         User user = getCurrentUser();
         String role = user.getRole().toUpperCase();
 
-        List<Notification> roleNotifs = notificationRepository.findByRecipientRoleIgnoreCaseOrRecipientRoleIgnoreCase("ALL", role);
+        List<Notification> roleNotifs = notificationRepository.findByRecipientRoleIgnoreCaseOrRecipientRoleIgnoreCase("ALL", role).stream()
+                .filter(n -> n.getRecipientId() == null || n.getRecipientId().isBlank())
+                .toList();
         List<Notification> userNotifs = new ArrayList<>();
         if (user.getId() != null && !user.getId().isBlank()) {
             userNotifs.addAll(notificationRepository.findByRecipientIdIgnoreCase(user.getId()));

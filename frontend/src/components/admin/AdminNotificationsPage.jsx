@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Wallet, Calendar, CheckSquare, Trash2, CheckCircle2, Clock, Filter, AlertTriangle } from 'lucide-react';
 import { getMyNotifications, markNotificationRead, deleteNotification } from '../../api/notificationApi';
+import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import { useDialog } from '../../context/DialogContext';
 
 export default function AdminNotificationsPage() {
@@ -157,6 +158,7 @@ export default function AdminNotificationsPage() {
           filteredNotifications.map(item => {
             const { icon: IconComp, bg } = getNotificationIcon(item.title, item.desc || item.message);
             const isUnread = !item.readStatus;
+            const timeInfo = formatNotificationTime(item.createdAt || item.date || item.time);
 
             return (
               <div 
@@ -187,9 +189,9 @@ export default function AdminNotificationsPage() {
                     </p>
 
                     <div className="flex items-center space-x-3 text-[11px] text-slate-400 font-semibold pt-1">
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 cursor-help" title={timeInfo.exact}>
                         <Clock className="w-3 h-3 text-slate-400" />
-                        {item.date || 'Recent'} {item.time ? `• ${item.time}` : ''}
+                        {timeInfo.relative}
                       </span>
                     </div>
                   </div>

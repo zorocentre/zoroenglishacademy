@@ -81,3 +81,10 @@ body {
     box-shadow: 0 0 12px 2px rgba(59, 130, 246, 0.5);
   }
 }
+
+/* Security deterrent: hide content on print */
+@media print {
+  body {
+    display: none !important;
+  }
+}

@@ -959,16 +959,6 @@ export default function CompetitionTestSeriesPage() {
                     <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-xs font-black">
                       Slot {test.sequenceNo}
                     </span>
-
-                    {isMixed ? (
-                      <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-md text-[10px] font-bold">
-                        MCQ & Voice
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-bold">
-                        MCQ Only
-                      </span>
-                    )}
                   </div>
 
                   {/* Title & Stats */}

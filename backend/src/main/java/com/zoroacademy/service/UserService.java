@@ -437,7 +437,23 @@ public class UserService {
 
             if (emailService != null) {
                 try {
-                    emailService.sendStudentWelcomeEmail(user.getEmail(), user.getName(), dto.getPassword());
+                    List<String> courses = (user.getCourse() != null && !user.getCourse().isBlank())
+                            ? List.of(user.getCourse())
+                            : Collections.emptyList();
+                    emailService.sendStudentWelcomeEmail(user.getEmail(), user.getName(), dto.getPassword(), courses);
+                } catch (Exception ignored) {}
+            }
+        } else {
+            if (emailService != null) {
+                try {
+                    java.util.Map<String, Object> changed = new java.util.LinkedHashMap<>();
+                    if (dto.getName() != null) changed.put("Full Name", dto.getName());
+                    if (dto.getPhone() != null) changed.put("Phone", dto.getPhone());
+                    if (user.getCourse() != null && !user.getCourse().isBlank()) changed.put("Enrolled Courses", user.getCourse());
+                    if (dto.getStatus() != null) changed.put("Account Status", dto.getStatus());
+
+                    String updatedPass = (dto.getPassword() != null && !dto.getPassword().isBlank()) ? dto.getPassword() : null;
+                    emailService.sendProfileUpdatedEmail(user.getEmail(), user.getName(), "STUDENT", changed, updatedPass);
                 } catch (Exception ignored) {}
             }
         }
@@ -522,6 +538,19 @@ public class UserService {
             if (emailService != null) {
                 try {
                     emailService.sendTrainerWelcomeEmail(user.getEmail(), user.getName(), dto.getPassword(), user.getSpecialty());
+                } catch (Exception ignored) {}
+            }
+        } else {
+            if (emailService != null) {
+                try {
+                    java.util.Map<String, Object> changed = new java.util.LinkedHashMap<>();
+                    if (dto.getName() != null) changed.put("Full Name", dto.getName());
+                    if (dto.getPhone() != null) changed.put("Phone", dto.getPhone());
+                    if (dto.getSpecialty() != null) changed.put("Specialization", dto.getSpecialty());
+                    if (dto.getStatus() != null) changed.put("Account Status", dto.getStatus());
+
+                    String updatedPass = (dto.getPassword() != null && !dto.getPassword().isBlank()) ? dto.getPassword() : null;
+                    emailService.sendProfileUpdatedEmail(user.getEmail(), user.getName(), "TRAINER", changed, updatedPass);
                 } catch (Exception ignored) {}
             }
         }
@@ -790,6 +819,17 @@ public class UserService {
 
         user.setStatus(status.trim());
         user = userRepository.save(user);
+
+        // Keep enrollment status synchronized with single source of truth (user status)
+        if (enrollmentRepository != null) {
+            List<Enrollment> enrs = enrollmentRepository.findByStudentId(user.getId());
+            if (enrs != null && !enrs.isEmpty()) {
+                for (Enrollment enr : enrs) {
+                    enr.setStatus(status.trim());
+                }
+                enrollmentRepository.saveAll(enrs);
+            }
+        }
 
         if (refreshTokenRepository != null && !"Active".equalsIgnoreCase(status.trim())) {
             refreshTokenRepository.revokeAllByUserId(user.getId());

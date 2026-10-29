@@ -95,13 +95,26 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
           </button>
         </div>
 
-        {/* Mobile Hamburger Toggle Button */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 text-slate-600 hover:text-slate-900 focus:outline-none"
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        {/* Mobile Actions: Login Button immediately to the LEFT of Hamburger Icon */}
+        <div className="flex md:hidden items-center space-x-2">
+          <button 
+            type="button"
+            onClick={handleLoginClick}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-xl font-extrabold text-xs shadow-xs transition-all flex items-center space-x-1 cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Login</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
 
       </div>
 
@@ -149,18 +162,11 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
             Contact
           </button>
 
-          <div className="pt-2 grid grid-cols-2 gap-3">
+          <div className="pt-2">
             <button 
-              onClick={() => { handleLoginClick(); setMobileMenuOpen(false); }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-extrabold text-xs shadow flex items-center justify-center space-x-1 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Login</span>
-            </button>
-
-            <button 
+              type="button"
               onClick={() => { onOpenEnquire(); setMobileMenuOpen(false); }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-extrabold text-xs shadow flex items-center justify-center space-x-1 cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-extrabold text-xs shadow flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <PhoneCall className="w-4 h-4" />
               <span>Enquire Now</span>

@@ -118,6 +118,9 @@ export default function SafeVideo({
           src={effectiveSrc}
           poster={poster}
           controls={controls}
+          controlsList="nodownload"
+          disablePictureInPicture
+          onContextMenu={(e) => e.preventDefault()}
           autoPlay={autoPlay}
           muted={muted}
           className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${

@@ -354,6 +354,7 @@ public class FileController {
                         .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(buffer.length))
                         .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                         .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                        .header("X-Content-Type-Options", "nosniff")
                         .header("Content-Security-Policy", "frame-ancestors 'self' " + allowedOriginsCsp)
                         .body(rangeResource);
             } catch (Exception e) {
@@ -366,6 +367,7 @@ public class FileController {
                 .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "frame-ancestors 'self' " + allowedOriginsCsp)
                 .body(resource);
     }

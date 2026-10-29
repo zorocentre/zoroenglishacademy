@@ -1052,10 +1052,29 @@ export default function CompetitionFinalAssessmentPage() {
   // ==========================================
   // VIEW 3: LANDING / DASHBOARD VIEW (Light Portal Theme)
   // ==========================================
-  const windowStatus = assessmentData?.windowStatus || 'DRAFT';
+  const nowMs = nowTick;
+  const startAtMs = assessmentData?.startAt ? new Date(assessmentData.startAt).getTime() : null;
+  const endAtMs = assessmentData?.endAt ? new Date(assessmentData.endAt).getTime() : null;
+
+  let windowStatus = 'UNANNOUNCED';
+  if (startAtMs && endAtMs) {
+    if (nowMs < startAtMs) {
+      windowStatus = 'UPCOMING';
+    } else if (nowMs <= endAtMs) {
+      windowStatus = 'LIVE';
+    } else {
+      windowStatus = 'EXPIRED';
+    }
+  } else if (assessmentData?.windowStatus === 'LIVE') {
+    windowStatus = 'LIVE';
+  } else {
+    windowStatus = 'UNANNOUNCED';
+  }
+
   const isLive = windowStatus === 'LIVE';
   const isUpcoming = windowStatus === 'UPCOMING';
   const isExpired = windowStatus === 'EXPIRED';
+  const isUnannounced = windowStatus === 'UNANNOUNCED';
   const attemptStatus = assessmentData?.attemptStatus || null;
   const isAttemptCompleted = attemptStatus === 'COMPLETED' || attemptStatus === 'EVALUATION_PENDING';
   const assignedSetCode = assignedSet?.code || 'A';
@@ -1112,6 +1131,10 @@ export default function CompetitionFinalAssessmentPage() {
                 <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                   <Clock className="w-3.5 h-3.5" /> Upcoming Scheduled Examination
                 </span>
+              ) : isUnannounced ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                  <Clock className="w-3.5 h-3.5" /> Final Assessment Opening Soon
+                </span>
               ) : (
                 <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400">
                   <Lock className="w-3.5 h-3.5" /> Examination Window Concluded
@@ -1127,8 +1150,10 @@ export default function CompetitionFinalAssessmentPage() {
               {isLive 
                 ? `Window is currently open! Submit before the window closes.`
                 : isUpcoming 
-                  ? `Scheduled to open at ${new Date(assessmentData?.startAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
-                  : `This scheduled exam window has ended.`
+                  ? `Final assessment will be opened on ${new Date(assessmentData?.startAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} (IST)`
+                  : isUnannounced
+                    ? `Final Assessment will be opened soon. Date will be announced.`
+                    : `This scheduled exam window has ended.`
               }
             </p>
           </div>
@@ -1165,12 +1190,12 @@ export default function CompetitionFinalAssessmentPage() {
                 <Play className="w-4 h-4 fill-white" />
                 {attemptStatus === 'IN_PROGRESS' ? 'Resume Examination' : 'Start Examination Now'}
               </button>
-            ) : isUpcoming ? (
+            ) : isUpcoming || isUnannounced ? (
               <button
                 disabled
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-slate-700"
               >
-                <Lock className="w-4 h-4" /> Examination Locked
+                <Lock className="w-4 h-4" /> {isUpcoming ? 'Examination Locked' : 'Date Announced Soon'}
               </button>
             ) : (
               <div className="text-xs font-semibold text-rose-400 bg-rose-950/30 border border-rose-500/30 px-4 py-2.5 rounded-xl">

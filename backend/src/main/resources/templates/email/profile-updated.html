@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Updated - Zoro English Academy</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
+        table { border-collapse: collapse; }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
+                    <!-- Brand Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 36px 24px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">ZORO ENGLISH ACADEMY</h1>
+                            <p style="color: #93c5fd; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">Account Notification</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style="padding: 32px 28px;">
+                            <h2 style="color: #0f172a; margin: 0 0 14px 0; font-size: 20px; font-weight: 700;">
+                                Hello, <span th:text="${name}">User</span>!
+                            </h2>
+                            <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+                                Your <strong th:text="${role}">Student</strong> profile details have been updated by the academy administration. Below is a summary of the updated information:
+                            </p>
+
+                            <!-- Updated Fields Table -->
+                            <table role="presentation" width="100%" style="background-color: #f8fafc; border-radius: 12px; margin: 20px 0; border: 1px solid #e2e8f0;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="color: #0f172a; margin: 0 0 14px 0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+                                            Updated Profile Fields
+                                        </h3>
+                                        <table role="presentation" width="100%">
+                                            <tr th:each="entry : ${changedFields}">
+                                                <td style="padding: 8px 0; color: #64748b; font-size: 13px; font-weight: 600; width: 40%;" th:text="${entry.key}">Field</td>
+                                                <td style="padding: 8px 0; color: #0f172a; font-size: 14px; font-weight: 700;" th:text="${entry.value}">New Value</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Password Reset Notice (Included ONLY if password was changed) -->
+                            <table th:if="${newPassword != null and !newPassword.isEmpty()}" role="presentation" width="100%" style="background-color: #fef2f2; border-radius: 12px; margin: 20px 0; border: 1px solid #fecaca;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="color: #991b1b; margin: 0 0 10px 0; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            🔑 Password Reset Notification
+                                        </h3>
+                                        <p style="color: #7f1d1d; font-size: 13px; line-height: 1.5; margin: 0 0 12px 0;">
+                                            Your account password was updated by the administrator. Use the new temporary password below to log in:
+                                        </p>
+                                        <table role="presentation" width="100%">
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #991b1b; font-size: 14px; width: 35%;">New Password:</td>
+                                                <td style="padding: 6px 0; color: #1e1b4b; font-size: 15px; font-weight: 800; font-family: monospace;" th:text="${newPassword}">NewPassword123!</td>
+                                            </tr>
+                                        </table>
+                                        <p style="margin: 12px 0 0 0; color: #b91c1c; font-size: 12px; font-weight: 600;">
+                                            🔒 Security Note: Please change this password immediately after logging in.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- CTA Button -->
+                            <div style="text-align: center; margin: 32px 0 24px 0;">
+                                <a th:href="${loginUrl != null ? loginUrl : 'https://zoroenglish.com/login'}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);">
+                                    Log In to Portal
+                                </a>
+                            </div>
+
+                            <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0; text-align: center;">
+                                If you did not request or expect this change, please contact us immediately at zorocentre@gmail.com.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #0f172a; padding: 24px; text-align: center; border-top: 1px solid #1e293b;">
+                            <p style="color: #94a3b8; font-size: 13px; font-weight: 600; margin: 0 0 6px 0;">
+                                Zoro English Academy
+                            </p>
+                            <p style="color: #64748b; font-size: 12px; margin: 0 0 10px 0;">
+                                Support: <a href="mailto:zorocentre@gmail.com" style="color: #93c5fd; text-decoration: none;">zorocentre@gmail.com</a> | <a th:href="${frontendUrl != null ? frontendUrl : 'https://zoroenglish.com'}" style="color: #93c5fd; text-decoration: none;">zoroenglish.com</a>
+                            </p>
+                            <p style="color: #475569; font-size: 11px; margin: 0;">
+                                &copy; 2026 Zoro English Academy. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

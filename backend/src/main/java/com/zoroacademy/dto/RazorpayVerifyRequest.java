@@ -1,16 +1,20 @@
 package com.zoroacademy.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 
 public class RazorpayVerifyRequest {
 
     @NotBlank(message = "Order ID is required")
+    @JsonAlias({"razorpay_order_id", "razorpayOrderId"})
     private String orderId;
 
     @NotBlank(message = "Payment ID is required")
+    @JsonAlias({"razorpay_payment_id", "razorpayPaymentId"})
     private String paymentId;
 
     @NotBlank(message = "Signature is required")
+    @JsonAlias({"razorpay_signature", "razorpaySignature"})
     private String signature;
 
     public RazorpayVerifyRequest() {}

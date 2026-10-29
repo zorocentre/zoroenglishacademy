@@ -21,7 +21,7 @@ import {
   duplicateAssessmentQuestion, reorderAssessmentQuestions
 } from '../../api/competitionApi';
 import { getTrainers } from '../../api/userApi';
-import { uploadFile, resolveFileUrl, openFileWithSignedLink } from '../../api/fileApi';
+import { uploadFile, resolveFileUrl, openFileWithSignedLink, getFileLink } from '../../api/fileApi';
 import ButtonSpinner from '../common/ButtonSpinner';
 import InlineSpinner from '../common/InlineSpinner';
 import PageLoader from '../common/PageLoader';
@@ -82,6 +82,41 @@ export default function AdminCompetitionManagementPage() {
   const [syllabus, setSyllabus] = useState(null);
   const [sylTitle, setSylTitle] = useState('Official Competition Syllabus');
   const [sylUploading, setSylUploading] = useState(false);
+  const [inlineSyllabusUrl, setInlineSyllabusUrl] = useState('');
+  const [inlineSyllabusText, setInlineSyllabusText] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (!syllabus) {
+      setInlineSyllabusUrl('');
+      setInlineSyllabusText('');
+      return;
+    }
+    const fileId = syllabus.storedFileId || syllabus.id;
+    const rawUrl = syllabus.viewUrl || (fileId ? `/api/files/${fileId}` : '');
+    const ext = (syllabus.fileType || syllabus.fileName?.split('.').pop() || '').toLowerCase();
+
+    if (fileId) {
+      getFileLink(fileId)
+        .then(res => {
+          if (!active) return;
+          const finalUrl = res?.url ? resolveFileUrl(res.url) : resolveFileUrl(rawUrl);
+          setInlineSyllabusUrl(finalUrl);
+          if (ext === 'txt') {
+            fetch(finalUrl)
+              .then(r => r.text())
+              .then(txt => { if (active) setInlineSyllabusText(txt); })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          if (active) setInlineSyllabusUrl(resolveFileUrl(rawUrl));
+        });
+    } else if (rawUrl) {
+      setInlineSyllabusUrl(resolveFileUrl(rawUrl));
+    }
+    return () => { active = false; };
+  }, [syllabus]);
 
   const [videos, setVideos] = useState([]);
   const [newVideo, setNewVideo] = useState({ title: '', bunnyVideoId: '', duration: '', sortOrder: 0 });
@@ -485,7 +520,7 @@ export default function AdminCompetitionManagementPage() {
       if (editingSlot.type !== 'TEST_SERIES') {
         payload.durationMinutes = Number(slotFormData.durationMinutes || 20);
       }
-      if (editingSlot.type === 'MOCK') {
+      if (editingSlot.type === 'MOCK' || editingSlot.type === 'FINAL') {
         payload.startAt = toUtcIsoString(slotFormData.startAt);
         payload.endAt = toUtcIsoString(slotFormData.endAt);
       }
@@ -755,19 +790,21 @@ export default function AdminCompetitionManagementPage() {
     document.body.removeChild(link);
   };
 
-  // Filtered Students
+  // Filtered Students (Registered Students must show ONLY SUCCESS / PAID candidates)
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
+      const isPaid = s.paymentStatus && (s.paymentStatus.toUpperCase() === 'SUCCESS' || s.paymentStatus.toUpperCase() === 'PAID');
+      if (!isPaid) return false;
+
       const matchesSearch = !studentSearch || (
         (s.studentName && s.studentName.toLowerCase().includes(studentSearch.toLowerCase())) ||
         (s.studentEmail && s.studentEmail.toLowerCase().includes(studentSearch.toLowerCase())) ||
         (s.studentPhone && s.studentPhone.includes(studentSearch))
       );
       const matchesSet = setFilter === 'ALL' || (s.setCode === setFilter) || (setFilter === 'UNASSIGNED' && !s.setCode);
-      const matchesPayment = paymentFilter === 'ALL' || (s.paymentStatus && s.paymentStatus.toUpperCase() === paymentFilter);
-      return matchesSearch && matchesSet && matchesPayment;
+      return matchesSearch && matchesSet;
     });
-  }, [students, studentSearch, setFilter, paymentFilter]);
+  }, [students, studentSearch, setFilter]);
 
   if (loadingCompetitions) {
     return <PageLoader text="Loading competitions management..." />;
@@ -1099,12 +1136,12 @@ export default function AdminCompetitionManagementPage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {syllabus.viewUrl && (
+                  {(syllabus.viewUrl || inlineSyllabusUrl) && (
                     <button
                       type="button"
                       onClick={() => setViewingFile({
                         id: syllabus.storedFileId || syllabus.id,
-                        url: syllabus.viewUrl,
+                        url: inlineSyllabusUrl || resolveFileUrl(syllabus.viewUrl),
                         name: syllabus.fileName || syllabus.title,
                         title: syllabus.title,
                         type: syllabus.fileType
@@ -1137,7 +1174,7 @@ export default function AdminCompetitionManagementPage() {
                 </div>
               </div>
 
-              {/* Inline Syllabus Preview Card (Task K1) */}
+              {/* Inline Syllabus Preview Card */}
               <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50 space-y-3">
                 <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
                   Inline Syllabus Document Preview
@@ -1146,15 +1183,19 @@ export default function AdminCompetitionManagementPage() {
                 {syllabus.fileType === 'pdf' || (syllabus.fileName && syllabus.fileName.toLowerCase().endsWith('.pdf')) ? (
                   <div className="w-full h-96 rounded-xl border border-slate-200 overflow-hidden bg-white shadow-inner">
                     <iframe
-                      src={`${syllabus.viewUrl}#toolbar=0&navpanes=0`}
+                      src={`${inlineSyllabusUrl || resolveFileUrl(syllabus.viewUrl)}#toolbar=0&navpanes=0`}
                       className="w-full h-full border-0 select-none"
                       title="Syllabus Preview"
                     />
                   </div>
+                ) : syllabus.fileType === 'txt' || (syllabus.fileName && syllabus.fileName.toLowerCase().endsWith('.txt')) ? (
+                  <div className="w-full h-96 rounded-xl border border-slate-200 overflow-auto bg-white p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap select-none shadow-inner">
+                    {inlineSyllabusText || 'Loading text document preview...'}
+                  </div>
                 ) : ['png', 'jpg', 'jpeg', 'webp'].includes(syllabus.fileType?.toLowerCase()) ? (
                   <div className="flex justify-center p-2 bg-white rounded-xl border border-slate-200">
                     <img
-                      src={syllabus.viewUrl}
+                      src={inlineSyllabusUrl || resolveFileUrl(syllabus.viewUrl)}
                       alt="Syllabus Preview"
                       className="max-h-96 rounded-lg object-contain shadow-xs"
                     />

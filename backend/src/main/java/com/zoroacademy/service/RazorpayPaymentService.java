@@ -136,6 +136,52 @@ public class RazorpayPaymentService {
         return new String(chars);
     }
 
+    private void activateCandidateUserAccount(CompetitionRegistration reg, Competition comp) {
+        if (userRepository == null || reg == null || reg.getStudentEmail() == null) {
+            return;
+        }
+        String cleanEmail = reg.getStudentEmail().trim().toLowerCase();
+        Optional<User> existingUserOpt = userRepository.findByEmailIgnoreCase(cleanEmail);
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            reg.setStudentId(existingUser.getId());
+            registrationRepository.save(reg);
+        } else {
+            String plainPassword;
+            if (reg.getEncryptedPassword() != null) {
+                plainPassword = (adminPasswordCryptoService != null)
+                        ? adminPasswordCryptoService.decrypt(reg.getEncryptedPassword())
+                        : reg.getEncryptedPassword();
+            } else {
+                plainPassword = generateSecureRandomPassword();
+            }
+            String encryptedPassword = (adminPasswordCryptoService != null)
+                    ? adminPasswordCryptoService.encrypt(plainPassword)
+                    : plainPassword;
+
+            User newUser = new User();
+            newUser.setId("usr_" + UUID.randomUUID());
+            newUser.setEmail(cleanEmail);
+            newUser.setName(reg.getStudentName());
+            newUser.setPhone(reg.getStudentPhone());
+            if (passwordEncoder != null) {
+                newUser.setPassword(passwordEncoder.encode(plainPassword));
+            } else {
+                newUser.setPassword(plainPassword);
+            }
+            newUser.setAdminVisiblePassword(encryptedPassword);
+            newUser.setRole("STUDENT");
+            newUser.setOrigin("COMPETITION");
+            newUser.setStatus("Active");
+            newUser.setJoinedOn(LocalDate.now().toString());
+            userRepository.save(newUser);
+
+            reg.setStudentId(newUser.getId());
+            reg.setEncryptedPassword(encryptedPassword);
+            registrationRepository.save(reg);
+        }
+    }
+
     private void notifyRegistrationConfirmed(CompetitionRegistration reg, Competition comp) {
         if (reg == null || emailService == null || reg.getStudentEmail() == null || reg.getStudentEmail().isBlank()) {
             return;
@@ -150,15 +196,23 @@ public class RazorpayPaymentService {
                 user = userRepository.findByEmailIgnoreCase(reg.getStudentEmail()).orElse(null);
             }
 
-            boolean isNewCandidate = user != null && "COMPETITION".equalsIgnoreCase(user.getOrigin());
-            if (isNewCandidate && reg.getEncryptedPassword() != null) {
-                String plainPassword = (adminPasswordCryptoService != null)
+            String plainPassword = null;
+            if (reg.getEncryptedPassword() != null) {
+                plainPassword = (adminPasswordCryptoService != null)
                         ? adminPasswordCryptoService.decrypt(reg.getEncryptedPassword())
                         : reg.getEncryptedPassword();
-                emailService.sendCompetitionCredentials(reg.getStudentEmail(), reg.getStudentName(), plainPassword, compTitle);
-            } else {
-                emailService.sendCompetitionRegistrationConfirmation(reg);
             }
+            String feeStr = (reg.getAmountPaise() != null) ? "₹" + (reg.getAmountPaise() / 100) : "₹199.00";
+            String dateStr = reg.getPaidAt() != null ? reg.getPaidAt().toLocalDate().toString() : (reg.getCreatedAt() != null ? reg.getCreatedAt().toLocalDate().toString() : "Today");
+            emailService.sendCompetitionRegistrationSuccess(
+                    reg.getStudentEmail(),
+                    reg.getStudentName(),
+                    plainPassword,
+                    compTitle,
+                    reg.getRazorpayPaymentId() != null ? reg.getRazorpayPaymentId() : "N/A",
+                    feeStr,
+                    dateStr
+            );
         } catch (Exception e) {
             log.error("Failed to send competition confirmation / credentials email to {}: {}", reg.getStudentEmail(), e.getMessage());
         }
@@ -228,7 +282,7 @@ public class RazorpayPaymentService {
         reg.setSchool(request.getSchool());
         reg.setCity(request.getCity());
 
-        // Account linkage / creation (Part A)
+        // Account linkage / credential preparation (deferred user creation until payment success)
         if (userRepository != null) {
             Optional<User> existingUserOpt = userRepository.findByEmailIgnoreCase(cleanEmail);
             if (existingUserOpt.isPresent()) {
@@ -244,9 +298,10 @@ public class RazorpayPaymentService {
                 if (existingUser.getAdminVisiblePassword() != null) {
                     reg.setEncryptedPassword(existingUser.getAdminVisiblePassword());
                 }
-                // Do NOT generate a new password and do NOT overwrite the existing one
             } else {
-                // CASE 2: New competition-only candidate
+                // CASE 2: New competition-only candidate:
+                // DO NOT CREATE ACTIVE USER ACCOUNT PREMATURELY!
+                // Only prepare the encrypted credentials on registration.
                 String plainPassword = (request.getPassword() != null && request.getPassword().trim().length() >= 8)
                         ? request.getPassword().trim()
                         : generateSecureRandomPassword();
@@ -255,24 +310,6 @@ public class RazorpayPaymentService {
                         ? adminPasswordCryptoService.encrypt(plainPassword)
                         : plainPassword;
 
-                User newUser = new User();
-                newUser.setId("usr_" + UUID.randomUUID());
-                newUser.setEmail(cleanEmail);
-                newUser.setName(request.getStudentName());
-                newUser.setPhone(sanitizedPhone);
-                if (passwordEncoder != null) {
-                    newUser.setPassword(passwordEncoder.encode(plainPassword));
-                } else {
-                    newUser.setPassword(plainPassword);
-                }
-                newUser.setAdminVisiblePassword(encryptedPassword);
-                newUser.setRole("STUDENT");
-                newUser.setOrigin("COMPETITION");
-                newUser.setStatus("Active");
-                newUser.setJoinedOn(LocalDate.now().toString());
-                userRepository.save(newUser);
-
-                reg.setStudentId(newUser.getId());
                 reg.setEncryptedPassword(encryptedPassword);
             }
         } else if (request.getStudentId() != null) {
@@ -281,13 +318,15 @@ public class RazorpayPaymentService {
 
         // Free Competition -> Confirm immediately without payment
         if (amountPaise <= 0) {
-            reg.setPaymentStatus("PAID");
+            reg.setPaymentStatus("SUCCESS");
             reg.setAmountPaise(0L);
             reg.setAmount(BigDecimal.ZERO);
             reg.setCurrency("INR");
             reg.setSignatureVerified(false);
             reg.setPaidAt(LocalDateTime.now());
             registrationRepository.save(reg);
+
+            activateCandidateUserAccount(reg, comp);
 
             if (setDistributionService != null) {
                 try {
@@ -318,7 +357,7 @@ public class RazorpayPaymentService {
         // Call Razorpay Orders REST API
         String orderId = callRazorpayCreateOrder(amountPaise, reg.getId(), comp.getId(), cleanEmail);
 
-        reg.setPaymentStatus("PENDING_PAYMENT");
+        reg.setPaymentStatus("PENDING");
         reg.setRazorpayOrderId(orderId);
         reg.setAmountPaise(amountPaise);
         reg.setAmount(fee);
@@ -397,7 +436,7 @@ public class RazorpayPaymentService {
             throw new BadRequestException("Invalid payment signature");
         }
 
-        reg.setPaymentStatus("PAID");
+        reg.setPaymentStatus("SUCCESS");
         reg.setRazorpayPaymentId(paymentId);
         reg.setRazorpaySignature(signature);
         reg.setPaidAt(LocalDateTime.now());
@@ -413,6 +452,9 @@ public class RazorpayPaymentService {
             }
         }
         reg = registrationRepository.save(reg);
+
+        // Activate / create candidate User account upon confirmed payment
+        activateCandidateUserAccount(reg, reg.getCompetition());
 
         if (setDistributionService != null && reg.getCompetition() != null) {
             try {
@@ -442,16 +484,25 @@ public class RazorpayPaymentService {
             JsonNode root = objectMapper.readTree(payload);
             String event = root.path("event").asText();
 
-            if ("payment.captured".equals(event)) {
-                JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
-                String orderId = paymentEntity.path("order_id").asText();
-                String paymentId = paymentEntity.path("id").asText();
+            if ("payment.captured".equals(event) || "order.paid".equals(event)) {
+                JsonNode payloadEntity = "order.paid".equals(event) 
+                        ? root.path("payload").path("order").path("entity")
+                        : root.path("payload").path("payment").path("entity");
+                String orderId = payloadEntity.path("order_id").asText();
+                if (orderId == null || orderId.isBlank()) {
+                    orderId = payloadEntity.path("id").asText();
+                }
+                String paymentId = "order.paid".equals(event)
+                        ? root.path("payload").path("payment").path("entity").path("id").asText()
+                        : payloadEntity.path("id").asText();
 
                 if (orderId != null && !orderId.isBlank()) {
                     registrationRepository.findByRazorpayOrderId(orderId).ifPresent(reg -> {
                         if (!isPaid(reg.getPaymentStatus())) {
-                            reg.setPaymentStatus("PAID");
-                            reg.setRazorpayPaymentId(paymentId);
+                            reg.setPaymentStatus("SUCCESS");
+                            if (paymentId != null && !paymentId.isBlank()) {
+                                reg.setRazorpayPaymentId(paymentId);
+                            }
                             reg.setPaidAt(LocalDateTime.now());
                             reg.setSignatureVerified(true);
                             if (reg.getCurrency() == null) reg.setCurrency("INR");
@@ -463,6 +514,9 @@ public class RazorpayPaymentService {
                                 }
                             }
                             registrationRepository.save(reg);
+
+                            activateCandidateUserAccount(reg, reg.getCompetition());
+
                             if (setDistributionService != null && reg.getCompetition() != null) {
                                 try {
                                     setDistributionService.assignStudentToSet(reg.getCompetition().getId(), reg.getId());
@@ -471,12 +525,22 @@ public class RazorpayPaymentService {
                                 }
                             }
                             notifyRegistrationConfirmed(reg, reg.getCompetition());
-                            log.info("Webhook successfully marked registration {} as PAID", reg.getId());
+                            log.info("Webhook successfully marked registration {} as SUCCESS", reg.getId());
                         }
                     });
                 }
             } else if ("payment.failed".equals(event)) {
-                log.info("Razorpay webhook recorded failed payment: {}", payload);
+                JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
+                String orderId = paymentEntity.path("order_id").asText();
+                if (orderId != null && !orderId.isBlank()) {
+                    registrationRepository.findByRazorpayOrderId(orderId).ifPresent(reg -> {
+                        if (!isPaid(reg.getPaymentStatus())) {
+                            reg.setPaymentStatus("FAILED");
+                            registrationRepository.save(reg);
+                            log.info("Webhook marked registration {} as FAILED", reg.getId());
+                        }
+                    });
+                }
             }
             return true;
         } catch (Exception e) {
@@ -513,19 +577,20 @@ public class RazorpayPaymentService {
     }
 
     private boolean isPaid(String status) {
-        return status != null && ("PAID".equalsIgnoreCase(status) || "Paid".equalsIgnoreCase(status));
+        return status != null && ("SUCCESS".equalsIgnoreCase(status) || "PAID".equalsIgnoreCase(status));
     }
 
-    // Expire pending registrations after 30 minutes
-    @Scheduled(fixedRate = 300000)
+    // Automatically delete / clean up PENDING registrations older than 5 days via scheduled cron
+    @Scheduled(cron = "0 0 2 * * *") // Daily at 2:00 AM
     @Transactional
-    public void expirePendingRegistrations() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
-        List<CompetitionRegistration> pendingList = registrationRepository.findByPaymentStatusAndCreatedAtBefore("PENDING_PAYMENT", cutoff);
-        for (CompetitionRegistration reg : pendingList) {
-            reg.setPaymentStatus("EXPIRED");
-            registrationRepository.save(reg);
-            log.info("Expired unpaid pending competition registration {} (order {})", reg.getId(), reg.getRazorpayOrderId());
+    public void cleanupStalePendingRegistrations() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(5);
+        List<CompetitionRegistration> staleList = registrationRepository.findByPaymentStatusInAndCreatedAtBefore(
+                List.of("PENDING", "PENDING_PAYMENT"), cutoff);
+        for (CompetitionRegistration reg : staleList) {
+            log.info("Deleting stale pending competition registration {} (order {}, created {})",
+                    reg.getId(), reg.getRazorpayOrderId(), reg.getCreatedAt());
+            registrationRepository.delete(reg);
         }
     }
 

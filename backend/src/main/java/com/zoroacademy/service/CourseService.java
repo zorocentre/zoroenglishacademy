@@ -393,7 +393,12 @@ public class CourseService {
     public static boolean isValidGoogleMeetUrl(String url) {
         if (url == null || url.isBlank()) return false;
         String normalized = normalizeMeetUrl(url);
-        return normalized.toLowerCase().contains("meet.google.com/") && normalized.matches("^https:\\/\\/meet\\.google\\.com\\/[a-zA-Z0-9_-]+(\\?.*)?$");
+        if (normalized == null) return false;
+        String lower = normalized.toLowerCase();
+        if (lower.contains("meet.google.com/new") || lower.contains("meet.google.com/zoro-live-class")) {
+            return false;
+        }
+        return lower.contains("meet.google.com/") && normalized.matches("(?i)^https:\\/\\/meet\\.google\\.com\\/[a-zA-Z0-9_-]+(\\/)?(\\?.*)?$");
     }
 
     private void updateFutureSchedulesMeetLink(String courseId, String meetUrl) {
@@ -1031,10 +1036,7 @@ public class CourseService {
                 enrolledDate = u.getJoinedOn() != null ? u.getJoinedOn() : "";
             }
 
-            String status = statusMap.get(u.getId());
-            if (status == null || status.isBlank()) {
-                status = u.getStatus() != null ? u.getStatus() : "Active";
-            }
+            String status = u.getStatus() != null && !u.getStatus().isBlank() ? u.getStatus() : "Active";
 
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", u.getId());
