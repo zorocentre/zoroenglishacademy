@@ -46,7 +46,9 @@ export default function CustomPdfViewer({ url, title = 'Document', watermarkText
   // Load PDF document
   useEffect(() => {
     let active = true;
-    if (!url || url === '#') {
+    let loadingTask = null;
+
+    if (!url || url === '#' || url === 'undefined') {
       setError('Invalid or missing document URL');
       setLoading(false);
       return;
@@ -55,32 +57,80 @@ export default function CustomPdfViewer({ url, title = 'Document', watermarkText
     setLoading(true);
     setError('');
 
-    const loadingTask = pdfjsLib.getDocument({
-      url,
-      withCredentials: true,
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
-      cMapPacked: true,
-    });
+    const loadPdf = async () => {
+      try {
+        const isSameOriginOrRelative = (!url.startsWith('http://') && !url.startsWith('https://')) ||
+          (typeof window !== 'undefined' && url.startsWith(window.location.origin)) ||
+          url.startsWith('/api/');
 
-    loadingTask.promise
-      .then((loadedDoc) => {
+        // 1. Try direct getDocument first
+        try {
+          loadingTask = pdfjsLib.getDocument({
+            url,
+            withCredentials: Boolean(isSameOriginOrRelative),
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+            cMapPacked: true,
+          });
+
+          const loadedDoc = await loadingTask.promise;
+          if (!active) return;
+          setPdfDoc(loadedDoc);
+          setTotalPages(loadedDoc.numPages);
+          setCurrentPage(1);
+          setLoading(false);
+          return;
+        } catch (directErr) {
+          console.warn('Direct PDF.js URL load failed, attempting arrayBuffer fetch fallback:', directErr);
+        }
+
+        if (!active) return;
+
+        // 2. Fallback: fetch binary arrayBuffer directly and parse in-memory
+        const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+        const headers = {};
+        if (token && isSameOriginOrRelative) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetch(url, {
+          method: 'GET',
+          headers,
+          credentials: isSameOriginOrRelative ? 'include' : 'same-origin',
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        const arrayBuffer = await res.arrayBuffer();
+        if (!active) return;
+
+        loadingTask = pdfjsLib.getDocument({
+          data: new Uint8Array(arrayBuffer),
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+          cMapPacked: true,
+        });
+
+        const loadedDoc = await loadingTask.promise;
         if (!active) return;
         setPdfDoc(loadedDoc);
         setTotalPages(loadedDoc.numPages);
         setCurrentPage(1);
         setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!active) return;
-        console.warn('Failed to load PDF via PDF.js:', err);
+        console.error('Failed to load PDF document:', err);
         setError('Could not load PDF document. Please verify your access permissions.');
         setLoading(false);
-      });
+      }
+    };
+
+    loadPdf();
 
     return () => {
       active = false;
       try {
-        loadingTask.destroy();
+        if (loadingTask) loadingTask.destroy();
       } catch {
         // ignore cleanup error
       }

@@ -613,27 +613,33 @@ export default function CourseContentPage({ courseId: propCourseId, setActiveScr
 
     const videoStatus = videoUploadState.status || (videoUploadState.isUploading ? 'Uploading' : (formData.videoId ? 'Ready' : ''));
 
-    const videoStorageRef = formData.videoId ? JSON.stringify({
-      videoId: formData.videoId,
+    // Preserve existing video reference if not explicitly replaced during edit
+    const effectiveVideoId = formData.videoId || (editingModule ? (() => {
+      const parsed = parseJsonField(editingModule.videoStorageRef);
+      return parsed?.videoId || (typeof editingModule.videoStorageRef === 'string' && !editingModule.videoStorageRef.startsWith('{') ? editingModule.videoStorageRef : '');
+    })() : '');
+
+    const videoStorageRef = effectiveVideoId ? JSON.stringify({
+      videoId: effectiveVideoId,
       status: videoStatus || 'Ready'
-    }) : null;
+    }) : (editingModule?.videoStorageRef || null);
 
     const payload = {
       title: formData.title,
       description: formData.description,
       duration: computedDuration,
       videoStorageRef,
-      thumbnail: formData.thumbnail || '',
-      thumbnailUrl: formData.thumbnail || '',
+      thumbnail: formData.thumbnail || editingModule?.thumbnailUrl || '',
+      thumbnailUrl: formData.thumbnail || editingModule?.thumbnailUrl || '',
       notesFile: formData.notesFile,
-      notesFileUrl: formData.notesFile?.fileUrl || (typeof formData.notesFile === 'string' ? formData.notesFile : null),
-      notesFileName: formData.notesFile?.name || null,
+      notesFileUrl: formData.notesFile?.fileUrl || (typeof formData.notesFile === 'string' ? formData.notesFile : (editingModule?.notesFileUrl || null)),
+      notesFileName: formData.notesFile?.name || editingModule?.notesFileName || null,
       worksheetFile: formData.worksheetFile,
-      worksheetFileUrl: formData.worksheetFile?.fileUrl || (typeof formData.worksheetFile === 'string' ? formData.worksheetFile : null),
-      worksheetFileName: formData.worksheetFile?.name || null,
+      worksheetFileUrl: formData.worksheetFile?.fileUrl || (typeof formData.worksheetFile === 'string' ? formData.worksheetFile : (editingModule?.worksheetFileUrl || null)),
+      worksheetFileName: formData.worksheetFile?.name || editingModule?.worksheetFileName || null,
       assignmentFile: formData.assignmentFile,
-      assignmentFileUrl: formData.assignmentFile?.fileUrl || (typeof formData.assignmentFile === 'string' ? formData.assignmentFile : null),
-      assignmentFileName: formData.assignmentFile?.name || null
+      assignmentFileUrl: formData.assignmentFile?.fileUrl || (typeof formData.assignmentFile === 'string' ? formData.assignmentFile : (editingModule?.assignmentFileUrl || null)),
+      assignmentFileName: formData.assignmentFile?.name || editingModule?.assignmentFileName || null
     };
 
     if (editingModule) {
@@ -686,10 +692,10 @@ export default function CourseContentPage({ courseId: propCourseId, setActiveScr
       title: mod.title || '',
       description: mod.description || '',
       videoId: typeof existingVideoId === 'string' ? existingVideoId : '',
-      thumbnail: mod.thumbnail || '',
-      notesFile: mod.notesFile || mod.notesPdf || null,
-      worksheetFile: mod.worksheetFile || mod.activitySheetPdf || null,
-      assignmentFile: mod.assignmentFile || mod.assignmentPdf || null
+      thumbnail: mod.thumbnailUrl || mod.thumbnail || '',
+      notesFile: mod.notesFile || mod.notesPdf || (mod.notesFileUrl ? { fileUrl: mod.notesFileUrl, name: mod.notesFileName || 'Notes Document' } : null),
+      worksheetFile: mod.worksheetFile || mod.activitySheetPdf || (mod.worksheetFileUrl ? { fileUrl: mod.worksheetFileUrl, name: mod.worksheetFileName || 'Worksheet Document' } : null),
+      assignmentFile: mod.assignmentFile || mod.assignmentPdf || (mod.assignmentFileUrl ? { fileUrl: mod.assignmentFileUrl, name: mod.assignmentFileName || 'Assignment Document' } : null)
     });
 
     if (existingVideoId && typeof existingVideoId === 'string') {

@@ -56,12 +56,25 @@ export function DialogProvider({ children }) {
   }, []);
 
   const showError = useCallback((message, title = 'Error', options = {}) => {
+    let cleanTitle = title;
+    if (!cleanTitle || cleanTitle === 'Error' || /Request Failed\s*\([A-Z0-9_]+\)/i.test(cleanTitle)) {
+      cleanTitle = 'Action Failed';
+    }
+    let cleanDetails = options.details || '';
+    if (/HTTP Status:\s*\d+/i.test(cleanDetails)) {
+      cleanDetails = '';
+    }
+
+    if (dialogStateRef.current.isOpen && dialogStateRef.current.message === message) {
+      return Promise.resolve(false);
+    }
+
     return openDialog({
       type: 'error',
-      title,
+      title: cleanTitle,
       message,
       confirmText: options.confirmText || 'Close',
-      details: options.details || '',
+      details: cleanDetails,
       correlationId: options.correlationId || '',
       ...options
     });
@@ -113,13 +126,23 @@ export function DialogProvider({ children }) {
 
   // Global listener for api:error dispatched by client.js on non-GET API failures
   useEffect(() => {
+    let lastErrorMsg = '';
+    let lastErrorTime = 0;
+
     const handleApiError = (e) => {
       const detail = e?.detail || {};
       const msg = detail.message || 'A network or server error occurred.';
-      const title = detail.code ? `Request Failed (${detail.code})` : 'Action Failed';
-      showError(msg, title, {
+      const now = Date.now();
+      // Deduplicate identical error messages within 2 seconds or if dialog with same message is already open
+      if ((now - lastErrorTime < 2000 && lastErrorMsg === msg) || (dialogStateRef.current.isOpen && dialogStateRef.current.message === msg)) {
+        return;
+      }
+      lastErrorMsg = msg;
+      lastErrorTime = now;
+
+      showError(msg, 'Action Failed', {
         correlationId: detail.correlationId || '',
-        details: detail.status ? `HTTP Status: ${detail.status}` : ''
+        details: '' // Do not expose "HTTP Status: 409" or raw error codes
       });
     };
 
@@ -178,11 +201,11 @@ export function DialogProvider({ children }) {
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[9999] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 transition-all"
+          className="fixed inset-0 z-[9999] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
           onClick={() => closeDialog(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-4 modal-content-transition"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}

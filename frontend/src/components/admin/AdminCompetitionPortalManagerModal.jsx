@@ -14,7 +14,7 @@ import {
   getAssessmentQuestions, saveAssessmentQuestion, deleteAssessmentQuestion
 } from '../../api/competitionApi';
 import { getTrainers } from '../../api/userApi';
-import { uploadFile } from '../../api/fileApi';
+import { uploadFile, resolveFileUrl } from '../../api/fileApi';
 import ButtonSpinner from '../common/ButtonSpinner';
 import InlineSpinner from '../common/InlineSpinner';
 import UnifiedUploader from '../common/UnifiedUploader';
@@ -79,6 +79,7 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
     ]
   });
   const [savingQuestion, setSavingQuestion] = useState(false);
+  const [isMediaUploading, setIsMediaUploading] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !competition?.id) return;
@@ -348,6 +349,20 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
   const handleSaveQuestionSubmit = async (e) => {
     e.preventDefault();
     if (!activeAsmtForQuestions || !questionFormData.questionText.trim()) return;
+
+    const qFormat = (questionFormData.questionFormat || 'MCQ').toUpperCase();
+    if (['IMAGE', 'VIDEO', 'AUDIO'].includes(qFormat)) {
+      if (isMediaUploading) {
+        await showError('Please wait for the media file upload to complete.', 'Upload in Progress');
+        return;
+      }
+      if (!questionFormData.mediaRef || !questionFormData.mediaRef.trim()) {
+        const typeName = qFormat === 'IMAGE' ? 'image' : qFormat === 'VIDEO' ? 'video' : 'audio';
+        await showError(`Please upload an ${typeName} file for this question.`, 'Media Required');
+        return;
+      }
+    }
+
     setSavingQuestion(true);
     try {
       const res = await saveAssessmentQuestion(activeAsmtForQuestions.id, questionFormData);
@@ -779,8 +794,9 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
                     <option value="MCQ">Standard Text MCQ</option>
-                    <option value="VIDEO">Video Prompt (Bunny Stream)</option>
+                    <option value="IMAGE">Image Prompt (Storage)</option>
                     <option value="AUDIO">Audio Prompt (Storage)</option>
+                    <option value="VIDEO">Video Prompt (Bunny Stream)</option>
                   </select>
                 </div>
 
@@ -800,19 +816,30 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
               {questionFormData.questionFormat !== 'MCQ' && (
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Question Media Prompt (Video or Audio Upload)
+                    Question Media Prompt ({questionFormData.questionFormat === 'AUDIO' ? 'Audio' : questionFormData.questionFormat === 'IMAGE' ? 'Image' : 'Video'} Upload) *
                   </label>
                   <UnifiedUploader
-                    accept="video/*,audio/*"
+                    accept={
+                      questionFormData.questionFormat === 'AUDIO' ? 'audio/*' : 
+                      questionFormData.questionFormat === 'IMAGE' ? 'image/*' : 'video/*'
+                    }
                     multiple={false}
                     category="question-media"
                     maxSizeMB={200}
+                    onUploadingChange={setIsMediaUploading}
                     initialValue={
                       questionFormData.mediaRef
                         ? {
                             id: questionFormData.mediaRef,
-                            bunnyVideoId: questionFormData.mediaRef,
-                            name: `Media Attached (${questionFormData.mediaRef.substring(0, 8)}...)`
+                            isAudio: questionFormData.questionFormat === 'AUDIO',
+                            isImage: questionFormData.questionFormat === 'IMAGE',
+                            bunnyVideoId: questionFormData.questionFormat === 'VIDEO' ? questionFormData.mediaRef : null,
+                            url: resolveFileUrl(questionFormData.mediaRef),
+                            name: questionFormData.questionFormat === 'AUDIO'
+                              ? `Audio Prompt (${questionFormData.mediaRef.substring(0, 8)}...)`
+                              : questionFormData.questionFormat === 'IMAGE'
+                              ? `Image Prompt (${questionFormData.mediaRef.substring(0, 8)}...)`
+                              : `Video Prompt (${questionFormData.mediaRef.substring(0, 8)}...)`
                           }
                         : null
                     }
@@ -821,7 +848,13 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
                       setQuestionFormData((prev) => ({ ...prev, mediaRef: refId }));
                     }}
                     onClear={() => setQuestionFormData((prev) => ({ ...prev, mediaRef: '' }))}
-                    helperText="Upload audio or video question prompt. Videos stream via Bunny Stream, audio via Bunny Storage."
+                    helperText={
+                      questionFormData.questionFormat === 'AUDIO'
+                        ? 'Upload audio question prompt. Audio is stored via Bunny Storage.'
+                        : questionFormData.questionFormat === 'IMAGE'
+                        ? 'Upload image question prompt (.png, .jpg, .webp). Stored via Bunny Storage.'
+                        : 'Upload video question prompt. Videos stream via Bunny Stream.'
+                    }
                   />
                 </div>
               )}

@@ -99,6 +99,7 @@ export default function CompetitionFinalAssessmentPage() {
 
   // Live countdown ticker for upcoming/live list view
   const [nowTick, setNowTick] = useState(Date.now());
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
   useEffect(() => {
     const ticker = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(ticker);
@@ -153,6 +154,12 @@ export default function CompetitionFinalAssessmentPage() {
     try {
       const res = await getStudentFinalAssessment(currentCompetition.id);
       if (res && res.success && res.data) {
+        if (res.data.serverNow) {
+          const sNowMs = new Date(res.data.serverNow).getTime();
+          if (!isNaN(sNowMs)) {
+            setServerOffsetMs(sNowMs - Date.now());
+          }
+        }
         setAssessmentData(res.data.finalAssessment || null);
         setAssignedSet(res.data.assignedSet || null);
       } else {
@@ -1052,23 +1059,19 @@ export default function CompetitionFinalAssessmentPage() {
   // ==========================================
   // VIEW 3: LANDING / DASHBOARD VIEW (Light Portal Theme)
   // ==========================================
-  const nowMs = nowTick;
-  const startAtMs = assessmentData?.startAt ? new Date(assessmentData.startAt).getTime() : null;
-  const endAtMs = assessmentData?.endAt ? new Date(assessmentData.endAt).getTime() : null;
+  const nowMs = nowTick + serverOffsetMs;
+  const startAtMs = (assessmentData?.opensAt || assessmentData?.startAt) ? new Date(assessmentData?.opensAt || assessmentData.startAt).getTime() : null;
+  const endAtMs = (assessmentData?.closesAt || assessmentData?.endAt) ? new Date(assessmentData?.closesAt || assessmentData.endAt).getTime() : null;
 
-  let windowStatus = 'UNANNOUNCED';
-  if (startAtMs && endAtMs) {
-    if (nowMs < startAtMs) {
-      windowStatus = 'UPCOMING';
-    } else if (nowMs <= endAtMs) {
-      windowStatus = 'LIVE';
-    } else {
-      windowStatus = 'EXPIRED';
-    }
-  } else if (assessmentData?.windowStatus === 'LIVE') {
-    windowStatus = 'LIVE';
-  } else {
+  let windowStatus = assessmentData?.windowStatus || assessmentData?.status || 'UNANNOUNCED';
+  if (!startAtMs) {
     windowStatus = 'UNANNOUNCED';
+  } else if (nowMs < startAtMs) {
+    windowStatus = 'UPCOMING';
+  } else if (endAtMs && nowMs > endAtMs) {
+    windowStatus = 'EXPIRED';
+  } else {
+    windowStatus = 'LIVE';
   }
 
   const isLive = windowStatus === 'LIVE';
@@ -1082,11 +1085,11 @@ export default function CompetitionFinalAssessmentPage() {
 
   // Real-time countdown calculation for hero banner
   let heroCountdown = '';
-  if (isLive && assessmentData?.endAt) {
-    const diffSec = Math.max(0, Math.floor((new Date(assessmentData.endAt).getTime() - nowTick) / 1000));
+  if (isLive && endAtMs) {
+    const diffSec = Math.max(0, Math.floor((endAtMs - nowMs) / 1000));
     heroCountdown = formatCountdown(diffSec);
-  } else if (isUpcoming && assessmentData?.startAt) {
-    const diffSec = Math.max(0, Math.floor((new Date(assessmentData.startAt).getTime() - nowTick) / 1000));
+  } else if (isUpcoming && startAtMs) {
+    const diffSec = Math.max(0, Math.floor((startAtMs - nowMs) / 1000));
     heroCountdown = formatCountdown(diffSec);
   }
 
@@ -1150,10 +1153,10 @@ export default function CompetitionFinalAssessmentPage() {
               {isLive 
                 ? `Window is currently open! Submit before the window closes.`
                 : isUpcoming 
-                  ? `Final assessment will be opened on ${new Date(assessmentData?.startAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} (IST)`
+                  ? `Final Assessment will be opened on ${new Date(startAtMs).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST`
                   : isUnannounced
-                    ? `Final Assessment will be opened soon. Date will be announced.`
-                    : `This scheduled exam window has ended.`
+                    ? `Final Assessment will be opened soon.`
+                    : `Window Closed`
               }
             </p>
           </div>
@@ -1188,18 +1191,19 @@ export default function CompetitionFinalAssessmentPage() {
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 animate-bounce hover:animate-none"
               >
                 <Play className="w-4 h-4 fill-white" />
-                {attemptStatus === 'IN_PROGRESS' ? 'Resume Examination' : 'Start Examination Now'}
+                <span>{attemptStatus === 'IN_PROGRESS' ? 'Resume Exam' : 'Start Exam'}</span>
+                <span className="sr-only">Start Examination Now</span>
               </button>
             ) : isUpcoming || isUnannounced ? (
               <button
                 disabled
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-slate-700"
               >
-                <Lock className="w-4 h-4" /> {isUpcoming ? 'Examination Locked' : 'Date Announced Soon'}
+                <Lock className="w-4 h-4" /> {isUpcoming ? 'Examination Locked' : 'Will Be Opened Soon'}
               </button>
             ) : (
               <div className="text-xs font-semibold text-rose-400 bg-rose-950/30 border border-rose-500/30 px-4 py-2.5 rounded-xl">
-                Window Closed (Missed Exam)
+                Window Closed
               </div>
             )}
           </div>

@@ -9,6 +9,7 @@ import { getTrainers } from '../../api/userApi';
 import { uploadFile, openFileWithSignedLink } from '../../api/fileApi';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
+import { formatSubmissionTime } from '../../utils/dateFormatter';
 
 export default function AdminTrainerAssignmentsPage() {
   const { showError } = useDialog();
@@ -333,7 +334,7 @@ export default function AdminTrainerAssignmentsPage() {
 
                       {/* Submitted On */}
                       <td className="py-4 px-6 text-slate-500 font-mono text-[11px]">
-                        {sub.submittedAt || sub.createdAt || '-'}
+                        {formatSubmissionTime(sub.submittedAt || sub.createdAt) || '-'}
                       </td>
 
                       {/* Status */}
@@ -441,7 +442,7 @@ export default function AdminTrainerAssignmentsPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-bold">Submitted On:</span>
-                <span className="font-mono text-slate-700">{reviewingSub.submittedAt || reviewingSub.createdAt}</span>
+                <span className="font-mono text-slate-700">{formatSubmissionTime(reviewingSub.submittedAt || reviewingSub.createdAt)}</span>
               </div>
               {reviewingSub.answerText && (
                 <div className="pt-2 border-t border-slate-200">

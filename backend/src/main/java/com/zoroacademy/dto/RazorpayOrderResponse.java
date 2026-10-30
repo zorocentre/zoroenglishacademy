@@ -7,6 +7,7 @@ public class RazorpayOrderResponse {
     private String keyId;
     private String registrationId;
     private boolean free;
+    private String existingStudentName;
 
     public RazorpayOrderResponse() {}
 
@@ -17,6 +18,24 @@ public class RazorpayOrderResponse {
         this.keyId = keyId;
         this.registrationId = registrationId;
         this.free = free;
+    }
+
+    public RazorpayOrderResponse(String orderId, Long amount, String currency, String keyId, String registrationId, boolean free, String existingStudentName) {
+        this.orderId = orderId;
+        this.amount = amount;
+        this.currency = currency;
+        this.keyId = keyId;
+        this.registrationId = registrationId;
+        this.free = free;
+        this.existingStudentName = existingStudentName;
+    }
+
+    public String getExistingStudentName() {
+        return existingStudentName;
+    }
+
+    public void setExistingStudentName(String existingStudentName) {
+        this.existingStudentName = existingStudentName;
     }
 
     public static Builder builder() {
@@ -30,6 +49,7 @@ public class RazorpayOrderResponse {
         private String keyId;
         private String registrationId;
         private boolean free = false;
+        private String existingStudentName;
 
         public Builder orderId(String orderId) {
             this.orderId = orderId;
@@ -55,8 +75,12 @@ public class RazorpayOrderResponse {
             this.free = free;
             return this;
         }
+        public Builder existingStudentName(String existingStudentName) {
+            this.existingStudentName = existingStudentName;
+            return this;
+        }
         public RazorpayOrderResponse build() {
-            return new RazorpayOrderResponse(orderId, amount, currency, keyId, registrationId, free);
+            return new RazorpayOrderResponse(orderId, amount, currency, keyId, registrationId, free, existingStudentName);
         }
     }
 

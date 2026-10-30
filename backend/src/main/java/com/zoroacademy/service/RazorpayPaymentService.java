@@ -12,6 +12,9 @@ import com.zoroacademy.exception.ConflictException;
 import com.zoroacademy.exception.ResourceNotFoundException;
 import com.zoroacademy.repository.CompetitionRegistrationRepository;
 import com.zoroacademy.repository.CompetitionRepository;
+import com.zoroacademy.repository.EnrollmentRepository;
+import com.zoroacademy.repository.UserRepository;
+import com.zoroacademy.entity.User;
 import com.zoroacademy.util.PhoneValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +62,32 @@ public class RazorpayPaymentService {
 
     @Autowired(required = false)
     private EmailService emailService;
+
+    @Autowired(required = false)
+    private EnrollmentRepository enrollmentRepository;
+
+    private String resolveExistingCourseStudentName(String email) {
+        if (email == null || email.isBlank() || userRepository == null) return null;
+        try {
+            Optional<User> uOpt = userRepository.findByEmailIgnoreCase(email.trim());
+            if (uOpt.isPresent()) {
+                User u = uOpt.get();
+                boolean isStudent = "STUDENT".equalsIgnoreCase(u.getRole());
+                boolean hasCourse = (u.getCourse() != null && !u.getCourse().isBlank());
+                boolean hasEnrollment = false;
+                if (enrollmentRepository != null) {
+                    hasEnrollment = !enrollmentRepository.findByStudentId(u.getId()).isEmpty()
+                            || !enrollmentRepository.findByStudentEmailIgnoreCase(email.trim()).isEmpty();
+                }
+                if (isStudent && (hasCourse || hasEnrollment)) {
+                    return u.getName() != null && !u.getName().isBlank() ? u.getName() : "Student";
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error checking existing course enrollment for {}: {}", email, e.getMessage());
+        }
+        return null;
+    }
 
     @Value("${razorpay.key-id:}")
     private String keyId;
@@ -251,6 +280,7 @@ public class RazorpayPaymentService {
 
         String sanitizedPhone = PhoneValidator.sanitize(request.getStudentPhone());
         String cleanEmail = request.getStudentEmail().trim().toLowerCase();
+        String existingStudentName = resolveExistingCourseStudentName(cleanEmail);
 
         // Check for duplicates with PAID status
         Optional<CompetitionRegistration> existingByPhone = registrationRepository.findByCompetitionIdAndStudentPhone(comp.getId(), sanitizedPhone);
@@ -338,6 +368,7 @@ public class RazorpayPaymentService {
 
             notifyRegistrationConfirmed(reg, comp);
 
+            reg.setExistingStudentName(existingStudentName);
             return RazorpayOrderResponse.builder()
                     .orderId(null)
                     .amount(0L)
@@ -345,6 +376,7 @@ public class RazorpayPaymentService {
                     .keyId(null)
                     .registrationId(reg.getId())
                     .free(true)
+                    .existingStudentName(existingStudentName)
                     .build();
         }
 
@@ -365,6 +397,7 @@ public class RazorpayPaymentService {
         reg.setSignatureVerified(false);
         registrationRepository.save(reg);
 
+        reg.setExistingStudentName(existingStudentName);
         return RazorpayOrderResponse.builder()
                 .orderId(orderId)
                 .amount(amountPaise)
@@ -372,6 +405,7 @@ public class RazorpayPaymentService {
                 .keyId(keyId.trim())
                 .registrationId(reg.getId())
                 .free(false)
+                .existingStudentName(existingStudentName)
                 .build();
     }
 
@@ -464,6 +498,7 @@ public class RazorpayPaymentService {
             }
         }
         notifyRegistrationConfirmed(reg, reg.getCompetition());
+        reg.setExistingStudentName(resolveExistingCourseStudentName(reg.getStudentEmail()));
         return reg;
     }
 

@@ -1537,7 +1537,27 @@ public class CompetitionService {
             map.put("id", q.getId());
             map.put("assessmentId", q.getAssessmentId());
             map.put("sortOrder", q.getSortOrder());
-            map.put("questionFormat", q.getQuestionFormat());
+
+            String effectiveFormat = q.getQuestionFormat();
+            if ((effectiveFormat == null || "MCQ".equalsIgnoreCase(effectiveFormat) || "TEXT".equalsIgnoreCase(effectiveFormat)) && q.getMediaRef() != null && !q.getMediaRef().isBlank()) {
+                String refLower = q.getMediaRef().toLowerCase();
+                if (refLower.matches(".*\\.(png|jpe?g|webp|gif|svg)(\\?.*)?$")) {
+                    effectiveFormat = "IMAGE";
+                } else if (refLower.matches(".*\\.(mp3|wav|ogg|m4a|opus|aac)(\\?.*)?$")) {
+                    effectiveFormat = "AUDIO";
+                } else if (refLower.matches(".*\\.(mp4|webm|mov|mkv)(\\?.*)?$")) {
+                    effectiveFormat = "VIDEO";
+                } else if (storedFileRepository != null) {
+                    Optional<StoredFile> sfOpt = storedFileRepository.findById(q.getMediaRef());
+                    if (sfOpt.isPresent()) {
+                        String ct = sfOpt.get().getContentType() != null ? sfOpt.get().getContentType().toLowerCase() : "";
+                        if (ct.startsWith("image/")) effectiveFormat = "IMAGE";
+                        else if (ct.startsWith("audio/")) effectiveFormat = "AUDIO";
+                        else if (ct.startsWith("video/")) effectiveFormat = "VIDEO";
+                    }
+                }
+            }
+            map.put("questionFormat", effectiveFormat != null ? effectiveFormat : "MCQ");
             map.put("questionText", q.getQuestionText());
             map.put("mediaRef", q.getMediaRef());
             map.put("answerFormat", q.getAnswerFormat());
@@ -1578,10 +1598,11 @@ public class CompetitionService {
         if ("FILL_BLANK".equalsIgnoreCase(qFormat) || "FILL_BLANK".equalsIgnoreCase(aFormat)) {
             throw new BadRequestException("Fill-in-the-blank format is not supported");
         }
-        if ("IMAGE".equalsIgnoreCase(qFormat)) {
+        if ("IMAGE".equalsIgnoreCase(qFormat) || "AUDIO".equalsIgnoreCase(qFormat) || "VIDEO".equalsIgnoreCase(qFormat)) {
             String mRef = (String) payload.get("mediaRef");
             if (mRef == null || mRef.trim().isEmpty()) {
-                throw new BadRequestException("Image question requires an uploaded image");
+                String typeName = qFormat.toLowerCase();
+                throw new BadRequestException("Please upload an " + (typeName.startsWith("a") ? "audio" : typeName.startsWith("i") ? "image" : "video") + " file for this question.");
             }
         }
 
@@ -2151,20 +2172,23 @@ public class CompetitionService {
         long secondsToStart = 0;
         long secondsToEnd = 0;
 
-        if (finalAsmt.getStartAt() != null && finalAsmt.getEndAt() != null) {
-            if (now.isBefore(finalAsmt.getStartAt())) {
-                windowStatus = "UPCOMING";
-                secondsToStart = java.time.Duration.between(now, finalAsmt.getStartAt()).getSeconds();
-            } else if (now.isAfter(finalAsmt.getEndAt())) {
-                windowStatus = "EXPIRED";
-            } else {
-                windowStatus = "LIVE";
+        if (finalAsmt.getStartAt() == null) {
+            windowStatus = isPublished ? "UNANNOUNCED" : "DRAFT";
+        } else if (now.isBefore(finalAsmt.getStartAt())) {
+            windowStatus = "UPCOMING";
+            secondsToStart = java.time.Duration.between(now, finalAsmt.getStartAt()).getSeconds();
+        } else if (finalAsmt.getEndAt() != null && now.isAfter(finalAsmt.getEndAt())) {
+            windowStatus = "EXPIRED";
+        } else {
+            windowStatus = "LIVE";
+            if (finalAsmt.getEndAt() != null) {
                 secondsToEnd = java.time.Duration.between(now, finalAsmt.getEndAt()).getSeconds();
             }
-        } else {
-            windowStatus = isPublished ? "UPCOMING" : "DRAFT";
         }
         item.put("windowStatus", windowStatus);
+        item.put("status", windowStatus);
+        item.put("opensAt", finalAsmt.getStartAt());
+        item.put("closesAt", finalAsmt.getEndAt());
         item.put("secondsToStart", secondsToStart);
         item.put("secondsToEnd", secondsToEnd);
 
@@ -2218,6 +2242,9 @@ public class CompetitionService {
 
         OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Kolkata"));
         if ("MOCK".equalsIgnoreCase(asmt.getType()) || "FINAL".equalsIgnoreCase(asmt.getType())) {
+            if (asmt.getStartAt() == null && "FINAL".equalsIgnoreCase(asmt.getType())) {
+                throw new BadRequestException("Final Assessment unlock time has not been configured yet. It will be opened soon.");
+            }
             if (asmt.getStartAt() != null && now.isBefore(asmt.getStartAt())) {
                 throw new BadRequestException("This test window is not open yet. Scheduled to open at: " + asmt.getStartAt());
             }

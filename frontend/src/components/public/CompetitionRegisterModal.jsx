@@ -231,7 +231,11 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
               setLoading(false);
               setSuccessDialog({
                 competitionTitle: competition.name || competition.title,
-                data: verifyRes.data || orderData
+                data: {
+                  ...orderData,
+                  ...(verifyRes.data || {}),
+                  existingStudentName: verifyRes.data?.existingStudentName || orderData?.existingStudentName
+                }
               });
             } else {
               setLoading(false);
@@ -381,9 +385,21 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
 
   // Render Success App Dialog
   if (successDialog) {
+    const existingStudentName = successDialog.data?.existingStudentName || successDialog.data?.existing_student_name;
+
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          
+          {/* Important Enrolled Course Student Notice (Requirement D1) */}
+          {existingStudentName && (
+            <div className="p-3.5 bg-rose-50 border-2 border-rose-500 rounded-2xl text-left space-y-1">
+              <p className="text-xs font-black text-rose-700 leading-relaxed">
+                This email is already enrolled in the course with the name {existingStudentName}. If this is not you, please use another email to register for this competition, because the certificate will be issued in the name of {existingStudentName}. Please check carefully.
+              </p>
+            </div>
+          )}
+
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-9 h-9" />
           </div>

@@ -517,10 +517,11 @@ public class FileAccessService {
         return regs.stream().anyMatch(r -> {
             boolean statusOk = "Confirmed".equalsIgnoreCase(r.getPaymentStatus()) || "Paid".equalsIgnoreCase(r.getPaymentStatus())
                     || "CONFIRMED".equalsIgnoreCase(r.getPaymentStatus()) || "PAID".equalsIgnoreCase(r.getPaymentStatus())
-                    || "FREE_CONFIRMED".equalsIgnoreCase(r.getPaymentStatus()) || "Free".equalsIgnoreCase(r.getPaymentStatus());
+                    || "FREE_CONFIRMED".equalsIgnoreCase(r.getPaymentStatus()) || "Free".equalsIgnoreCase(r.getPaymentStatus())
+                    || "SUCCESS".equalsIgnoreCase(r.getPaymentStatus()) || "COMPLETED".equalsIgnoreCase(r.getPaymentStatus());
             if (!statusOk) return false;
             boolean userMatch = (userId != null && userId.equals(r.getStudentId()))
-                    || (email != null && !email.isBlank() && email.equalsIgnoreCase(r.getStudentEmail()));
+                    || (email != null && !email.isBlank() && r.getStudentEmail() != null && email.equalsIgnoreCase(r.getStudentEmail().trim()));
             return userMatch;
         });
     }

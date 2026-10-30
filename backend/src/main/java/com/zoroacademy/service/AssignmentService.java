@@ -501,7 +501,7 @@ public class AssignmentService {
             submission.setId("sub_" + java.util.UUID.randomUUID());
         }
         if (submission.getSubmittedAt() == null || submission.getSubmittedAt().isBlank()) {
-            submission.setSubmittedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a")));
+            submission.setSubmittedAt(java.time.Instant.now().toString());
         }
         if (submission.getStatus() == null || submission.getStatus().isBlank()) {
             submission.setStatus("Pending Correction");

@@ -9,6 +9,7 @@ import { getTrainers } from '../../api/userApi';
 import { getCourses, updateCourse } from '../../api/courseApi';
 import ConfirmModal from '../common/ConfirmModal';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
+import { formatSubmissionTime } from '../../utils/dateFormatter';
 
 export default function AdminAssignmentsPage() {
   const [activeTab, setActiveTab] = useState('Online'); // 'Online' | 'Recorded' | 'Hybrid' | 'TrainerCreated'
@@ -443,7 +444,7 @@ export default function AdminAssignmentsPage() {
                             <div>{sub.assignmentTitle}</div>
                             <div className="text-[11px] font-medium text-blue-600">{sub.courseTitle}</div>
                           </td>
-                          <td className="py-4 px-4 text-slate-500 font-medium">{sub.submittedAt}</td>
+                          <td className="py-4 px-4 text-slate-500 font-medium">{formatSubmissionTime(sub.submittedAt)}</td>
                           <td className="py-4 px-4">
                             {subFile ? (
                               <button
@@ -525,7 +526,7 @@ export default function AdminAssignmentsPage() {
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2 text-slate-700">
                 <div><span className="font-bold text-slate-500">Student:</span> <span className="font-black text-slate-900">{correctingSub.studentName}</span></div>
-                <div><span className="font-bold text-slate-500">Submitted On:</span> <span className="font-semibold">{correctingSub.submittedAt}</span></div>
+                <div><span className="font-bold text-slate-500">Submitted On:</span> <span className="font-semibold">{formatSubmissionTime(correctingSub.submittedAt)}</span></div>
               </div>
 
               {/* Submission File Attachment */}

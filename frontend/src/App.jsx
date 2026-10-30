@@ -337,7 +337,9 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
         siteSettings={siteSettings}
       />
       <main className="flex-1">
-        <Outlet context={{ onOpenLogin, onOpenEnquire, setActiveScreen: handleSetActiveScreen }} />
+        <div key={location.pathname} className="page-transition">
+          <Outlet context={{ onOpenLogin, onOpenEnquire, setActiveScreen: handleSetActiveScreen }} />
+        </div>
       </main>
       <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -345,7 +347,7 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
             <img src="/assets/logo.png" alt={`${academyName} Logo`} className="h-7 w-auto object-contain" />
             <div>
               <span className="font-extrabold text-white text-sm block sm:inline">{academyName}</span>
-              <span className="block sm:inline sm:ml-2">© 2026 {academyName}. All rights reserved.</span>
+              <span className="block sm:inline sm:ml-2">Â© 2026 {academyName}. All rights reserved.</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400 font-medium">
@@ -456,10 +458,12 @@ function DashboardLayout({ expectedRole }) {
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <Suspense fallback={<PortalLoadingFallback />}>
             <ErrorBoundary>
-              <Outlet context={{ 
-                setActiveScreen: handleSetActiveScreen, 
-                setSelectedCourseIdForEdit 
-              }} />
+              <div key={location.pathname} className="page-transition">
+                <Outlet context={{ 
+                  setActiveScreen: handleSetActiveScreen, 
+                  setSelectedCourseIdForEdit 
+                }} />
+              </div>
             </ErrorBoundary>
           </Suspense>
         </main>

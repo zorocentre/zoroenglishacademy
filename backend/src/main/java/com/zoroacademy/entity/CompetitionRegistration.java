@@ -81,6 +81,9 @@ public class CompetitionRegistration {
     @Column(name = "encrypted_password", length = 512)
     private String encryptedPassword;
 
+    @Transient
+    private String existingStudentName;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -249,6 +252,14 @@ public class CompetitionRegistration {
 
     public void setPaidAt(LocalDateTime paidAt) {
         this.paidAt = paidAt;
+    }
+
+    public String getExistingStudentName() {
+        return existingStudentName;
+    }
+
+    public void setExistingStudentName(String existingStudentName) {
+        this.existingStudentName = existingStudentName;
     }
 
     public Long getAmountPaise() {

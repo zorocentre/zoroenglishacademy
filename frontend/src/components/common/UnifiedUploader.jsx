@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud,
   File,
@@ -41,6 +41,7 @@ export default function UnifiedUploader({
   title = '',
   onUploadComplete,
   onMultiUploadComplete,
+  onUploadingChange,
   label = '',
   helperText = '',
   className = '',
@@ -51,6 +52,13 @@ export default function UnifiedUploader({
   const [uploadItems, setUploadItems] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const isUploading = uploadItems.some((item) => item.status === 'uploading');
+    if (typeof onUploadingChange === 'function') {
+      onUploadingChange(isUploading);
+    }
+  }, [uploadItems, onUploadingChange]);
 
   const getIconForType = (type, name = '') => {
     const lowerType = (type || '').toLowerCase();
@@ -378,7 +386,10 @@ export default function UnifiedUploader({
         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-2 text-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              {getIconForType(initialValue.contentType || (initialValue.isAudio ? 'audio/mpeg' : ''), initialValue.name || initialValue.title)}
+              {getIconForType(
+                initialValue.contentType || (initialValue.isImage ? 'image/jpeg' : initialValue.isAudio ? 'audio/mpeg' : initialValue.isVideo ? 'video/mp4' : ''),
+                initialValue.name || initialValue.title
+              )}
               <div className="min-w-0">
                 <p className="font-bold text-slate-800 truncate text-[11px]">
                   {initialValue.name || initialValue.title || 'Uploaded Media'}
@@ -393,7 +404,7 @@ export default function UnifiedUploader({
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {(initialValue.bunnyVideoId || initialValue.embedUrl) && (
+              {(initialValue.isVideo || initialValue.bunnyVideoId || initialValue.embedUrl) && (
                 <button
                   type="button"
                   onClick={() => setPreviewItem(initialValue)}
@@ -416,11 +427,33 @@ export default function UnifiedUploader({
             </div>
           </div>
 
+          {/* Inline Image Preview */}
+          {(initialValue.isImage ||
+            initialValue.contentType?.startsWith('image/') ||
+            (initialValue.name && initialValue.name.match(/\.(png|jpe?g|webp|gif|svg)$/i))) && (
+            <div className="pt-1.5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 max-w-xs overflow-hidden">
+                <img
+                  src={initialValue.url || resolveFileUrl(initialValue.id)}
+                  alt={initialValue.name || 'Question Image Preview'}
+                  className="max-h-48 w-full object-contain mx-auto rounded-lg"
+                  onError={(e) => {
+                    if (initialValue.id && !e.target.src.includes(`/api/files/${initialValue.id}`)) {
+                      e.target.src = resolveFileUrl(initialValue.id);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Inline Audio Player for Pre-existing Audio Media */}
-          {(initialValue.isAudio ||
-            initialValue.contentType?.startsWith('audio/') ||
-            (initialValue.name && initialValue.name.match(/\.(mp3|wav|ogg|m4a|opus|aac)$/i)) ||
-            (initialValue.url && !initialValue.bunnyVideoId)) && (
+          {(!initialValue.isImage &&
+            !initialValue.isVideo &&
+            !initialValue.bunnyVideoId &&
+            (initialValue.isAudio ||
+              initialValue.contentType?.startsWith('audio/') ||
+              (initialValue.name && initialValue.name.match(/\.(mp3|wav|ogg|m4a|opus|aac)$/i)))) && (
             <div className="pt-1">
               <AudioPromptPlayer
                 fileId={initialValue.id}

@@ -387,18 +387,40 @@ public class CourseService {
         } else if (trimmed.toLowerCase().startsWith("http://")) {
             trimmed = "https://" + trimmed.substring(7);
         }
-        return trimmed;
+        try {
+            java.net.URI uri = java.net.URI.create(trimmed);
+            String host = uri.getHost();
+            if (host == null || !"meet.google.com".equalsIgnoreCase(host)) {
+                return null;
+            }
+            String path = uri.getPath();
+            if (path == null) path = "";
+            String lower = path.toLowerCase();
+            if (lower.contains("/new") || lower.contains("/zoro-live-class")) {
+                return null;
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(?:[a-z]+/)?([a-z]{3}-[a-z]{4}-[a-z]{3})").matcher(path);
+            if (m.find()) {
+                return "https://meet.google.com/" + m.group(1).toLowerCase();
+            }
+            java.util.regex.Matcher lookupM = java.util.regex.Pattern.compile("(?i)/lookup/([a-z0-9_-]+)").matcher(path);
+            if (lookupM.find()) {
+                return "https://meet.google.com/lookup/" + lookupM.group(1).toLowerCase();
+            }
+            java.util.regex.Matcher genM = java.util.regex.Pattern.compile("(?i)^/([a-z0-9_-]+)$").matcher(path);
+            if (genM.find() && genM.group(1).length() >= 3) {
+                return "https://meet.google.com/" + genM.group(1).toLowerCase();
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public static boolean isValidGoogleMeetUrl(String url) {
         if (url == null || url.isBlank()) return false;
         String normalized = normalizeMeetUrl(url);
-        if (normalized == null) return false;
-        String lower = normalized.toLowerCase();
-        if (lower.contains("meet.google.com/new") || lower.contains("meet.google.com/zoro-live-class")) {
-            return false;
-        }
-        return lower.contains("meet.google.com/") && normalized.matches("(?i)^https:\\/\\/meet\\.google\\.com\\/[a-zA-Z0-9_-]+(\\/)?(\\?.*)?$");
+        return normalized != null && normalized.startsWith("https://meet.google.com/");
     }
 
     private void updateFutureSchedulesMeetLink(String courseId, String meetUrl) {
@@ -821,65 +843,77 @@ public class CourseService {
         if (updated.getDescription() != null) existing.setDescription(updated.getDescription());
         if (updated.getDuration() != null) existing.setDuration(updated.getDuration());
 
-        if (updated.getVideoStorageRef() != null) {
-            // If replacing video, delete previous video if it changed
+        if (updated.getVideoStorageRef() != null && !updated.getVideoStorageRef().isBlank()) {
             String oldRef = existing.getVideoStorageRef();
-            if (oldRef != null && !oldRef.equals(updated.getVideoStorageRef())) {
+            String oldVid = null;
+            String newVid = null;
+            try {
+                if (oldRef != null && !oldRef.isBlank()) {
+                    com.fasterxml.jackson.databind.JsonNode oldNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(oldRef);
+                    if (oldNode.has("videoId")) oldVid = oldNode.get("videoId").asText();
+                }
+                com.fasterxml.jackson.databind.JsonNode newNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(updated.getVideoStorageRef());
+                if (newNode.has("videoId")) newVid = newNode.get("videoId").asText();
+            } catch (Exception ignored) {}
+
+            // ONLY purge old video if a distinct new video is explicitly replacing it
+            if (oldVid != null && !oldVid.isBlank() && newVid != null && !newVid.isBlank() && !oldVid.equals(newVid)) {
                 try {
-                    com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(oldRef);
-                    if (node.has("videoId")) {
-                        purgeVideo(node.get("videoId").asText());
-                    }
+                    purgeVideo(oldVid);
                 } catch (Exception ignored) {}
             }
+
             existing.setVideoStorageRef(updated.getVideoStorageRef());
 
-            try {
-                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(updated.getVideoStorageRef());
-                if (node.has("videoId")) {
-                    String vid = node.get("videoId").asText();
-                    videoRepository.findById(vid).or(() -> videoRepository.findByBunnyVideoId(vid)).ifPresent(v -> {
-                        v.setCourseId(courseId);
-                        v.setModuleId(moduleId);
-                        videoRepository.save(v);
-                    });
-                }
-            } catch (Exception ignored) {}
+            if (newVid != null && !newVid.isBlank()) {
+                final String finalVid = newVid;
+                videoRepository.findById(finalVid).or(() -> videoRepository.findByBunnyVideoId(finalVid)).ifPresent(v -> {
+                    v.setCourseId(courseId);
+                    v.setModuleId(moduleId);
+                    videoRepository.save(v);
+                });
+            }
         }
 
-        if (updated.getThumbnailUrl() != null) {
+        if (updated.getThumbnailUrl() != null && !updated.getThumbnailUrl().isBlank()) {
             if (existing.getThumbnailUrl() != null && !existing.getThumbnailUrl().equals(updated.getThumbnailUrl())) {
                 cleanupStoredFilesFromText(existing.getThumbnailUrl());
             }
-            existing.setThumbnailUrl(updated.getThumbnailUrl().isBlank() ? null : updated.getThumbnailUrl());
+            existing.setThumbnailUrl(updated.getThumbnailUrl());
         }
 
-        if (updated.getNotesFileUrl() != null) {
+        if (updated.getNotesFileUrl() != null && !updated.getNotesFileUrl().isBlank()) {
             if (existing.getNotesFileUrl() != null && !existing.getNotesFileUrl().equals(updated.getNotesFileUrl())) {
                 cleanupStoredFilesFromText(existing.getNotesFileUrl());
             }
-            existing.setNotesFileUrl(updated.getNotesFileUrl().isBlank() ? null : updated.getNotesFileUrl());
-            existing.setNotesFileName(updated.getNotesFileName());
+            existing.setNotesFileUrl(updated.getNotesFileUrl());
+            if (updated.getNotesFileName() != null) {
+                existing.setNotesFileName(updated.getNotesFileName());
+            }
         } else if (updated.getNotesFileName() != null) {
             existing.setNotesFileName(updated.getNotesFileName());
         }
 
-        if (updated.getWorksheetFileUrl() != null) {
+        if (updated.getWorksheetFileUrl() != null && !updated.getWorksheetFileUrl().isBlank()) {
             if (existing.getWorksheetFileUrl() != null && !existing.getWorksheetFileUrl().equals(updated.getWorksheetFileUrl())) {
                 cleanupStoredFilesFromText(existing.getWorksheetFileUrl());
             }
-            existing.setWorksheetFileUrl(updated.getWorksheetFileUrl().isBlank() ? null : updated.getWorksheetFileUrl());
-            existing.setWorksheetFileName(updated.getWorksheetFileName());
+            existing.setWorksheetFileUrl(updated.getWorksheetFileUrl());
+            if (updated.getWorksheetFileName() != null) {
+                existing.setWorksheetFileName(updated.getWorksheetFileName());
+            }
         } else if (updated.getWorksheetFileName() != null) {
             existing.setWorksheetFileName(updated.getWorksheetFileName());
         }
 
-        if (updated.getAssignmentFileUrl() != null) {
+        if (updated.getAssignmentFileUrl() != null && !updated.getAssignmentFileUrl().isBlank()) {
             if (existing.getAssignmentFileUrl() != null && !existing.getAssignmentFileUrl().equals(updated.getAssignmentFileUrl())) {
                 cleanupStoredFilesFromText(existing.getAssignmentFileUrl());
             }
-            existing.setAssignmentFileUrl(updated.getAssignmentFileUrl().isBlank() ? null : updated.getAssignmentFileUrl());
-            existing.setAssignmentFileName(updated.getAssignmentFileName());
+            existing.setAssignmentFileUrl(updated.getAssignmentFileUrl());
+            if (updated.getAssignmentFileName() != null) {
+                existing.setAssignmentFileName(updated.getAssignmentFileName());
+            }
         } else if (updated.getAssignmentFileName() != null) {
             existing.setAssignmentFileName(updated.getAssignmentFileName());
         }

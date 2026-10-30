@@ -12,6 +12,7 @@ import SecureVideoPlayer from '../common/SecureVideoPlayer';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
 import { evaluateScheduleLocks, getScheduleJoinState, syncServerTime } from '../../utils/scheduleSortUtil';
+import { formatSubmissionTime } from '../../utils/dateFormatter';
 import { usePolling } from '../../hooks/usePolling';
 
 
@@ -1065,7 +1066,7 @@ export default function CourseLearningPage({ courseId: initialCourseId, _setActi
                                       <span className="text-[10px] font-mono text-purple-400 font-bold uppercase">Submission Details</span>
                                       <h5 className="text-sm font-black text-white">{currentSub.assignmentTitle}</h5>
                                     </div>
-                                    <span className="text-[11px] font-mono text-slate-400 font-medium">{currentSub.submittedAt}</span>
+                                    <span className="text-[11px] font-mono text-slate-400 font-medium">{formatSubmissionTime(currentSub.submittedAt)}</span>
                                   </div>
 
                                   {currentSub.attachment && (

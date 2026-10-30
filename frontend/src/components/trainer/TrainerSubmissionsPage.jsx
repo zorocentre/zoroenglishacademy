@@ -10,8 +10,9 @@ import { getTrainerStudents } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
 import { getTrainerAllocatedCourses, getTrainerAllocatedBatches } from '../../utils/trainerFilterHelper';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
-import SecureVideoPlayer from '../common/SecureVideoPlayer';
+import SecureVideoPlayer from '../common/SafeVideo';
 import PageLoader from '../common/PageLoader';
+import { formatSubmissionTime } from '../../utils/dateFormatter';
 
 function matchesTrainerName(assignedTrainer, currentTrainerName, currentTrainerEmail) {
   if (!assignedTrainer || assignedTrainer === 'None (Self-Paced)' || assignedTrainer === 'Unassigned') return false;
@@ -152,11 +153,12 @@ export default function TrainerSubmissionsPage() {
   // Open Correction Modal (Requirement 7.4 & 7.9)
   const handleOpenCorrectionModal = (sub) => {
     setCorrectionModalSub(sub);
+    const isAlreadyEvaluated = sub.status === 'Corrected' || sub.status === 'Reviewed';
     setCorrectionForm({
       score: sub.score || '90/100',
-      feedback: sub.feedback || sub.remarks || '',
-      remarks: sub.remarks || sub.feedback || '',
-      status: (sub.status === 'Corrected' || sub.status === 'Reviewed') ? sub.status : 'Corrected'
+      feedback: isAlreadyEvaluated ? (sub.feedback || '') : '',
+      remarks: isAlreadyEvaluated ? (sub.trainerRemarks || (sub.feedback ? sub.remarks : '') || '') : '',
+      status: isAlreadyEvaluated ? sub.status : 'Corrected'
     });
   };
 
@@ -361,7 +363,7 @@ export default function TrainerSubmissionsPage() {
                           <td className="py-4 px-4 text-blue-900 font-bold">{item.courseTitle || 'English Course'}</td>
                           <td className="py-4 px-4 font-bold text-purple-900">{item.batchName || 'Unassigned'}</td>
                           <td className="py-4 px-4 text-slate-800 font-bold">{item.assignmentTitle}</td>
-                          <td className="py-4 px-4 text-slate-500">{item.submittedAt}</td>
+                          <td className="py-4 px-4 text-slate-500 font-medium">{formatSubmissionTime(item.submittedAt)}</td>
                           
                           <td className="py-4 px-4">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${
@@ -699,12 +701,16 @@ export default function TrainerSubmissionsPage() {
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
               <div className="flex justify-between items-center">
                 <span className="font-extrabold text-slate-900 text-sm">{correctionModalSub.assignmentTitle}</span>
-                <span className="text-slate-500 font-bold">{correctionModalSub.submittedAt}</span>
+                <span className="text-slate-500 font-bold">{formatSubmissionTime(correctionModalSub.submittedAt)}</span>
               </div>
 
-              {correctionModalSub.answerText && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 text-slate-700 font-medium italic">
-                  "{correctionModalSub.answerText}"
+              {/* Student Remarks Read-Only Section (Requirement C2) */}
+              {(correctionModalSub.remarks || correctionModalSub.answerText) && (
+                <div className="bg-white p-3 rounded-xl border border-slate-200 text-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Student Remarks</span>
+                  <p className="font-semibold text-slate-900 break-words whitespace-pre-wrap">
+                    {correctionModalSub.remarks || correctionModalSub.answerText}
+                  </p>
                 </div>
               )}
 

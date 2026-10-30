@@ -348,7 +348,9 @@ export default function CompetitionPortalLayout() {
 
         {/* Content Area */}
         <main className={`flex-1 ${isExamActive ? 'p-0 overflow-y-auto bg-slate-950 text-slate-100' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'}`}>
-          <Outlet context={{ currentCompetition, setCurrentCompetition, portals, isExamActive, setIsExamActive }} />
+          <div key={location.pathname} className={isExamActive ? '' : 'page-transition'}>
+            <Outlet context={{ currentCompetition, setCurrentCompetition, portals, isExamActive, setIsExamActive }} />
+          </div>
         </main>
       </div>
     </div>

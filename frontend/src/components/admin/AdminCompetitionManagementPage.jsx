@@ -30,29 +30,11 @@ import SafeVideo from '../common/SafeVideo';
 import AudioPromptPlayer from '../common/AudioPromptPlayer';
 import GuidanceVideoManager from './GuidanceVideoManager';
 import QuestionPreview from '../common/QuestionPreview';
-import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
-import { formatDate } from '../../utils/dateFormatter';
+import { formatDate, toIstDatetimeInput, istInputToUtcIso } from '../../utils/dateFormatter';
 
-const toLocalDatetimeInput = (isoStr) => {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const min = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-};
-
-const toUtcIsoString = (localDtStr) => {
-  if (!localDtStr) return null;
-  const d = new Date(localDtStr);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString();
-};
+const toLocalDatetimeInput = (isoStr) => toIstDatetimeInput(isoStr);
+const toUtcIsoString = (localDtStr) => istInputToUtcIso(localDtStr);
 
 export default function AdminCompetitionManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -165,10 +147,9 @@ export default function AdminCompetitionManagementPage() {
     ]
   });
   const [savingQuestion, setSavingQuestion] = useState(false);
+  const [isMediaUploading, setIsMediaUploading] = useState(false);
   const [attemptCountForEditor, setAttemptCountForEditor] = useState(0);
 
-  // Universal File Viewer State (Tasks K1 & K2)
-  const [viewingFile, setViewingFile] = useState(null);
 
   // Republish Confirm Modal State (Task K7)
   const isRepublishingRef = useRef(false);
@@ -716,9 +697,17 @@ export default function AdminCompetitionManagementPage() {
     e.preventDefault();
     if (!questionFormData.questionText.trim()) return;
 
-    if (questionFormData.questionFormat === 'IMAGE' && (!questionFormData.mediaRef || !questionFormData.mediaRef.trim())) {
-      showWarning('Please upload an image for this Image Question.', 'Image Required');
-      return;
+    const qFormat = (questionFormData.questionFormat || 'MCQ').toUpperCase();
+    if (['IMAGE', 'VIDEO', 'AUDIO'].includes(qFormat)) {
+      if (isMediaUploading) {
+        showWarning('Please wait for the media file upload to complete.', 'Upload in Progress');
+        return;
+      }
+      if (!questionFormData.mediaRef || !questionFormData.mediaRef.trim()) {
+        const typeName = qFormat === 'IMAGE' ? 'image' : qFormat === 'VIDEO' ? 'video' : 'audio';
+        showWarning(`Please upload an ${typeName} file for this question.`, 'Media Required');
+        return;
+      }
     }
 
     if (questionFormData.answerFormat === 'MCQ_OPTIONS') {
@@ -1136,22 +1125,6 @@ export default function AdminCompetitionManagementPage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {(syllabus.viewUrl || inlineSyllabusUrl) && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingFile({
-                        id: syllabus.storedFileId || syllabus.id,
-                        url: inlineSyllabusUrl || resolveFileUrl(syllabus.viewUrl),
-                        name: syllabus.fileName || syllabus.title,
-                        title: syllabus.title,
-                        type: syllabus.fileType
-                      })}
-                      className="px-3.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Preview in Modal</span>
-                    </button>
-                  )}
                   <label className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl flex items-center space-x-1.5 cursor-pointer">
                     <Upload className="w-3.5 h-3.5" />
                     <span>{sylUploading ? 'Replacing...' : 'Replace'}</span>
@@ -1832,6 +1805,7 @@ export default function AdminCompetitionManagementPage() {
                       multiple={false}
                       category="question-media"
                       maxSizeMB={200}
+                      onUploadingChange={setIsMediaUploading}
                       initialValue={
                         questionFormData.mediaRef
                           ? {
@@ -2055,14 +2029,6 @@ export default function AdminCompetitionManagementPage() {
           </div>
         </div>
       )}
-
-      {/* Universal File Viewer Modal (Tasks K1 & K2) */}
-      <UniversalFileViewerModal
-        isOpen={Boolean(viewingFile)}
-        onClose={() => setViewingFile(null)}
-        file={viewingFile}
-        hideDownload={false}
-      />
     </div>
   );
 }

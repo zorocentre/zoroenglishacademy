@@ -74,11 +74,54 @@ body {
   .animate-unlock-icon {
     animation: lockShakeAndUnlock 1.2s ease-in-out forwards;
   }
+  .page-transition {
+    animation: pageFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .modal-backdrop-transition {
+    animation: modalBackdropFadeIn 180ms ease-out forwards;
+  }
+  .modal-content-transition {
+    animation: modalContentFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+/* Page & Modal Transitions (F2) */
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalBackdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalContentFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-unlock-card {
     box-shadow: 0 0 12px 2px rgba(59, 130, 246, 0.5);
+  }
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
