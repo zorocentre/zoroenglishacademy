@@ -27,6 +27,21 @@ public class TrainerCourseRequestController {
         return ApiResponse.ok(requestService.getAllRequests());
     }
 
+    @GetMapping("/trainer-course-access")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<List<Map<String, Object>>> getTrainerCourseAccessList() {
+        return ApiResponse.ok(requestService.getTrainerCourseAccessList());
+    }
+
+    @PostMapping("/revoke-access")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Boolean> revokeAccess(@RequestBody Map<String, String> body) {
+        String trainerId = body != null ? body.get("trainerId") : null;
+        String courseId = body != null ? body.get("courseId") : null;
+        requestService.revokeAccess(trainerId, courseId);
+        return ApiResponse.ok(true, "Trainer course access revoked successfully");
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('TRAINER', 'ADMIN')")
     public ApiResponse<TrainerCourseRequest> createRequest(@RequestBody TrainerCourseRequest request) {

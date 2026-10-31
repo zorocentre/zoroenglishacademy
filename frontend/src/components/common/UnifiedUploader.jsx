@@ -154,10 +154,33 @@ export default function UnifiedUploader({
         }
       });
 
+      // Immediately resolve signed token URL for uploaded file so previews render real media with auth
+      let signedUrl = null;
+      if (res && res.id && !res.bunnyVideoId) {
+        try {
+          const link = await getFileLink(res.id);
+          if (link?.url) signedUrl = link.url;
+        } catch {
+          // ignore
+        }
+      }
+      if (!signedUrl && fileObj && fileObj.type && fileObj.type.startsWith('image/')) {
+        try {
+          signedUrl = URL.createObjectURL(fileObj);
+        } catch {
+          // ignore
+        }
+      }
+
+      const enhancedResult = {
+        ...res,
+        signedUrl: signedUrl || res.url
+      };
+
       setUploadItems((prev) => {
         const updated = prev.map((item) =>
           item.id === itemId
-            ? { ...item, progress: 100, status: 'completed', result: res }
+            ? { ...item, progress: 100, status: 'completed', result: enhancedResult }
             : item
         );
         if (multiple && onMultiUploadComplete) {
@@ -170,7 +193,7 @@ export default function UnifiedUploader({
       });
 
       if (!multiple && onUploadComplete) {
-        onUploadComplete(res);
+        onUploadComplete(enhancedResult);
       }
     } catch (err) {
       if (abortController.signal.aborted) {
@@ -433,9 +456,16 @@ export default function UnifiedUploader({
                   <div className="pt-1.5">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 max-w-xs overflow-hidden">
                       <img
-                        src={item.result?.url || (item.result?.id ? resolveFileUrl(item.result.id) : '')}
+                        src={item.result?.signedUrl || (item.file ? URL.createObjectURL(item.file) : (item.result?.url ? resolveFileUrl(item.result.url) : ''))}
                         alt={item.name || 'Uploaded Image Preview'}
                         className="max-h-48 w-full object-contain mx-auto rounded-lg"
+                        onError={(e) => {
+                          if (item.result?.id) {
+                            getFileLink(item.result.id).then(l => {
+                              if (l?.url) e.currentTarget.src = l.url;
+                            }).catch(() => {});
+                          }
+                        }}
                       />
                     </div>
                   </div>
@@ -549,10 +579,23 @@ export default function UnifiedUploader({
                     </div>
                   ) : (
                     <img
-                      src={signedInitialUrl || initialValue.url || resolveFileUrl(initialValue.id)}
+                      src={signedInitialUrl || initialValue.signedUrl || (initialValue.url && initialValue.url.includes('token=') ? initialValue.url : null) || resolveFileUrl(initialValue.id)}
                       alt={initialValue.name || 'Question Image Preview'}
                       className="max-h-48 w-full object-contain mx-auto rounded-lg"
-                      onError={() => setSignedUrlError(true)}
+                      onError={() => {
+                        if (initialValue?.id) {
+                          getFileLink(initialValue.id).then(link => {
+                            if (link?.url) {
+                              setSignedInitialUrl(link.url);
+                              setSignedUrlError(false);
+                            } else {
+                              setSignedUrlError(true);
+                            }
+                          }).catch(() => setSignedUrlError(true));
+                        } else {
+                          setSignedUrlError(true);
+                        }
+                      }}
                     />
                   )}
                 </div>

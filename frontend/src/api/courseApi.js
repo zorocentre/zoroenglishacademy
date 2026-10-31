@@ -273,3 +273,19 @@ export const getCourseStudents = async (courseId) => {
   }
   return apiResponse([], false, res?.message || 'Failed to fetch course students');
 };
+
+export const getTrainerCourseAccessList = async () => {
+  const res = await apiGet('/trainer-course-requests/trainer-course-access');
+  if (res.success && Array.isArray(res.data)) {
+    return apiResponse(res.data);
+  }
+  return apiResponse([], false, res?.message || 'Failed to fetch trainer course access list');
+};
+
+export const revokeTrainerCourseAccess = async (trainerId, courseId) => {
+  const res = await apiPost('/trainer-course-requests/revoke-access', { trainerId, courseId });
+  if (res.success) {
+    return apiResponse(true, true, res.message || 'Trainer course access revoked successfully');
+  }
+  return apiResponse(false, false, res?.message || 'Failed to revoke trainer course access');
+};

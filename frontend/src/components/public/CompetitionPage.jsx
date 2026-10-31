@@ -4,6 +4,7 @@ import { getCompetitions } from '../../api/competitionApi';
 import { resolveFileUrl, getRulesDownloadUrl } from '../../api/fileApi';
 import { formatDate } from '../../utils/dateFormatter';
 import CompetitionRegisterModal from './CompetitionRegisterModal';
+import PageLoader from '../common/PageLoader';
 
 const formatDateTimeIST = (isoString) => {
   if (!isoString) return '';
@@ -61,8 +62,8 @@ export default function CompetitionPage({ currentUser }) {
 
   if (loading) {
     return (
-      <div className="bg-slate-50 min-h-screen py-20 text-center text-xs font-bold text-slate-400">
-        Loading active competitions...
+      <div className="bg-slate-50 min-h-screen py-20 flex items-center justify-center">
+        <PageLoader text="Loading active competitions..." minHeight="min-h-[400px]" />
       </div>
     );
   }

@@ -712,6 +712,37 @@ public class CourseService {
         Map<String, Long> counts = new HashMap<>();
         Map<String, List<String>> names = new HashMap<>();
 
+        boolean isRecorded = "Recorded".equalsIgnoreCase(course.getMode());
+        if (isRecorded) {
+            long moduleCount = course.getModules() != null ? course.getModules().size() : 0;
+            counts.put("modules", moduleCount);
+
+            List<Enrollment> enrs = enrollmentRepository.findByCourseId(course.getId());
+            counts.put("enrolledStudents", (long) enrs.size());
+
+            long trainerCount = 0;
+            if (trainerCourseRequestRepository != null) {
+                trainerCount += trainerCourseRequestRepository.findByCourseId(course.getId()).stream()
+                        .filter(r -> "Approved".equalsIgnoreCase(r.getStatus()))
+                        .count();
+            }
+            if (course.getTrainerId() != null && !course.getTrainerId().isBlank()) {
+                trainerCount = Math.max(trainerCount, 1);
+            }
+            counts.put("assignedTrainers", trainerCount);
+
+            List<Batch> batches = batchRepository.findByCourseId(course.getId());
+            counts.put("batches", (long) batches.size());
+
+            List<Assignment> assignments = assignmentRepository.findByCourseId(course.getId());
+            counts.put("assignments", (long) assignments.size());
+
+            List<Doubt> doubts = doubtRepository.findByCourseId(course.getId());
+            counts.put("doubts", (long) doubts.size());
+
+            return new com.zoroacademy.dto.DeletionImpactDto(true, Collections.emptyList(), counts, names);
+        }
+
         // Trainer audience courses: check approved trainer access
         if ("trainer".equalsIgnoreCase(course.getAudience())) {
             List<TrainerCourseRequest> approvedReqs = trainerCourseRequestRepository != null
@@ -774,6 +805,51 @@ public class CourseService {
 
         if (course != null) {
             String courseId = course.getId();
+            boolean isRecorded = "Recorded".equalsIgnoreCase(course.getMode());
+
+            if (isRecorded) {
+                if (doubtRepository != null) {
+                    List<Doubt> doubts = doubtRepository.findByCourseId(courseId);
+                    if (doubts != null && !doubts.isEmpty()) doubtRepository.deleteAll(doubts);
+                }
+
+                if (submissionRepository != null) {
+                    List<AssignmentSubmission> subs = submissionRepository.findByCourseId(courseId);
+                    if (subs != null && !subs.isEmpty()) submissionRepository.deleteAll(subs);
+                }
+
+                if (assignmentRepository != null) {
+                    List<Assignment> asgmts = assignmentRepository.findByCourseId(courseId);
+                    if (asgmts != null && !asgmts.isEmpty()) assignmentRepository.deleteAll(asgmts);
+                }
+
+                if (studentModuleProgressRepository != null) {
+                    studentModuleProgressRepository.deleteByCourseId(courseId);
+                }
+
+                if (studentProgressRepository != null) {
+                    studentProgressRepository.deleteByCourseId(courseId);
+                }
+
+                if (scheduleRepository != null) {
+                    List<Schedule> scheds = scheduleRepository.findByCourseId(courseId);
+                    if (scheds != null && !scheds.isEmpty()) scheduleRepository.deleteAll(scheds);
+                }
+
+                if (studentCourseBatchRepository != null) {
+                    studentCourseBatchRepository.deleteByCourseId(courseId);
+                }
+
+                if (enrollmentRepository != null) {
+                    List<Enrollment> enrs = enrollmentRepository.findByCourseId(courseId);
+                    if (enrs != null && !enrs.isEmpty()) enrollmentRepository.deleteAll(enrs);
+                }
+
+                if (batchRepository != null) {
+                    List<Batch> batches = batchRepository.findByCourseId(courseId);
+                    if (batches != null && !batches.isEmpty()) batchRepository.deleteAll(batches);
+                }
+            }
 
             // Pending and Rejected trainer requests are not access: delete them in the same transaction as the course
             if (trainerCourseRequestRepository != null) {

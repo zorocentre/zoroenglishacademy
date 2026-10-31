@@ -1005,51 +1005,53 @@ export default function AdminSettingsPage() {
                 {heroImagesList.map((img, index) => (
                   <div key={img.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     {/* Left: Thumbnail & Reorder */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveHero(index, 'up')}
-                          disabled={index === 0}
-                          className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-600 cursor-pointer"
-                          title="Move Up"
-                        >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveHero(index, 'down')}
-                          disabled={index === heroImagesList.length - 1}
-                          className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-600 cursor-pointer"
-                          title="Move Down"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0 flex-1">
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveHero(index, 'up')}
+                            disabled={index === 0}
+                            className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-600 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveHero(index, 'down')}
+                            disabled={index === heroImagesList.length - 1}
+                            className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none text-slate-600 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="relative w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                          <img
+                            src={resolveFileUrl(img.url)}
+                            alt={img.altText || 'Hero thumbnail'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = '/assets/course-placeholder.svg';
+                            }}
+                          />
+                          <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-bold px-1 rounded">
+                            #{index + 1}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="relative w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                        <img
-                          src={resolveFileUrl(img.url)}
-                          alt={img.altText || 'Hero thumbnail'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = '/assets/course-placeholder.svg';
-                          }}
-                        />
-                        <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-bold px-1 rounded">
-                          #{index + 1}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             defaultValue={img.altText || ''}
                             placeholder="Optional Alt / Achievement description"
                             onBlur={(e) => handleAltTextBlur(img.id, e.target.value)}
-                            className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 w-64 focus:border-blue-500 focus:outline-hidden"
+                            className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 w-full max-w-sm focus:border-blue-500 focus:outline-hidden"
                           />
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center gap-2 truncate max-w-xs">
@@ -1063,7 +1065,7 @@ export default function AdminSettingsPage() {
                     </div>
 
                     {/* Right: Active Toggle & Delete */}
-                    <div className="flex items-center gap-3 self-end sm:self-center">
+                    <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
                       <button
                         type="button"
                         onClick={() => handleToggleActiveHero(img)}

@@ -19,6 +19,9 @@ public class CourseController {
     private final CourseService courseService;
     private final EnrollmentRepository enrollmentRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.service.TrainerCourseRequestService requestService;
+
     public CourseController(CourseService courseService, EnrollmentRepository enrollmentRepository) {
         this.courseService = courseService;
         this.enrollmentRepository = enrollmentRepository;
@@ -84,6 +87,11 @@ public class CourseController {
         if (isTrainerAudience) {
             String trainerId = principal != null ? principal.getId() : null;
             String trainerEmail = principal != null ? principal.getEmail() : null;
+            if (principal != null && "TRAINER".equalsIgnoreCase(principal.getRole())) {
+                if (requestService != null && !requestService.isTrainerAuthorizedForCourse(trainerId, trainerEmail, course.getId())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You do not have approved access to this course.");
+                }
+            }
             Course trainerCourse = courseService.getCourseForStudent(course.getId(), trainerId, trainerEmail);
             return ApiResponse.ok(trainerCourse);
         }
@@ -116,6 +124,16 @@ public class CourseController {
         String userId = principal != null ? principal.getId() : null;
         String userEmail = principal != null ? principal.getEmail() : null;
         String userRole = principal != null ? principal.getRole() : "STUDENT";
+
+        if (principal != null && "TRAINER".equalsIgnoreCase(principal.getRole())) {
+            Course c = courseService.getCourseById(courseId);
+            if (c != null && "trainer".equalsIgnoreCase(c.getAudience())) {
+                if (requestService != null && !requestService.isTrainerAuthorizedForCourse(userId, userEmail, courseId)) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You do not have approved access to this course.");
+                }
+            }
+        }
+
         return ApiResponse.ok(courseService.getModuleForUser(courseId, moduleId, userId, userEmail, userRole));
     }
 

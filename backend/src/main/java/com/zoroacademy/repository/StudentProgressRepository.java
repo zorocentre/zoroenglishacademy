@@ -12,4 +12,6 @@ public interface StudentProgressRepository extends JpaRepository<StudentProgress
     List<StudentProgress> findByStudentIdIgnoreCaseAndCourseId(String studentId, String courseId);
     Optional<StudentProgress> findByStudentIdIgnoreCaseAndCourseIdAndModuleId(String studentId, String courseId, String moduleId);
     List<StudentProgress> findByStudentIdIgnoreCase(String studentId);
+    List<StudentProgress> findByCourseId(String courseId);
+    void deleteByCourseId(String courseId);
 }

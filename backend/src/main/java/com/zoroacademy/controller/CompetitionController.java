@@ -21,9 +21,25 @@ public class CompetitionController {
     private final CompetitionService competitionService;
     private final UserRepository userRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.service.CompetitionActivityLogService activityLogService;
+
     public CompetitionController(CompetitionService competitionService, UserRepository userRepository) {
         this.competitionService = competitionService;
         this.userRepository = userRepository;
+    }
+
+    @GetMapping("/activity-logs")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<List<com.zoroacademy.entity.CompetitionActivityLog>> getActivityLogs(
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String competitionId,
+            @RequestParam(required = false) String eventType) {
+        if (activityLogService == null) {
+            return ApiResponse.ok(java.util.Collections.emptyList());
+        }
+        return ApiResponse.ok(activityLogService.getLogs(fromDate, toDate, competitionId, eventType));
     }
 
     private User getCurrentUser() {

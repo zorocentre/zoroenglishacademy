@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Layers, BookOpen } from 'lucide-react';
+import { Play, Layers, BookOpen, RefreshCw } from 'lucide-react';
 import { getCourses } from '../../api/courseApi';
 import { resolveFileUrl } from '../../api/fileApi';
 import SafeImage from '../common/SafeImage';
+import PageLoader from '../common/PageLoader';
 
 function formatModulesDuration(modules) {
   if (!modules || modules.length === 0) return '';
@@ -42,23 +43,33 @@ function formatModulesDuration(modules) {
 export default function CoursePage({ onOpenEnquire }) {
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  async function loadCourses() {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await getCourses();
+      if (res.success && Array.isArray(res.data)) {
+        // Filter ONLY Student courses for Public Course Page
+        const studentCourses = res.data.filter(c => (c.audience || 'student') === 'student');
+        setCourses(studentCourses);
+        if (studentCourses.length > 0) {
+          setSelectedCourseId(studentCourses[0].id);
+        }
+      } else {
+        setLoadError(true);
+      }
+    } catch (err) {
+      console.error('Failed to load courses on course page', err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadCourses() {
-      try {
-        const res = await getCourses();
-        if (res.success && Array.isArray(res.data)) {
-          // Filter ONLY Student courses for Public Course Page
-          const studentCourses = res.data.filter(c => (c.audience || 'student') === 'student');
-          setCourses(studentCourses);
-          if (studentCourses.length > 0) {
-            setSelectedCourseId(studentCourses[0].id);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load courses on course page', err);
-      }
-    }
     loadCourses();
   }, []);
 
@@ -68,7 +79,28 @@ export default function CoursePage({ onOpenEnquire }) {
     <div className="bg-slate-50 min-h-screen py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {courses.length === 0 ? (
+        {loading ? (
+          <div className="min-h-[500px] flex items-center justify-center">
+            <PageLoader text="Loading course catalog..." minHeight="min-h-[400px]" />
+          </div>
+        ) : loadError ? (
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center max-w-lg mx-auto shadow-sm my-12 space-y-4">
+            <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <BookOpen className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900">Failed to load courses</h2>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              We encountered an issue fetching the latest courses. Please try again.
+            </p>
+            <button
+              onClick={loadCourses}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : courses.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-200/80 p-16 text-center max-w-lg mx-auto shadow-sm my-12">
             <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner">
               <BookOpen className="w-10 h-10" />

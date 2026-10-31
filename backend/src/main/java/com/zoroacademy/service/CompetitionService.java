@@ -90,8 +90,20 @@ public class CompetitionService {
     @Autowired(required = false)
     private NotificationService notificationService;
 
+    @Autowired(required = false)
+    private CompetitionActivityLogService activityLogService;
+
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
+
+    private void logCompetitionActivity(String compId, String compTitle, String eventType, String actorId, String actorName, String actorRole, String details) {
+        if (activityLogService != null && compId != null) {
+            try {
+                activityLogService.logEvent(compId, compTitle, eventType, actorId, actorName, actorRole, details);
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
     @Autowired
     public CompetitionService(
@@ -584,7 +596,22 @@ public class CompetitionService {
         if (updated.getRegEndAt() != null) comp.setRegEndAt(updated.getRegEndAt());
         if (updated.getStartAt() != null) comp.setStartAt(updated.getStartAt());
         if (updated.getEndAt() != null) comp.setEndAt(updated.getEndAt());
-        if (updated.getFinalUnlockAt() != null) comp.setFinalUnlockAt(updated.getFinalUnlockAt());
+        if (updated.getFinalUnlockAt() != null) {
+            comp.setFinalUnlockAt(updated.getFinalUnlockAt());
+            if (assessmentRepository != null) {
+                List<CompetitionAssessment> finalAsmts = assessmentRepository.findByCompetitionIdOrderBySequenceNoAsc(comp.getId())
+                        .stream()
+                        .filter(a -> "FINAL".equalsIgnoreCase(a.getType()))
+                        .toList();
+                for (CompetitionAssessment fa : finalAsmts) {
+                    fa.setStartAt(comp.getFinalUnlockAt());
+                    if (comp.getEndAt() != null) {
+                        fa.setEndAt(comp.getEndAt());
+                    }
+                    assessmentRepository.save(fa);
+                }
+            }
+        }
         if (updated.getLeaderboardPublishTime() != null) comp.setLeaderboardPublishTime(updated.getLeaderboardPublishTime());
         if (updated.getLeaderboardStatus() != null) comp.setLeaderboardStatus(updated.getLeaderboardStatus());
         if (updated.getLeaderboardPublishedAt() != null) comp.setLeaderboardPublishedAt(updated.getLeaderboardPublishedAt());
@@ -1283,6 +1310,12 @@ public class CompetitionService {
             if (comp.getFinalUnlockAt() == null) {
                 throw new BadRequestException("Final Assessment unlock date/time must be configured on the competition");
             }
+            if (asmt.getStartAt() == null && comp.getFinalUnlockAt() != null) {
+                asmt.setStartAt(comp.getFinalUnlockAt());
+            }
+            if (asmt.getEndAt() == null && comp.getEndAt() != null) {
+                asmt.setEndAt(comp.getEndAt());
+            }
             List<CompetitionSet> sets = setRepository.findByCompetitionIdOrderByCodeAsc(comp.getId());
             for (String code : List.of("A", "B", "C", "D")) {
                 boolean hasTrainer = sets.stream()
@@ -1620,11 +1653,16 @@ public class CompetitionService {
         if ("FILL_BLANK".equalsIgnoreCase(qFormat) || "FILL_BLANK".equalsIgnoreCase(aFormat)) {
             throw new BadRequestException("Fill-in-the-blank format is not supported");
         }
-        if ("IMAGE".equalsIgnoreCase(qFormat) || "AUDIO".equalsIgnoreCase(qFormat) || "VIDEO".equalsIgnoreCase(qFormat)) {
+        if ("IMAGE".equalsIgnoreCase(qFormat)) {
+            String mRef = (String) payload.get("mediaRef");
+            if (mRef == null || mRef.trim().isEmpty()) {
+                throw new BadRequestException("Image question requires an uploaded image");
+            }
+        } else if ("AUDIO".equalsIgnoreCase(qFormat) || "VIDEO".equalsIgnoreCase(qFormat)) {
             String mRef = (String) payload.get("mediaRef");
             if (mRef == null || mRef.trim().isEmpty()) {
                 String typeName = qFormat.toLowerCase();
-                throw new BadRequestException("Please upload an " + (typeName.startsWith("a") ? "audio" : typeName.startsWith("i") ? "image" : "video") + " file for this question.");
+                throw new BadRequestException("Please upload an " + (typeName.startsWith("a") ? "audio" : "video") + " file for this question.");
             }
         }
 
@@ -2166,6 +2204,9 @@ public class CompetitionService {
             return response;
         }
 
+        OffsetDateTime effectiveStart = finalAsmt.getStartAt() != null ? finalAsmt.getStartAt() : comp.getFinalUnlockAt();
+        OffsetDateTime effectiveEnd = finalAsmt.getEndAt() != null ? finalAsmt.getEndAt() : comp.getEndAt();
+
         response.put("hasFinalAssessment", true);
         Map<String, Object> item = new HashMap<>();
         item.put("id", finalAsmt.getId());
@@ -2174,8 +2215,8 @@ public class CompetitionService {
         item.put("sequenceNo", finalAsmt.getSequenceNo());
         item.put("title", finalAsmt.getTitle());
         item.put("durationMinutes", finalAsmt.getDurationMinutes());
-        item.put("startAt", finalAsmt.getStartAt());
-        item.put("endAt", finalAsmt.getEndAt());
+        item.put("startAt", effectiveStart);
+        item.put("endAt", effectiveEnd);
         item.put("status", finalAsmt.getStatus());
 
         List<AssessmentQuestion> qs = questionRepository.findByAssessmentIdOrderBySortOrderAsc(finalAsmt.getId());
@@ -2194,23 +2235,23 @@ public class CompetitionService {
         long secondsToStart = 0;
         long secondsToEnd = 0;
 
-        if (finalAsmt.getStartAt() == null) {
+        if (effectiveStart == null) {
             windowStatus = isPublished ? "UNANNOUNCED" : "DRAFT";
-        } else if (now.isBefore(finalAsmt.getStartAt())) {
+        } else if (now.isBefore(effectiveStart)) {
             windowStatus = "UPCOMING";
-            secondsToStart = java.time.Duration.between(now, finalAsmt.getStartAt()).getSeconds();
-        } else if (finalAsmt.getEndAt() != null && now.isAfter(finalAsmt.getEndAt())) {
+            secondsToStart = java.time.Duration.between(now, effectiveStart).getSeconds();
+        } else if (effectiveEnd != null && now.isAfter(effectiveEnd)) {
             windowStatus = "EXPIRED";
         } else {
             windowStatus = "LIVE";
-            if (finalAsmt.getEndAt() != null) {
-                secondsToEnd = java.time.Duration.between(now, finalAsmt.getEndAt()).getSeconds();
+            if (effectiveEnd != null) {
+                secondsToEnd = java.time.Duration.between(now, effectiveEnd).getSeconds();
             }
         }
         item.put("windowStatus", windowStatus);
         item.put("status", windowStatus);
-        item.put("opensAt", finalAsmt.getStartAt());
-        item.put("closesAt", finalAsmt.getEndAt());
+        item.put("opensAt", effectiveStart);
+        item.put("closesAt", effectiveEnd);
         item.put("secondsToStart", secondsToStart);
         item.put("secondsToEnd", secondsToEnd);
 
@@ -2264,14 +2305,25 @@ public class CompetitionService {
 
         OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Kolkata"));
         if ("MOCK".equalsIgnoreCase(asmt.getType()) || "FINAL".equalsIgnoreCase(asmt.getType())) {
-            if (asmt.getStartAt() == null && "FINAL".equalsIgnoreCase(asmt.getType())) {
+            OffsetDateTime effectiveStart = asmt.getStartAt();
+            OffsetDateTime effectiveEnd = asmt.getEndAt();
+            if ("FINAL".equalsIgnoreCase(asmt.getType())) {
+                Competition comp = getCompetitionById(asmt.getCompetitionId());
+                if (effectiveStart == null && comp.getFinalUnlockAt() != null) {
+                    effectiveStart = comp.getFinalUnlockAt();
+                }
+                if (effectiveEnd == null && comp.getEndAt() != null) {
+                    effectiveEnd = comp.getEndAt();
+                }
+            }
+            if (effectiveStart == null && "FINAL".equalsIgnoreCase(asmt.getType())) {
                 throw new BadRequestException("Final Assessment unlock time has not been configured yet. It will be opened soon.");
             }
-            if (asmt.getStartAt() != null && now.isBefore(asmt.getStartAt())) {
-                throw new BadRequestException("This test window is not open yet. Scheduled to open at: " + asmt.getStartAt());
+            if (effectiveStart != null && now.isBefore(effectiveStart)) {
+                throw new BadRequestException("This test window is not open yet. Scheduled to open at: " + effectiveStart);
             }
-            if (asmt.getEndAt() != null && now.isAfter(asmt.getEndAt())) {
-                throw new BadRequestException("This test window has closed. Ended at: " + asmt.getEndAt());
+            if (effectiveEnd != null && now.isAfter(effectiveEnd)) {
+                throw new BadRequestException("This test window has closed. Ended at: " + effectiveEnd);
             }
         }
 

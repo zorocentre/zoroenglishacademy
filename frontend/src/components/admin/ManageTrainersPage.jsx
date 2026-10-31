@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, X, Plus, Search, Calendar, AlertTriangle, ArrowRight, ShieldAlert, CheckCircle2, Copy, Check, Key, Eye, EyeOff } from 'lucide-react';
+import { Edit, Trash2, X, Plus, Search, Calendar, AlertTriangle, ArrowRight, ShieldAlert, CheckCircle2, Copy, Check, Key, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { getTrainers, createTrainer, updateTrainer, deleteTrainer, updateUserStatus, getTrainerDependencies, getTrainerDeletionImpact, replaceTrainer, getAdminVisiblePassword, setAdminUserPassword } from '../../api/userApi';
+import { getTrainerCourseAccessList, revokeTrainerCourseAccess } from '../../api/courseApi';
 import { logActivity } from '../../api/activityLogApi';
 import { sanitizePhone, validatePhone, formatPhone, SUBMIT_PHONE_ERROR } from '../../utils/phoneValidator';
 import ConfirmModal from '../common/ConfirmModal';
@@ -33,6 +34,52 @@ export default function ManageTrainersPage() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [passwordModalError, setPasswordModalError] = useState('');
   const [passwordModalLoading, setPasswordModalLoading] = useState(false);
+
+  // Trainer Enrolled Courses states
+  const [showEnrolledCoursesModal, setShowEnrolledCoursesModal] = useState(false);
+  const [enrolledCoursesList, setEnrolledCoursesList] = useState([]);
+  const [loadingEnrolledCourses, setLoadingEnrolledCourses] = useState(false);
+  const [enrolledCourseSearch, setEnrolledCourseSearch] = useState('');
+  const [enrolledCourseModeFilter, setEnrolledCourseModeFilter] = useState('ALL');
+  const [enrolledCourseTrainerFilter, setEnrolledCourseTrainerFilter] = useState('ALL');
+  const [revokeConfirmData, setRevokeConfirmData] = useState(null);
+  const [revokingAccess, setRevokingAccess] = useState(false);
+
+  const loadEnrolledCourses = async () => {
+    setLoadingEnrolledCourses(true);
+    try {
+      const res = await getTrainerCourseAccessList();
+      if (res && res.success && Array.isArray(res.data)) {
+        setEnrolledCoursesList(res.data);
+      } else {
+        setEnrolledCoursesList([]);
+      }
+    } catch (err) {
+      console.error('Failed to load trainer course access list:', err);
+      setEnrolledCoursesList([]);
+    } finally {
+      setLoadingEnrolledCourses(false);
+    }
+  };
+
+  const handleConfirmRevokeAccess = async () => {
+    if (!revokeConfirmData) return;
+    setRevokingAccess(true);
+    try {
+      const res = await revokeTrainerCourseAccess(revokeConfirmData.trainerId, revokeConfirmData.courseId);
+      if (res && res.success) {
+        showSuccess(`Access revoked for ${revokeConfirmData.trainerName || 'trainer'} on course ${revokeConfirmData.courseTitle || ''}`, 'Access Revoked');
+        setRevokeConfirmData(null);
+        await loadEnrolledCourses();
+      } else {
+        showError(res?.message || 'Failed to revoke access', 'Error');
+      }
+    } catch (err) {
+      showError(err?.message || 'Failed to revoke access', 'Error');
+    } finally {
+      setRevokingAccess(false);
+    }
+  };
 
   const handleToggleRevealPassword = async (trainerId) => {
     if (showPasswords[trainerId]) {
@@ -985,7 +1032,193 @@ export default function ManageTrainersPage() {
         </div>
       )}
 
-    </div>
+    
+      {/* Trainer Enrolled Courses Modal */}
+      {showEnrolledCoursesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">Trainer Enrolled Courses</h2>
+                  <p className="text-xs text-slate-500 font-medium">Manage and review all trainer course allocations and access permissions</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEnrolledCoursesModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex flex-wrap gap-3 items-center justify-between">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by trainer name, email, or course..."
+                  value={enrolledCourseSearch}
+                  onChange={(e) => setEnrolledCourseSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={enrolledCourseModeFilter}
+                  onChange={(e) => setEnrolledCourseModeFilter(e.target.value)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Modes</option>
+                  <option value="ONLINE">Online</option>
+                  <option value="RECORDED">Recorded</option>
+                  <option value="HYBRID">Hybrid</option>
+                </select>
+
+                <select
+                  value={enrolledCourseTrainerFilter}
+                  onChange={(e) => setEnrolledCourseTrainerFilter(e.target.value)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer max-w-[180px] truncate"
+                >
+                  <option value="ALL">All Trainers</option>
+                  {trainers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={loadEnrolledCourses}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              {loadingEnrolledCourses ? (
+                <div className="py-16 text-center text-slate-400 font-bold text-sm">
+                  Loading trainer course accesses...
+                </div>
+              ) : enrolledCoursesList.filter((item) => {
+                  if (enrolledCourseModeFilter !== 'ALL' && item.courseMode?.toUpperCase() !== enrolledCourseModeFilter) return false;
+                  if (enrolledCourseTrainerFilter !== 'ALL' && item.trainerId !== enrolledCourseTrainerFilter) return false;
+                  if (enrolledCourseSearch) {
+                    const q = enrolledCourseSearch.toLowerCase();
+                    const matchTrainer = item.trainerName?.toLowerCase().includes(q) || item.trainerEmail?.toLowerCase().includes(q) || item.trainerPhone?.includes(q);
+                    const matchCourse = item.courseTitle?.toLowerCase().includes(q) || item.courseCategory?.toLowerCase().includes(q);
+                    if (!matchTrainer && !matchCourse) return false;
+                  }
+                  return true;
+                }).length === 0 ? (
+                <div className="py-16 text-center text-slate-400 font-bold text-sm">
+                  {enrolledCoursesList.length === 0
+                    ? 'No trainer course enrollments found.'
+                    : 'No matching course allocations found for your filter.'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 uppercase font-bold text-[11px]">
+                        <th className="py-3 px-4">Trainer</th>
+                        <th className="py-3 px-4">Course Title</th>
+                        <th className="py-3 px-4">Mode</th>
+                        <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Allocated Date</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {enrolledCoursesList.filter((item) => {
+                        if (enrolledCourseModeFilter !== 'ALL' && item.courseMode?.toUpperCase() !== enrolledCourseModeFilter) return false;
+                        if (enrolledCourseTrainerFilter !== 'ALL' && item.trainerId !== enrolledCourseTrainerFilter) return false;
+                        if (enrolledCourseSearch) {
+                          const q = enrolledCourseSearch.toLowerCase();
+                          const matchTrainer = item.trainerName?.toLowerCase().includes(q) || item.trainerEmail?.toLowerCase().includes(q) || item.trainerPhone?.includes(q);
+                          const matchCourse = item.courseTitle?.toLowerCase().includes(q) || item.courseCategory?.toLowerCase().includes(q);
+                          if (!matchTrainer && !matchCourse) return false;
+                        }
+                        return true;
+                      }).map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-3 px-4">
+                            <div className="font-extrabold text-slate-900">{item.trainerName}</div>
+                            <div className="text-[11px] text-slate-500">{item.trainerEmail}</div>
+                            {item.trainerPhone && <div className="text-[10px] text-slate-400 font-mono">{item.trainerPhone}</div>}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-slate-800">{item.courseTitle}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                              item.courseMode?.toLowerCase() === 'recorded'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : item.courseMode?.toLowerCase() === 'hybrid'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                              {item.courseMode || 'Online'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">{item.courseCategory || 'General'}</td>
+                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{item.requestDate || 'N/A'}</td>
+                          <td className="py-3 px-4">
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                              {item.status || 'Approved'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setRevokeConfirmData(item)}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Revoke Access
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span>Total Access Records: {enrolledCoursesList.length}</span>
+              <button
+                type="button"
+                onClick={() => setShowEnrolledCoursesModal(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke Access Confirmation Dialog */}
+      {revokeConfirmData && (
+        <ConfirmModal
+          isOpen={Boolean(revokeConfirmData)}
+          title="Revoke Course Access"
+          message={`Are you sure you want to revoke access for trainer "${revokeConfirmData.trainerName}" on course "${revokeConfirmData.courseTitle}"? The trainer will immediately lose access to lead this course and its materials.`}
+          confirmText={revokingAccess ? "Revoking..." : "Revoke Access"}
+          confirmDisabled={revokingAccess}
+          onConfirm={handleConfirmRevokeAccess}
+          onCancel={() => setRevokeConfirmData(null)}
+        />
+      )}
+</div>
   );
 }
 

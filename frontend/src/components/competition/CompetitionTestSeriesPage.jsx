@@ -681,7 +681,7 @@ export default function CompetitionTestSeriesPage() {
                       maxLength={5000}
                       rows={7}
                       placeholder="Type your response here (up to 5,000 characters)..."
-                      className="w-full p-4 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 resize-y font-sans leading-relaxed"
+                      className="w-full p-4 rounded-2xl border border-slate-300 bg-white text-slate-900 caret-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 placeholder-slate-400 resize-y font-sans leading-relaxed"
                     />
                   </div>
                 )}

@@ -11,5 +11,7 @@ import java.util.Optional;
 public interface StudentModuleProgressRepository extends JpaRepository<StudentModuleProgress, String> {
     List<StudentModuleProgress> findByStudentId(String studentId);
     List<StudentModuleProgress> findByStudentIdAndCourseId(String studentId, String courseId);
+    List<StudentModuleProgress> findByCourseId(String courseId);
     Optional<StudentModuleProgress> findByStudentIdAndModuleId(String studentId, String moduleId);
+    void deleteByCourseId(String courseId);
 }

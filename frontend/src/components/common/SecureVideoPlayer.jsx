@@ -24,47 +24,7 @@ export default function SecureVideoPlayer({
   // Watermark requirement: authenticated user's real email as stored (no name, no course, no forced uppercase)
   const authenticatedEmail = user?.email || studentEmail || '';
 
-  const iframeRef = useRef(null);
-  const containerRef = useRef(null);
-  const isResumedRef = useRef(false);
-  const positionRef = useRef(initialPosition || 0);
-  const durationRef = useRef(0);
-  const isPlayingRef = useRef(false);
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [_currentTime, setCurrentTime] = useState(initialPosition || 0);
-  const [duration, setDuration] = useState(0);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-
-  // 10-second stream loading timeout failsafe
-  useEffect(() => {
-    setLoadError(false);
-    if (!embedUrl) return;
-    const timer = setTimeout(() => {
-      if (!isPlayerReady) {
-        console.warn('[SecureVideoPlayer] Stream loading timed out after 10s for embedUrl:', embedUrl);
-        setLoadError(true);
-      }
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, [embedUrl, isPlayerReady]);
-
-  // Moving Watermark Position State (shifts position periodically)
-  const [watermarkPos, setWatermarkPos] = useState({ top: '15%', left: '15%' });
-
-  // Watermark position shifting every 6 seconds using visibility-aware usePolling
-  usePolling(() => {
-    const topPositions = ['12%', '28%', '65%', '78%', '42%'];
-    const leftPositions = ['10%', '55%', '15%', '65%', '40%'];
-    const randIdx = Math.floor(Math.random() * topPositions.length);
-    setWatermarkPos({
-      top: topPositions[randIdx],
-      left: leftPositions[randIdx]
-    });
-  }, 6000, true);
-
-  // Parse video reference data
+  // 1. Parse video reference data and resolve embed URL FIRST to prevent TDZ ReferenceErrors
   let parsedRef = videoRefData;
   if (typeof videoRefData === 'string' && videoRefData.trim().startsWith('{')) {
     try {
@@ -104,7 +64,22 @@ export default function SecureVideoPlayer({
             ? `https://${parsedRef.cdnHost}/${parsedRef.videoId}/thumbnail.jpg`
             : null));
 
-  // PostMessage helper for Player.js protocol
+  const iframeRef = useRef(null);
+  const containerRef = useRef(null);
+  const isResumedRef = useRef(false);
+  const positionRef = useRef(initialPosition || 0);
+  const durationRef = useRef(0);
+  const isPlayingRef = useRef(false);
+  const loadTimeoutRef = useRef(null);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [_currentTime, setCurrentTime] = useState(initialPosition || 0);
+  const [duration, setDuration] = useState(0);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [replayKey, setReplayKey] = useState(0);
+
+  // Helper to post messages via Player.js protocol
   const postToPlayer = (method, value) => {
     try {
       if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -122,6 +97,45 @@ export default function SecureVideoPlayer({
     }
   };
 
+  // 30-second stream loading timeout failsafe (Task 10 & TDZ hardened)
+  useEffect(() => {
+    setLoadError(false);
+    if (!embedUrl) return;
+
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
+
+    if (isPlayerReady || isPlaying) return;
+
+    loadTimeoutRef.current = setTimeout(() => {
+      if (!isPlayerReady && !isPlayingRef.current) {
+        console.warn('[SecureVideoPlayer] Stream loading timed out after 30s for embedUrl:', embedUrl);
+        setLoadError(true);
+      }
+    }, 30000);
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
+  }, [embedUrl, isPlayerReady, isPlaying, replayKey]);
+
+  // Moving Watermark Position State (shifts position periodically)
+  const [watermarkPos, setWatermarkPos] = useState({ top: '15%', left: '15%' });
+
+  // Watermark position shifting every 6 seconds using visibility-aware usePolling
+  usePolling(() => {
+    const topPositions = ['12%', '28%', '65%', '78%', '42%'];
+    const leftPositions = ['10%', '55%', '15%', '65%', '40%'];
+    const randIdx = Math.floor(Math.random() * topPositions.length);
+    setWatermarkPos({
+      top: topPositions[randIdx],
+      left: leftPositions[randIdx]
+    });
+  }, 6000, true);
+
   // Register Player.js event listeners on message
   useEffect(() => {
     isResumedRef.current = false;
@@ -138,6 +152,13 @@ export default function SecureVideoPlayer({
       }
       if (!data || data.context !== 'player.js') return;
 
+      // When player reports ready or play, cancel loading timeout
+      if (data.event === 'ready' || data.event === 'play' || data.event === 'timeupdate') {
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current);
+        }
+      }
+
       if (data.event === 'ready') {
         setIsPlayerReady(true);
         postToPlayer('addEventListener', 'play');
@@ -152,6 +173,7 @@ export default function SecureVideoPlayer({
       } else if (data.event === 'play') {
         setIsPlaying(true);
         isPlayingRef.current = true;
+        setIsPlayerReady(true);
       } else if (data.event === 'pause') {
         setIsPlaying(false);
         isPlayingRef.current = false;
@@ -192,7 +214,7 @@ export default function SecureVideoPlayer({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [embedUrl, initialPosition, moduleId, courseId, user, onProgressUpdate]);
+  }, [embedUrl, initialPosition, moduleId, courseId, user, onProgressUpdate, replayKey]);
 
   // Heartbeat every 5 seconds while playing
   useEffect(() => {
@@ -238,6 +260,9 @@ export default function SecureVideoPlayer({
   }, [parsedRef?.expiresAt, onTokenExpired]);
 
   const handleIframeLoad = () => {
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
     // Send Player.js handshake
     postToPlayer('addEventListener', 'ready');
     postToPlayer('addEventListener', 'play');
@@ -251,6 +276,13 @@ export default function SecureVideoPlayer({
         isResumedRef.current = true;
       }, 600);
     }
+  };
+
+  const handleRetry = () => {
+    setLoadError(false);
+    setIsPlayerReady(false);
+    setReplayKey(prev => prev + 1);
+    onTokenExpired?.();
   };
 
   if (!isAuthorized) {
@@ -307,15 +339,12 @@ export default function SecureVideoPlayer({
         <div className="space-y-1 max-w-sm text-center">
           <h3 className="text-lg font-black tracking-tight text-slate-200">Video Loading Timed Out</h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            The video stream did not start within 10 seconds. Click retry to refresh access token or stream.
+            The video stream did not start within 30 seconds. Click retry to refresh access token or stream.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => {
-            setLoadError(false);
-            onTokenExpired?.();
-          }}
+          onClick={handleRetry}
           className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
         >
           <RefreshCw className="w-3.5 h-3.5" />
@@ -333,6 +362,7 @@ export default function SecureVideoPlayer({
     >
       {/* Bunny Stream Embed Player iframe */}
       <iframe
+        key={replayKey}
         ref={iframeRef}
         src={embedUrl}
         title={videoTitle || courseTitle || 'Recorded Lesson Video'}

@@ -7,6 +7,7 @@ import { resolveFileUrl } from '../../api/fileApi';
 import { formatDate } from '../../utils/dateFormatter';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import SafeImage from '../common/SafeImage';
+import PageLoader from '../common/PageLoader';
 import HeroCarousel from './HeroCarousel';
 import CompetitionRegisterModal from './CompetitionRegisterModal';
 
@@ -18,9 +19,11 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
   const [registeringComp, setRegisteringComp] = useState(null);
   const [siteSettings, setSiteSettings] = useState(null);
   const [heroImages, setHeroImages] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
     async function loadHomeData() {
+      setLoadingData(true);
       try {
         const [sRes, cRes, compRes, heroRes] = await Promise.allSettled([
           getWebsiteSettings(),
@@ -58,6 +61,8 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
         }
       } catch (err) {
         console.error('Failed to load homepage data:', err);
+      } finally {
+        setLoadingData(false);
       }
     }
     loadHomeData();
@@ -159,7 +164,11 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
             <p className="text-slate-500 text-sm mt-2">{landingContent.featuresSubtitle}</p>
           </div>
 
-        {courses.length === 0 ? (
+        {loadingData ? (
+          <div className="py-12">
+            <PageLoader text="Loading academy courses..." minHeight="min-h-[220px]" />
+          </div>
+        ) : courses.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center max-w-lg mx-auto shadow-sm">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <BookOpen className="w-8 h-8" />

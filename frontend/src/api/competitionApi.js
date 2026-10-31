@@ -720,6 +720,20 @@ export const getTrainerStudentSubmissions = async (registrationId, folder) => {
   return apiResponse({ submissions: [] }, false, res?.message || 'Failed to fetch student submissions');
 };
 
+export const getCompetitionActivityLogs = async ({ fromDate, toDate, competitionId, eventType } = {}) => {
+  const params = new URLSearchParams();
+  if (fromDate) params.append('fromDate', fromDate);
+  if (toDate) params.append('toDate', toDate);
+  if (competitionId) params.append('competitionId', competitionId);
+  if (eventType) params.append('eventType', eventType);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiGet(`/competitions/activity-logs${query}`);
+  if (res && res.success && Array.isArray(res.data)) {
+    return apiResponse(res.data);
+  }
+  return apiResponse([], false, res?.message || 'Failed to fetch competition activity logs');
+};
+
 
 
 

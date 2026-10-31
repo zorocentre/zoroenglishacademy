@@ -74,6 +74,8 @@ export default function ManageCoursesPage({ _setActiveScreen, setSelectedCourseI
         setDeleteModalData({
           id: course.id,
           title: course.title,
+          mode: course.mode,
+          counts: impactRes.data.counts || {},
           canDelete: impactRes.data.canDelete,
           blockingReasons: impactRes.data.blockingReasons || []
         });
@@ -294,6 +296,8 @@ export default function ManageCoursesPage({ _setActiveScreen, setSelectedCourseI
         message={
           !deleteModalData?.canDelete && deleteModalData?.blockingReasons?.length > 0
             ? deleteModalData.blockingReasons.join(' ')
+            : deleteModalData?.mode?.toLowerCase() === 'recorded'
+            ? `Are you sure you want to delete recorded course "${deleteModalData?.title}"? This will permanently delete the course along with all associated modules, video/storage files, enrolled students, batches, assignments, and doubts. This action cannot be undone.`
             : `Are you sure you want to delete course "${deleteModalData?.title}"? This action cannot be undone.`
         }
         confirmText="Delete Course"

@@ -850,7 +850,7 @@ export default function CompetitionFinalAssessmentPage() {
                         maxLength={5000}
                         rows={8}
                         placeholder="Type your answer here (up to 5,000 characters)..."
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-500 resize-y font-sans leading-relaxed"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white caret-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400 resize-y font-sans leading-relaxed"
                       />
                     </div>
                   ) : (

@@ -24,11 +24,16 @@ export default function SafeVideo({
   const authenticatedEmail = user?.email || '';
 
   const containerRef = useRef(null);
+  const iframeRef = useRef(null);
+  const loadTimeoutRef = useRef(null);
+  const isPlayerReadyRef = useRef(false);
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [watermarkPos, setWatermarkPos] = useState({ top: '22%', left: '18%' });
+  const [replayKey, setReplayKey] = useState(0);
 
   // Parse videoRefData if provided
   let refParsed = videoRefData;
@@ -48,11 +53,45 @@ export default function SafeVideo({
   const effectiveIframe = isIframe || Boolean(effectiveBunnyId) || Boolean(effectiveEmbedUrl) || (resolvedSrc && resolvedSrc.includes('mediadelivery.net'));
   const effectiveSrc = effectiveEmbedUrl || (effectiveBunnyId ? (effectiveBunnyId.includes('http') ? effectiveBunnyId : `https://iframe.mediadelivery.net/embed/${libraryId}/${effectiveBunnyId}`) : resolvedSrc);
 
-  // 10-second Loading Timeout Failsafe
+  // Player.js listener to clear loading timeouts on real player events (ready, play, timeupdate)
+  useEffect(() => {
+    isPlayerReadyRef.current = false;
+
+    const handleMessage = (event) => {
+      let data = event.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+      if (!data) return;
+
+      // Bunny Player.js protocol events
+      if (data.context === 'player.js' || data.event === 'ready' || data.event === 'play' || data.event === 'timeupdate') {
+        isPlayerReadyRef.current = true;
+        setIsLoaded(true);
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [effectiveSrc, replayKey]);
+
+  // 30-second Loading Timeout Failsafe (Task 10)
   useEffect(() => {
     setIsLoaded(false);
     setHasError(false);
     setErrorMsg('');
+    isPlayerReadyRef.current = false;
+
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
 
     if (!effectiveSrc) {
       const timer = setTimeout(() => {
@@ -62,16 +101,21 @@ export default function SafeVideo({
       return () => clearTimeout(timer);
     }
 
-    const timeout = setTimeout(() => {
-      if (!isLoaded) {
-        console.warn('[SafeVideo] Video loading timed out after 10 seconds for src:', effectiveSrc);
+    // 30-second generous timeout: cancel if loaded or player ready
+    loadTimeoutRef.current = setTimeout(() => {
+      if (!isLoaded && !isPlayerReadyRef.current) {
+        console.warn('[SafeVideo] Video loading timed out after 30 seconds for src:', effectiveSrc);
         setHasError(true);
         setErrorMsg('Video playback timed out. Click retry to refresh access token or stream.');
       }
-    }, 10000);
+    }, 30000);
 
-    return () => clearTimeout(timeout);
-  }, [effectiveSrc]);
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
+  }, [effectiveSrc, replayKey]);
 
   useEffect(() => {
     const topPositions = ['15%', '28%', '58%', '72%', '40%'];
@@ -105,6 +149,8 @@ export default function SafeVideo({
     setHasError(false);
     setIsLoaded(false);
     setErrorMsg('');
+    isPlayerReadyRef.current = false;
+    setReplayKey(prev => prev + 1);
     onRetry?.();
   };
 
@@ -172,6 +218,8 @@ export default function SafeVideo({
 
       {effectiveSrc && effectiveIframe ? (
         <iframe
+          key={replayKey}
+          ref={iframeRef}
           src={effectiveSrc}
           title={title}
           className={`absolute inset-0 w-full h-full border-0 object-contain transition-opacity duration-300 ${
@@ -180,7 +228,12 @@ export default function SafeVideo({
           loading="lazy"
           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
           allowFullScreen
-          onLoad={() => setIsLoaded(true)}
+          onLoad={() => {
+            setIsLoaded(true);
+            if (loadTimeoutRef.current) {
+              clearTimeout(loadTimeoutRef.current);
+            }
+          }}
           onError={(e) => {
             console.error('[SafeVideo] iframe load error:', e);
             setHasError(true);
@@ -190,6 +243,7 @@ export default function SafeVideo({
         />
       ) : effectiveSrc ? (
         <video
+          key={replayKey}
           src={effectiveSrc}
           poster={poster}
           controls={controls}
@@ -201,7 +255,12 @@ export default function SafeVideo({
           className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
             isLoaded && !hasError ? 'opacity-100' : 'opacity-0'
           } ${className}`}
-          onLoadedData={() => setIsLoaded(true)}
+          onLoadedData={() => {
+            setIsLoaded(true);
+            if (loadTimeoutRef.current) {
+              clearTimeout(loadTimeoutRef.current);
+            }
+          }}
           onError={(e) => {
             console.error('[SafeVideo] video element error:', e);
             setHasError(true);

@@ -348,7 +348,7 @@ public class RazorpayPaymentService {
 
         // Free Competition -> Confirm immediately without payment
         if (amountPaise <= 0) {
-            reg.setPaymentStatus("SUCCESS");
+            reg.setPaymentStatus("PAID");
             reg.setAmountPaise(0L);
             reg.setAmount(BigDecimal.ZERO);
             reg.setCurrency("INR");
@@ -470,7 +470,7 @@ public class RazorpayPaymentService {
             throw new BadRequestException("Invalid payment signature");
         }
 
-        reg.setPaymentStatus("SUCCESS");
+        reg.setPaymentStatus("PAID");
         reg.setRazorpayPaymentId(paymentId);
         reg.setRazorpaySignature(signature);
         reg.setPaidAt(LocalDateTime.now());
@@ -534,7 +534,7 @@ public class RazorpayPaymentService {
                 if (orderId != null && !orderId.isBlank()) {
                     registrationRepository.findByRazorpayOrderId(orderId).ifPresent(reg -> {
                         if (!isPaid(reg.getPaymentStatus())) {
-                            reg.setPaymentStatus("SUCCESS");
+                            reg.setPaymentStatus("PAID");
                             if (paymentId != null && !paymentId.isBlank()) {
                                 reg.setRazorpayPaymentId(paymentId);
                             }

@@ -43,6 +43,7 @@ export default function CourseLearningPage({ courseId: initialCourseId, initialC
   const [playbackData, setPlaybackData] = useState(null);
   const [justUnlockedModuleId, setJustUnlockedModuleId] = useState(null);
   const [, setTimerTick] = useState(0);
+  const [loadingData, setLoadingData] = useState(true);
 
   // Periodically re-evaluate schedule locks every 30s without needing full refresh (Requirement B3)
   usePolling(async () => {
@@ -89,6 +90,7 @@ export default function CourseLearningPage({ courseId: initialCourseId, initialC
   }, [activeModule?.id, selectedCourse?.id, studentIdentifier]);
 
   const loadAllData = async () => {
+    setLoadingData(true);
     try {
       const coursesRes = await getCourses();
       const allCourses = coursesRes.data || [];
@@ -148,6 +150,8 @@ export default function CourseLearningPage({ courseId: initialCourseId, initialC
       }
     } catch (err) {
       console.error('Error loading LMS data:', err);
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -498,7 +502,11 @@ export default function CourseLearningPage({ courseId: initialCourseId, initialC
       {activeTab === 'my-courses' && (
         <div className="space-y-6">
           <h2 className="text-lg font-bold text-slate-900">Enrolled Courses</h2>
-          {enrolledCourses.length === 0 ? (
+          {loadingData ? (
+            <div className="py-12 flex justify-center">
+              <PageLoader text="Loading your enrolled courses..." minHeight="min-h-[280px]" />
+            </div>
+          ) : enrolledCourses.length === 0 ? (
             <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center space-y-4 max-w-md mx-auto">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
               <p className="text-sm font-semibold text-slate-600">You have not enrolled in any courses yet.</p>
