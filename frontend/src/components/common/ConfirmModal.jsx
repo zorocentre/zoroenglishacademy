@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
 export default function ConfirmModal({ 
@@ -16,6 +17,18 @@ export default function ConfirmModal({
   children = null
 }) {
   const isConfirmDisabled = confirmDisabled || disabled;
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleDismiss = () => {
@@ -23,7 +36,7 @@ export default function ConfirmModal({
     if (onClose) onClose();
   };
 
-  return (
+  const modalContent = (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={handleDismiss}
@@ -81,4 +94,6 @@ export default function ConfirmModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
 }

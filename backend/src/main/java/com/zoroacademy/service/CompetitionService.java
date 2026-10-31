@@ -484,6 +484,28 @@ public class CompetitionService {
         return registrationRepository.findByCompetitionId(compId);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> precheckRegistrationEmail(String compId, String email) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("existingAccountName", null);
+        result.put("existingAccountType", null);
+
+        if (email == null || email.isBlank() || userRepository == null) {
+            return result;
+        }
+
+        String normEmail = email.trim().toLowerCase();
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(normEmail);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String role = user.getRole() != null ? user.getRole().toUpperCase() : "STUDENT";
+            String accountType = "TRAINER".equals(role) ? "TRAINER" : "STUDENT";
+            result.put("existingAccountName", user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail());
+            result.put("existingAccountType", accountType);
+        }
+        return result;
+    }
+
     @Transactional
     public CompetitionRegistration registerStudent(String compId, CompetitionRegistration reg) {
         Competition comp = getCompetitionById(compId);

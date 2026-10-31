@@ -10,23 +10,24 @@ import { uploadFile, resolveFileUrl } from '../../api/fileApi';
 import { useAuth } from '../../context/AuthContext';
 import SecureVideoPlayer from '../common/SecureVideoPlayer';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
+import PageLoader from '../common/PageLoader';
 import { useDialog } from '../../context/DialogContext';
 import { evaluateScheduleLocks, getScheduleJoinState, syncServerTime } from '../../utils/scheduleSortUtil';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
 import { usePolling } from '../../hooks/usePolling';
 
 
-export default function CourseLearningPage({ courseId: initialCourseId, _setActiveScreen, isTrainerLearning = false, onBack }) {
+export default function CourseLearningPage({ courseId: initialCourseId, initialCourse = null, _setActiveScreen, isTrainerLearning = false, onBack }) {
   const { user } = useAuth();
   const isTrainer = isTrainerLearning || user?.role === 'TRAINER';
   const { showError } = useDialog();
-  const [activeTab, setActiveTab] = useState('my-courses'); // 'my-courses' | 'explore' | 'learn'
+  const [activeTab, setActiveTab] = useState(initialCourseId || initialCourse ? 'learn' : 'my-courses'); // 'my-courses' | 'explore' | 'learn'
   const [hybridTab, setHybridTab] = useState('live'); // 'live' | 'recorded'
   
   const [availableCourses, setAvailableCourses] = useState([]);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [activeModule, setActiveModule] = useState(null);
+  const [selectedCourse, setSelectedCourse] = useState(initialCourse || null);
+  const [activeModule, setActiveModule] = useState(initialCourse?.modules?.[0] || null);
   const [viewerFile, setViewerFile] = useState(null);
   
   const [allSchedules, setAllSchedules] = useState([]);
@@ -138,8 +139,9 @@ export default function CourseLearningPage({ courseId: initialCourseId, _setActi
 
       await loadSubmissionsData();
 
-      if (initialCourseId) {
-        const target = allCourses.find(c => c.id === initialCourseId) || (isTrainer ? allCourses.find(c => c.audience?.toLowerCase() === 'trainer') : allCourses.find(c => !c.audience || c.audience?.toLowerCase() === 'student'));
+      if (initialCourseId || initialCourse) {
+        const targetId = initialCourseId || initialCourse?.id;
+        const target = allCourses.find(c => c.id === targetId) || initialCourse || (isTrainer ? allCourses.find(c => c.audience?.toLowerCase() === 'trainer') : allCourses.find(c => !c.audience || c.audience?.toLowerCase() === 'student'));
         if (target) selectCourseToLearn(target);
       } else {
         setActiveTab('my-courses');
@@ -444,6 +446,14 @@ export default function CourseLearningPage({ courseId: initialCourseId, _setActi
   const modulesList = [...(selectedCourse?.modules || [])].sort((a, b) => ((a.moduleOrder ?? a.module_order ?? 0) - (b.moduleOrder ?? b.module_order ?? 0)));
   const completedModulesCount = modulesList.filter(m => (studentProgressMap[m.id]?.status === 'Completed')).length;
   const overallProgressPct = modulesList.length > 0 ? Math.round((completedModulesCount / modulesList.length) * 100) : 0;
+
+  if (activeTab === 'learn' && !selectedCourse) {
+    return (
+      <div className="p-8 bg-slate-50 min-h-screen flex items-center justify-center">
+        <PageLoader message="Opening Classroom..." />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">

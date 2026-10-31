@@ -78,6 +78,15 @@ public class CompetitionController {
         return ApiResponse.ok(competitionService.getRegistrations(id));
     }
 
+    @PostMapping("/{id}/precheck")
+    public ApiResponse<Map<String, Object>> precheckRegistrationEmail(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, String> payload
+    ) {
+        String email = payload != null ? payload.get("email") : null;
+        return ApiResponse.ok(competitionService.precheckRegistrationEmail(id, email));
+    }
+
     @PostMapping("/{id}/registrations")
     public ApiResponse<CompetitionRegistration> registerStudent(@PathVariable String id, @RequestBody CompetitionRegistration reg) {
         return ApiResponse.ok(competitionService.registerStudent(id, reg), "Student registered for competition");

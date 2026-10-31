@@ -3,14 +3,55 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, AlertCircle, Loa
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Configure PDF.js worker
-if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+// Configure PDF.js worker with multi-layer hardening (Task 1b)
+let workerBlobUrl = null;
+
+function setupPdfWorker() {
+  if (typeof window === 'undefined' || !pdfjsLib.GlobalWorkerOptions) return;
+
+  // 1. Try native module worker via workerPort
+  try {
+    if (typeof Worker !== 'undefined') {
+      const worker = new Worker(
+        new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url),
+        { type: 'module' }
+      );
+      pdfjsLib.GlobalWorkerOptions.workerPort = worker;
+      return;
+    }
+  } catch (portErr) {
+    console.warn('Native module workerPort creation failed, attempting blob worker fallback:', portErr);
+  }
+
+  // 2. Fetch worker script and create a blob URL with text/javascript MIME (bypasses server octet-stream MIME)
+  if (!workerBlobUrl && pdfjsWorker) {
+    try {
+      fetch(pdfjsWorker)
+        .then((res) => res.text())
+        .then((code) => {
+          const blob = new Blob([code], { type: 'text/javascript' });
+          workerBlobUrl = URL.createObjectURL(blob);
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
+        })
+        .catch((fetchErr) => {
+          console.warn('Blob worker fallback failed, falling back to URL workerSrc:', fetchErr);
+          pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+        });
+      return;
+    } catch (e) {
+      console.warn('Blob worker setup failed:', e);
+    }
+  }
+
+  // 3. Fallback to direct workerSrc URL
   try {
     pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
   } catch (e) {
-    console.warn('PDF.js worker initialization warning:', e);
+    console.warn('PDF.js worker fallback initialization error:', e);
   }
 }
+
+setupPdfWorker();
 
 export default function CustomPdfViewer({ url, title = 'Document', watermarkText = '', className = '' }) {
   const canvasRef = useRef(null);
@@ -68,8 +109,9 @@ export default function CustomPdfViewer({ url, title = 'Document', watermarkText
           loadingTask = pdfjsLib.getDocument({
             url,
             withCredentials: Boolean(isSameOriginOrRelative),
-            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/',
             cMapPacked: true,
+            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/standard_fonts/',
           });
 
           const loadedDoc = await loadingTask.promise;
@@ -107,8 +149,9 @@ export default function CustomPdfViewer({ url, title = 'Document', watermarkText
 
         loadingTask = pdfjsLib.getDocument({
           data: new Uint8Array(arrayBuffer),
-          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/',
           cMapPacked: true,
+          standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/standard_fonts/',
         });
 
         const loadedDoc = await loadingTask.promise;
@@ -119,8 +162,8 @@ export default function CustomPdfViewer({ url, title = 'Document', watermarkText
         setLoading(false);
       } catch (err) {
         if (!active) return;
-        console.error('Failed to load PDF document:', err);
-        setError('Could not load PDF document. Please verify your access permissions.');
+        console.error('Failed to load PDF document. Root cause:', err?.message || err, err);
+        setError('Could not load PDF document. Please verify your access permissions or try reloading.');
         setLoading(false);
       }
     };

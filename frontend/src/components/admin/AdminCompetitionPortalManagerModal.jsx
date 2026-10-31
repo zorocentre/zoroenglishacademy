@@ -833,6 +833,8 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
                             id: questionFormData.mediaRef,
                             isAudio: questionFormData.questionFormat === 'AUDIO',
                             isImage: questionFormData.questionFormat === 'IMAGE',
+                            isVideo: questionFormData.questionFormat === 'VIDEO',
+                            mediaType: questionFormData.questionFormat === 'IMAGE' ? 'image' : questionFormData.questionFormat === 'VIDEO' ? 'video' : questionFormData.questionFormat === 'AUDIO' ? 'audio' : null,
                             bunnyVideoId: questionFormData.questionFormat === 'VIDEO' ? questionFormData.mediaRef : null,
                             url: resolveFileUrl(questionFormData.mediaRef),
                             name: questionFormData.questionFormat === 'AUDIO'

@@ -35,6 +35,20 @@ export default function SecureVideoPlayer({
   const [_currentTime, setCurrentTime] = useState(initialPosition || 0);
   const [duration, setDuration] = useState(0);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  // 10-second stream loading timeout failsafe
+  useEffect(() => {
+    setLoadError(false);
+    if (!embedUrl) return;
+    const timer = setTimeout(() => {
+      if (!isPlayerReady) {
+        console.warn('[SecureVideoPlayer] Stream loading timed out after 10s for embedUrl:', embedUrl);
+        setLoadError(true);
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [embedUrl, isPlayerReady]);
 
   // Moving Watermark Position State (shifts position periodically)
   const [watermarkPos, setWatermarkPos] = useState({ top: '15%', left: '15%' });
@@ -280,6 +294,33 @@ export default function SecureVideoPlayer({
         <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
           The video lesson for this module is being processed or will be uploaded shortly by your trainer.
         </p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="relative w-full aspect-video bg-slate-950 rounded-3xl overflow-hidden flex flex-col items-center justify-center p-8 text-center text-white border border-slate-900 shadow-2xl space-y-3">
+        <div className="w-16 h-16 bg-rose-500/20 border border-rose-500/40 rounded-full flex items-center justify-center text-rose-400">
+          <VideoOff className="w-8 h-8" />
+        </div>
+        <div className="space-y-1 max-w-sm text-center">
+          <h3 className="text-lg font-black tracking-tight text-slate-200">Video Loading Timed Out</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            The video stream did not start within 10 seconds. Click retry to refresh access token or stream.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadError(false);
+            onTokenExpired?.();
+          }}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Loading Video</span>
+        </button>
       </div>
     );
   }

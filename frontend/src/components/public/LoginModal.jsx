@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { X, LogIn, Lock, Mail, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
@@ -13,6 +14,17 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenEnqu
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -44,7 +56,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenEnqu
     }
   };
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-slate-100">
         
@@ -172,4 +184,6 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenEnqu
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
 }

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
+import { apiPost } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import { X, Trophy, CheckCircle2, AlertCircle, CreditCard, ShieldCheck, User, Mail, Building2, MapPin, ArrowRight } from 'lucide-react';
 import { createRazorpayOrder, verifyRazorpayPayment } from '../../api/paymentApi';
@@ -16,6 +18,19 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [successDialog, setSuccessDialog] = useState(null); // { competitionTitle, data }
   const [failureDialog, setFailureDialog] = useState(null); // string reason
+  const [precheckInfo, setPrecheckInfo] = useState({ existingAccountName: null, existingAccountType: null });
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [isOpen]);
 
   const [formData, setFormData] = useState({
     studentName: currentUser?.name || currentUser?.studentName || '',
@@ -72,7 +87,7 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
     setErrorMsg('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -117,6 +132,22 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
     if (!cleanCity) {
       setErrorMsg('Please enter your city.');
       return;
+    }
+
+    // Call precheck before opening confirmation modal (Task 4)
+    try {
+      setCheckingEmail(true);
+      const preRes = await apiPost(`/competitions/${competition.id}/precheck`, { email: cleanEmail });
+      if (preRes && preRes.success && preRes.data) {
+        setPrecheckInfo(preRes.data);
+      } else {
+        setPrecheckInfo({ existingAccountName: null, existingAccountType: null });
+      }
+    } catch (err) {
+      console.warn('Competition precheck error:', err);
+      setPrecheckInfo({ existingAccountName: null, existingAccountType: null });
+    } finally {
+      setCheckingEmail(false);
     }
 
     // Open Pre-Payment Confirmation Modal without creating order yet
@@ -285,7 +316,7 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
     const cleanSchool = formData.school.trim();
     const cleanCity = formData.city.trim();
 
-    return (
+    const confirmModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-center space-x-3 text-blue-600">
@@ -349,6 +380,18 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
             </div>
           </div>
 
+          {/* Important Enrolled Account Warning (Task 4) */}
+          {precheckInfo?.existingAccountName && (
+            <div className="p-3.5 bg-rose-50 border-2 border-rose-500 rounded-2xl text-left space-y-1">
+              <p className="text-xs font-black text-rose-700 leading-relaxed">
+                {precheckInfo.existingAccountType === 'TRAINER'
+                  ? `This email is already registered as a trainer with the name ${precheckInfo.existingAccountName}. If this is not you, please use another email to register for this competition, because the certificate will be issued in the name of ${precheckInfo.existingAccountName}. Please check carefully.`
+                  : `This email is already enrolled in the course with the name ${precheckInfo.existingAccountName}. If this is not you, please use another email to register for this competition, because the certificate will be issued in the name of ${precheckInfo.existingAccountName}. Please check carefully.`
+                }
+              </p>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
             <button
@@ -381,25 +424,14 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
         </div>
       </div>
     );
+    return typeof document !== 'undefined' ? ReactDOM.createPortal(confirmModalEl, document.body) : confirmModalEl;
   }
 
   // Render Success App Dialog
   if (successDialog) {
-    const existingStudentName = successDialog.data?.existingStudentName || successDialog.data?.existing_student_name;
-
-    return (
+    const successModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-          
-          {/* Important Enrolled Course Student Notice (Requirement D1) */}
-          {existingStudentName && (
-            <div className="p-3.5 bg-rose-50 border-2 border-rose-500 rounded-2xl text-left space-y-1">
-              <p className="text-xs font-black text-rose-700 leading-relaxed">
-                This email is already enrolled in the course with the name {existingStudentName}. If this is not you, please use another email to register for this competition, because the certificate will be issued in the name of {existingStudentName}. Please check carefully.
-              </p>
-            </div>
-          )}
-
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-9 h-9" />
           </div>
@@ -446,11 +478,12 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
         </div>
       </div>
     );
+    return typeof document !== 'undefined' ? ReactDOM.createPortal(successModalEl, document.body) : successModalEl;
   }
 
   // Render Failure App Dialog
   if (failureDialog) {
-    return (
+    const failModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
@@ -474,9 +507,10 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
         </div>
       </div>
     );
+    return typeof document !== 'undefined' ? ReactDOM.createPortal(failModalEl, document.body) : failModalEl;
   }
 
-  return (
+  const mainModalEl = (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto text-xs animate-in fade-in zoom-in-95 duration-200">
         <button
@@ -651,4 +685,5 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
       </div>
     </div>
   );
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(mainModalEl, document.body) : mainModalEl;
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { X, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { createEnquiry } from '../../api/enquiryApi';
 import { getCourses } from '../../api/courseApi';
@@ -37,6 +38,11 @@ export default function EnquireModal({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       loadActiveCourses();
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
     }
   }, [isOpen]);
 
@@ -78,7 +84,7 @@ export default function EnquireModal({ isOpen, onClose }) {
     }, 2000);
   };
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-slate-100">
         
@@ -194,4 +200,6 @@ export default function EnquireModal({ isOpen, onClose }) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
 }

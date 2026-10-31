@@ -22,7 +22,7 @@ public class DocumentConversionService {
     private static final Logger log = LoggerFactory.getLogger(DocumentConversionService.class);
 
     private static final Set<String> CONVERTIBLE_EXTENSIONS = Set.of(
-            "ppt", "pptx", "doc", "docx"
+            "ppt", "pptx", "doc", "docx", "xls", "xlsx"
     );
 
     @Value("${libreoffice.path:}")

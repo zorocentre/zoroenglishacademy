@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Trophy, Users, BookOpen, Video, FileText, Layers, Plus, 
@@ -30,6 +31,7 @@ import SafeVideo from '../common/SafeVideo';
 import AudioPromptPlayer from '../common/AudioPromptPlayer';
 import GuidanceVideoManager from './GuidanceVideoManager';
 import QuestionPreview from '../common/QuestionPreview';
+import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
 import { formatDate, toIstDatetimeInput, istInputToUtcIso } from '../../utils/dateFormatter';
 
@@ -62,6 +64,7 @@ export default function AdminCompetitionManagementPage() {
   const [loadingSets, setLoadingSets] = useState(false);
 
   const [syllabus, setSyllabus] = useState(null);
+  const [viewingFile, setViewingFile] = useState(null);
   const [sylTitle, setSylTitle] = useState('Official Competition Syllabus');
   const [sylUploading, setSylUploading] = useState(false);
   const [inlineSyllabusUrl, setInlineSyllabusUrl] = useState('');
@@ -160,6 +163,17 @@ export default function AdminCompetitionManagementPage() {
     understand: false,
     loading: false
   });
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (activeAsmtForQuestions || showQuestionModal || republishModalData.open || viewingFile) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [activeAsmtForQuestions, showQuestionModal, republishModalData.open, viewingFile]);
 
   // Load competitions on mount
   useEffect(() => {
@@ -633,11 +647,20 @@ export default function AdminCompetitionManagementPage() {
   };
 
   const openEditQuestion = (q) => {
+    let qFormat = (q.questionFormat || 'MCQ').toUpperCase();
+    if ((qFormat === 'MCQ' || qFormat === 'TEXT') && q.mediaRef) {
+      const refLower = String(q.mediaRef).toLowerCase();
+      if (refLower.match(/\.(png|jpe?g|webp|gif|svg)(\?.*)?$/)) qFormat = 'IMAGE';
+      else if (refLower.match(/\.(mp3|wav|ogg|m4a|opus|aac)(\?.*)?$/)) qFormat = 'AUDIO';
+      else if (refLower.match(/\.(mp4|webm|mov|mkv)(\?.*)?$/)) qFormat = 'VIDEO';
+    }
+
     setQuestionFormData({
       id: q.id,
-      questionFormat: q.questionFormat || 'MCQ',
+      questionFormat: qFormat,
       questionText: q.questionText || '',
       mediaRef: q.mediaRef || '',
+      mediaType: qFormat === 'IMAGE' ? 'image' : qFormat === 'VIDEO' ? 'video' : qFormat === 'AUDIO' ? 'audio' : null,
       answerFormat: q.answerFormat || 'MCQ_OPTIONS',
       guidanceText: q.guidanceText || '',
       maxDurationSeconds: q.maxDurationSeconds || 120,
@@ -1722,7 +1745,7 @@ export default function AdminCompetitionManagementPage() {
       )}
 
       {/* SUB-MODAL: ADD / EDIT QUESTION FORM */}
-      {showQuestionModal && (
+      {showQuestionModal && (typeof document !== 'undefined' ? ReactDOM.createPortal(
         <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1812,6 +1835,8 @@ export default function AdminCompetitionManagementPage() {
                               id: questionFormData.mediaRef,
                               isAudio: questionFormData.questionFormat === 'AUDIO',
                               isImage: questionFormData.questionFormat === 'IMAGE',
+                              isVideo: questionFormData.questionFormat === 'VIDEO',
+                              mediaType: questionFormData.questionFormat === 'IMAGE' ? 'image' : questionFormData.questionFormat === 'VIDEO' ? 'video' : questionFormData.questionFormat === 'AUDIO' ? 'audio' : null,
                               bunnyVideoId: questionFormData.questionFormat === 'VIDEO' ? questionFormData.mediaRef : null,
                               url: resolveFileUrl(questionFormData.mediaRef),
                               name: questionFormData.questionFormat === 'AUDIO'
@@ -1964,8 +1989,9 @@ export default function AdminCompetitionManagementPage() {
               </form>
             )}
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      ) : null)}
 
       {/* Task K7: Republish Confirmation Modal */}
       {republishModalData.open && (
@@ -2029,6 +2055,8 @@ export default function AdminCompetitionManagementPage() {
           </div>
         </div>
       )}
+      {/* Universal File Viewer Modal */}
+      <UniversalFileViewerModal file={viewingFile} isOpen={Boolean(viewingFile)} onClose={() => setViewingFile(null)} hideDownload={false} />
     </div>
   );
 }

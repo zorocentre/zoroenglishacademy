@@ -118,6 +118,7 @@ export default function TrainerCoursesPage() {
     return (
       <CourseLearningPage
         courseId={selectedCourseForClassroom.id}
+        initialCourse={selectedCourseForClassroom}
         isTrainerLearning={true}
         onBack={() => {
           setSelectedCourseForClassroom(null);

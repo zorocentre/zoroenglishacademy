@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { X, ShieldCheck, FileText } from 'lucide-react';
 
 /**
@@ -9,6 +10,17 @@ import { X, ShieldCheck, FileText } from 'lucide-react';
 export default function PolicyModal({ isOpen, onClose, title, content, type = 'privacy' }) {
   const modalRef = useRef(null);
   const okButtonRef = useRef(null);
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -36,7 +48,7 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
@@ -102,4 +114,6 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
 }

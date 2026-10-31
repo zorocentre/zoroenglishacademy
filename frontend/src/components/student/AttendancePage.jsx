@@ -82,14 +82,15 @@ export default function StudentAttendancePage({ setActiveScreen }) {
     const att = attendanceRecords.find(r => r.scheduleId === sch.id);
     const status = att?.status ? (att.status.toLowerCase() === 'present' ? 'Present' : 'Absent') : 'Absent';
 
+    const resolvedTrainer = (!sch.trainer || sch.trainer === 'STUDENT_JOIN') ? '-' : sch.trainer;
     finishedSessions.push({
       id: sch.id,
       courseId: sch.courseId,
-      course: sch.course || 'English Communication',
+      course: sch.course || enrolledCourses.find(c => c.id === sch.courseId)?.title || 'English Communication',
       date: sch.date,
       time: sch.time || '10:00 AM - 11:00 AM',
       topic: sch.topic || sch.title || 'Live Interactive Class',
-      trainer: sch.trainer || 'Assigned Trainer',
+      trainer: resolvedTrainer,
       status,
       joinedAt: att?.joinedAt || att?.createdAt || null
     });
@@ -98,14 +99,24 @@ export default function StudentAttendancePage({ setActiveScreen }) {
   // Also include any standalone attendance records that didn't match a schedule directly
   attendanceRecords.forEach(att => {
     if (att.scheduleId && processedScheduleIds.has(att.scheduleId)) return;
+    const resolvedCourse = att.course 
+      || enrolledCourses.find(c => c.id === att.courseId)?.title 
+      || att.courseName 
+      || (att.courseId && !att.courseId.startsWith('crs_') ? att.courseId : 'Enrolled Course');
+    
+    let resolvedTrainer = att.trainer;
+    if (!resolvedTrainer || resolvedTrainer === 'STUDENT_JOIN') {
+      resolvedTrainer = (att.recordedBy && att.recordedBy !== 'STUDENT_JOIN') ? att.recordedBy : '-';
+    }
+
     finishedSessions.push({
       id: att.id,
       courseId: att.courseId,
-      course: att.courseName || att.courseId || att.course || 'Enrolled Course',
+      course: resolvedCourse,
       date: att.date || '-',
       time: att.time || 'Completed Session',
       topic: att.remarks || att.topic || 'Classroom Session',
-      trainer: att.recordedBy || 'Trainer',
+      trainer: resolvedTrainer,
       status: (att.status || '').toLowerCase() === 'present' ? 'Present' : 'Absent',
       joinedAt: att.joinedAt || att.createdAt || null
     });

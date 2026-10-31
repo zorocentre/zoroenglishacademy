@@ -32,6 +32,7 @@ public class FileStorageService {
     private final BunnyTokenService bunnyTokenService;
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentConversionService documentConversionService;
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FileStorageService.class);
 
     @Value("${jwt.secret:defaultSecretForFileLinksOnlyNotForJwtAuthKey123}")
     private String linkSecret;
@@ -289,7 +290,42 @@ public class FileStorageService {
                 .orElseThrow(() -> new ResourceNotFoundException("File not found with id: " + id));
     }
 
+    public void ensureConvertedToPdfIfOfficeDocument(StoredFile storedFile) {
+        if (storedFile == null || documentConversionService == null) return;
+        String origName = storedFile.getOriginalName();
+        if (origName == null || !documentConversionService.isConvertibleOfficeDocument(origName)) return;
+        if ("application/pdf".equalsIgnoreCase(storedFile.getContentType()) || origName.toLowerCase().endsWith(".pdf")) return;
+
+        try {
+            Resource res = storageProvider.loadAsResource(storedFile.getStoragePath());
+            if (res == null || !res.exists()) return;
+            byte[] origBytes;
+            try (InputStream in = res.getInputStream()) {
+                origBytes = in.readAllBytes();
+            }
+            if (origBytes == null || origBytes.length == 0) return;
+            var conversion = documentConversionService.convertToPdfIfApplicable(origBytes, origName);
+            if (conversion != null && conversion.getPdfBytes() != null && conversion.getPdfBytes().length > 0) {
+                String oldPath = storedFile.getStoragePath();
+                String newPath = oldPath.replaceFirst("\\.[^.]+$", ".pdf");
+                if (newPath.equals(oldPath)) {
+                    newPath = oldPath + ".pdf";
+                }
+                storageProvider.store(newPath, conversion.getPdfBytes(), "application/pdf");
+                storedFile.setStoragePath(newPath);
+                storedFile.setContentType("application/pdf");
+                storedFile.setOriginalName(conversion.getPdfFilename());
+                storedFile.setSizeBytes((long) conversion.getPdfBytes().length);
+                storedFileRepository.save(storedFile);
+                log.info("Lazy-converted office document id='{}' ({}) to PDF ({})", storedFile.getId(), origName, newPath);
+            }
+        } catch (Exception e) {
+            log.warn("Failed lazy conversion of document id='{}' to PDF: {}", storedFile.getId(), e.getMessage());
+        }
+    }
+
     public Resource loadFileAsResource(StoredFile storedFile) {
+        ensureConvertedToPdfIfOfficeDocument(storedFile);
         return storageProvider.loadAsResource(storedFile.getStoragePath());
     }
 
@@ -345,6 +381,7 @@ public class FileStorageService {
      * Generates a signed access link for private files with time-based expiration.
      */
     public Map<String, Object> generateFileLink(StoredFile storedFile, long expirationSeconds) {
+        ensureConvertedToPdfIfOfficeDocument(storedFile);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", storedFile.getId());
         result.put("name", storedFile.getOriginalName());

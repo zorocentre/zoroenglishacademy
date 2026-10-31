@@ -10,9 +10,10 @@ import {
   X,
   RotateCcw,
   Play,
-  Eye
+  Eye,
+  Loader2
 } from 'lucide-react';
-import { unifiedUpload, resolveFileUrl } from '../../api/fileApi';
+import { unifiedUpload, resolveFileUrl, getFileLink } from '../../api/fileApi';
 import SafeVideo from './SafeVideo';
 import AudioPromptPlayer from './AudioPromptPlayer';
 
@@ -51,7 +52,54 @@ export default function UnifiedUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [uploadItems, setUploadItems] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
+  const [signedInitialUrl, setSignedInitialUrl] = useState('');
+  const [signedUrlLoading, setSignedUrlLoading] = useState(false);
+  const [signedUrlError, setSignedUrlError] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Fetch signed token link for pre-existing uploaded files
+  useEffect(() => {
+    let active = true;
+    const resolveSignedUrl = async () => {
+      if (!initialValue) {
+        setSignedInitialUrl('');
+        return;
+      }
+      const raw = initialValue.url || initialValue.id || '';
+      if (!raw) return;
+
+      if (raw.startsWith('http') && raw.includes('token=')) {
+        setSignedInitialUrl(raw);
+        return;
+      }
+
+      const uuidMatch = String(raw).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      const targetId = uuidMatch ? uuidMatch[0] : (initialValue.id && !String(initialValue.id).startsWith('http') ? initialValue.id : null);
+      if (targetId && !initialValue.bunnyVideoId) {
+        setSignedUrlLoading(true);
+        setSignedUrlError(false);
+        try {
+          const link = await getFileLink(targetId);
+          if (active && link?.url) {
+            setSignedInitialUrl(link.url);
+            setSignedUrlLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('[UnifiedUploader] Failed to fetch signed link for initialValue:', err);
+          if (active) setSignedUrlError(true);
+        } finally {
+          if (active) setSignedUrlLoading(false);
+        }
+      }
+      if (active) {
+        setSignedInitialUrl(initialValue.url ? resolveFileUrl(initialValue.url) : resolveFileUrl(raw));
+      }
+    };
+
+    resolveSignedUrl();
+    return () => { active = false; };
+  }, [initialValue?.id, initialValue?.url]);
 
   useEffect(() => {
     const isUploading = uploadItems.some((item) => item.status === 'uploading');
@@ -376,94 +424,166 @@ export default function UnifiedUploader({
                     />
                   </div>
                 )}
+
+              {/* Inline Image Preview for newly uploaded images */}
+              {item.status === 'completed' &&
+                (item.result?.contentType?.startsWith('image/') ||
+                  item.type?.startsWith('image/') ||
+                  item.name?.match(/\.(png|jpe?g|webp|gif|svg)$/i)) && (
+                  <div className="pt-1.5">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 max-w-xs overflow-hidden">
+                      <img
+                        src={item.result?.url || (item.result?.id ? resolveFileUrl(item.result.id) : '')}
+                        alt={item.name || 'Uploaded Image Preview'}
+                        className="max-h-48 w-full object-contain mx-auto rounded-lg"
+                      />
+                    </div>
+                  </div>
+                )}
             </div>
           ))}
         </div>
       )}
 
       {/* Pre-existing initial value display if provided and no active upload items */}
-      {uploadItems.length === 0 && initialValue && (
-        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-2 text-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              {getIconForType(
-                initialValue.contentType || (initialValue.isImage ? 'image/jpeg' : initialValue.isAudio ? 'audio/mpeg' : initialValue.isVideo ? 'video/mp4' : ''),
-                initialValue.name || initialValue.title
-              )}
-              <div className="min-w-0">
-                <p className="font-bold text-slate-800 truncate text-[11px]">
-                  {initialValue.name || initialValue.title || 'Uploaded Media'}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {initialValue.bunnyVideoId
-                    ? `Bunny Stream: ${initialValue.bunnyVideoId}`
-                    : initialValue.id
-                    ? `Storage ID: ${initialValue.id}`
-                    : 'Attached'}
-                </p>
+      {uploadItems.length === 0 && initialValue && (() => {
+        const isInitialImage = Boolean(
+          initialValue.isImage ||
+          initialValue.mediaType === 'image' ||
+          initialValue.contentType?.startsWith('image/') ||
+          (initialValue.name && initialValue.name.match(/\.(png|jpe?g|webp|gif|svg)$/i))
+        );
+
+        const isInitialVideo = Boolean(
+          initialValue.isVideo ||
+          initialValue.mediaType === 'video' ||
+          initialValue.bunnyVideoId ||
+          initialValue.contentType?.startsWith('video/') ||
+          (initialValue.name && initialValue.name.match(/\.(mp4|webm|mov|mkv)$/i))
+        );
+
+        const isInitialAudio = Boolean(
+          !isInitialImage && !isInitialVideo && (
+            initialValue.isAudio ||
+            initialValue.mediaType === 'audio' ||
+            initialValue.contentType?.startsWith('audio/') ||
+            (initialValue.name && initialValue.name.match(/\.(mp3|wav|ogg|m4a|opus|aac)$/i))
+          )
+        );
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                {getIconForType(
+                  initialValue.contentType || (isInitialImage ? 'image/jpeg' : isInitialAudio ? 'audio/mpeg' : isInitialVideo ? 'video/mp4' : ''),
+                  initialValue.name || initialValue.title
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-800 truncate text-[11px]">
+                    {initialValue.name || initialValue.title || 'Uploaded Media'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {initialValue.bunnyVideoId
+                      ? `Bunny Stream: ${initialValue.bunnyVideoId}`
+                      : initialValue.id
+                      ? `Storage ID: ${initialValue.id}`
+                      : 'Attached'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {(isInitialVideo || initialValue.embedUrl) && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(initialValue)}
+                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-indigo-700" />
+                    <span>Preview</span>
+                  </button>
+                )}
+                {onClear && (
+                  <button
+                    type="button"
+                    onClick={onClear}
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                    title="Remove"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {(initialValue.isVideo || initialValue.bunnyVideoId || initialValue.embedUrl) && (
-                <button
-                  type="button"
-                  onClick={() => setPreviewItem(initialValue)}
-                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <Play className="w-3 h-3 fill-indigo-700" />
-                  <span>Preview</span>
-                </button>
-              )}
-              {onClear && (
-                <button
-                  type="button"
-                  onClick={onClear}
-                  className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
-                  title="Remove"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
 
-          {/* Inline Image Preview */}
-          {(initialValue.isImage ||
-            initialValue.contentType?.startsWith('image/') ||
-            (initialValue.name && initialValue.name.match(/\.(png|jpe?g|webp|gif|svg)$/i))) && (
-            <div className="pt-1.5">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 max-w-xs overflow-hidden">
-                <img
-                  src={initialValue.url || resolveFileUrl(initialValue.id)}
-                  alt={initialValue.name || 'Question Image Preview'}
-                  className="max-h-48 w-full object-contain mx-auto rounded-lg"
-                  onError={(e) => {
-                    if (initialValue.id && !e.target.src.includes(`/api/files/${initialValue.id}`)) {
-                      e.target.src = resolveFileUrl(initialValue.id);
-                    }
-                  }}
+            {/* Inline Image Preview */}
+            {isInitialImage && (
+              <div className="pt-1.5">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 max-w-xs overflow-hidden relative">
+                  {signedUrlLoading ? (
+                    <div className="h-32 flex items-center justify-center text-slate-400 text-xs">
+                      <Loader2 className="w-5 h-5 animate-spin mr-1.5" />
+                      <span>Loading image preview...</span>
+                    </div>
+                  ) : signedUrlError ? (
+                    <div className="h-32 flex flex-col items-center justify-center text-rose-500 text-xs p-2 text-center space-y-1">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>Failed to load image preview</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (initialValue?.id) {
+                            setSignedUrlLoading(true);
+                            getFileLink(initialValue.id).then(link => {
+                              if (link?.url) {
+                                setSignedInitialUrl(link.url);
+                                setSignedUrlError(false);
+                              }
+                            }).catch(() => setSignedUrlError(true)).finally(() => setSignedUrlLoading(false));
+                          }
+                        }}
+                        className="text-[10px] text-blue-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <img
+                      src={signedInitialUrl || initialValue.url || resolveFileUrl(initialValue.id)}
+                      alt={initialValue.name || 'Question Image Preview'}
+                      className="max-h-48 w-full object-contain mx-auto rounded-lg"
+                      onError={() => setSignedUrlError(true)}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Inline Video Preview */}
+            {isInitialVideo && (
+              <div className="pt-1.5 max-w-sm">
+                <SafeVideo
+                  bunnyVideoId={initialValue.bunnyVideoId || (initialValue.id && !initialValue.id.includes('-') ? initialValue.id : null)}
+                  embedUrl={initialValue.embedUrl}
+                  src={signedInitialUrl || initialValue.url}
+                  className="w-full aspect-video rounded-xl"
                 />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Inline Audio Player for Pre-existing Audio Media */}
-          {(!initialValue.isImage &&
-            !initialValue.isVideo &&
-            !initialValue.bunnyVideoId &&
-            (initialValue.isAudio ||
-              initialValue.contentType?.startsWith('audio/') ||
-              (initialValue.name && initialValue.name.match(/\.(mp3|wav|ogg|m4a|opus|aac)$/i)))) && (
-            <div className="pt-1">
-              <AudioPromptPlayer
-                fileId={initialValue.id}
-                src={initialValue.url || initialValue.id}
-                title={initialValue.name || initialValue.title || 'Audio Prompt'}
-              />
-            </div>
-          )}
-        </div>
-      )}
+            {/* Inline Audio Player for Pre-existing Audio Media */}
+            {isInitialAudio && (
+              <div className="pt-1">
+                <AudioPromptPlayer
+                  fileId={initialValue.id}
+                  src={signedInitialUrl || initialValue.url || initialValue.id}
+                  title={initialValue.name || initialValue.title || 'Audio Prompt'}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Video Preview Modal */}
       {previewItem && (

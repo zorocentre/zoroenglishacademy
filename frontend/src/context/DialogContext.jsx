@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { CheckCircle2, AlertCircle, AlertTriangle, HelpCircle, X } from 'lucide-react';
 
 const DialogContext = createContext(null);
@@ -152,6 +153,17 @@ export function DialogProvider({ children }) {
     };
   }, [showError]);
 
+  // Lock body scroll while dialog is open (Task 3)
+  useEffect(() => {
+    if (dialogState.isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [dialogState.isOpen]);
+
   // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -193,101 +205,102 @@ export function DialogProvider({ children }) {
     }
   };
 
+  const dialogElement = dialogState.isOpen && (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[9999] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
+      onClick={() => closeDialog(false)}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-4 modal-content-transition"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={() => closeDialog(false)}
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+          aria-label="Close dialog"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Header with Icon and Title */}
+        <div className="flex items-start space-x-3.5 pt-1">
+          {renderIcon()}
+          <div className="space-y-1 pr-6">
+            <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">
+              {dialogState.title}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">
+              {dialogState.message}
+            </p>
+          </div>
+        </div>
+
+        {/* Optional Correlation / Reference ID */}
+        {dialogState.correlationId && (
+          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-[11px] text-slate-500 font-mono">
+            <span className="font-bold text-slate-700">Support Ref:</span> {dialogState.correlationId}
+          </div>
+        )}
+
+        {/* Optional Details */}
+        {dialogState.details && (
+          <div className="text-[11px] text-slate-400 font-medium">
+            {dialogState.details}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="pt-2 flex items-center justify-end space-x-3">
+          {dialogState.type === 'confirm' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => closeDialog(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                {dialogState.cancelText}
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => closeDialog(true)}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black text-white shadow-md transition-colors cursor-pointer ${
+                  dialogState.danger
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                    : 'bg-[#0F52BA] hover:bg-blue-700 shadow-blue-200'
+                }`}
+              >
+                {dialogState.confirmText}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              autoFocus
+              onClick={() => closeDialog(true)}
+              className={`px-6 py-2.5 rounded-xl text-xs font-black text-white shadow-md transition-colors cursor-pointer ${
+                dialogState.type === 'error'
+                  ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                  : dialogState.type === 'warning'
+                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200'
+                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+              }`}
+            >
+              {dialogState.confirmText}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <DialogContext.Provider value={{ showError, showSuccess, showWarning, confirm }}>
       {children}
-
-      {dialogState.isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-[9999] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
-          onClick={() => closeDialog(false)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-4 modal-content-transition"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => closeDialog(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-              aria-label="Close dialog"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Header with Icon and Title */}
-            <div className="flex items-start space-x-3.5 pt-1">
-              {renderIcon()}
-              <div className="space-y-1 pr-6">
-                <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">
-                  {dialogState.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">
-                  {dialogState.message}
-                </p>
-              </div>
-            </div>
-
-            {/* Optional Correlation / Reference ID */}
-            {dialogState.correlationId && (
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-[11px] text-slate-500 font-mono">
-                <span className="font-bold text-slate-700">Support Ref:</span> {dialogState.correlationId}
-              </div>
-            )}
-
-            {/* Optional Details */}
-            {dialogState.details && (
-              <div className="text-[11px] text-slate-400 font-medium">
-                {dialogState.details}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="pt-2 flex items-center justify-end space-x-3">
-              {dialogState.type === 'confirm' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => closeDialog(false)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
-                  >
-                    {dialogState.cancelText}
-                  </button>
-                  <button
-                    type="button"
-                    autoFocus
-                    onClick={() => closeDialog(true)}
-                    className={`px-5 py-2.5 rounded-xl text-xs font-black text-white shadow-md transition-colors cursor-pointer ${
-                      dialogState.danger
-                        ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                        : 'bg-[#0F52BA] hover:bg-blue-700 shadow-blue-200'
-                    }`}
-                  >
-                    {dialogState.confirmText}
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  autoFocus
-                  onClick={() => closeDialog(true)}
-                  className={`px-6 py-2.5 rounded-xl text-xs font-black text-white shadow-md transition-colors cursor-pointer ${
-                    dialogState.type === 'error'
-                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                      : dialogState.type === 'warning'
-                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200'
-                        : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
-                  }`}
-                >
-                  {dialogState.confirmText}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {typeof document !== 'undefined' && dialogElement ? ReactDOM.createPortal(dialogElement, document.body) : dialogElement}
     </DialogContext.Provider>
   );
 }

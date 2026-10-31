@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Maximize2, Minimize2 } from 'lucide-react';
+import { Video, Maximize2, Minimize2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { resolveFileUrl } from '../../api/fileApi';
 
@@ -16,6 +16,8 @@ export default function SafeVideo({
   controls = true,
   muted = false,
   bunnyVideoId,
+  videoRefData,
+  onRetry,
   ...rest
 }) {
   const { user } = useAuth();
@@ -23,8 +25,53 @@ export default function SafeVideo({
 
   const containerRef = useRef(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [watermarkPos, setWatermarkPos] = useState({ top: '22%', left: '18%' });
+
+  // Parse videoRefData if provided
+  let refParsed = videoRefData;
+  if (typeof videoRefData === 'string' && videoRefData.trim().startsWith('{')) {
+    try {
+      refParsed = JSON.parse(videoRefData);
+    } catch {
+      // fallback
+    }
+  }
+
+  const effectiveBunnyId = bunnyVideoId || refParsed?.bunnyVideoId || refParsed?.videoId || (typeof refParsed === 'string' && !refParsed.startsWith('http') && !refParsed.startsWith('/') ? refParsed : null);
+  const effectiveEmbedUrl = embedUrl || refParsed?.embedUrl || (refParsed?.videoId && refParsed?.token ? `https://iframe.mediadelivery.net/embed/${refParsed.libraryId || libraryId}/${refParsed.videoId}?token=${refParsed.token}${refParsed.expiresAt ? `&expires=${refParsed.expiresAt}` : ''}` : null);
+  const rawSrc = src || refParsed?.videoUrl || refParsed?.url || '';
+  const resolvedSrc = rawSrc ? resolveFileUrl(rawSrc) : '';
+
+  const effectiveIframe = isIframe || Boolean(effectiveBunnyId) || Boolean(effectiveEmbedUrl) || (resolvedSrc && resolvedSrc.includes('mediadelivery.net'));
+  const effectiveSrc = effectiveEmbedUrl || (effectiveBunnyId ? (effectiveBunnyId.includes('http') ? effectiveBunnyId : `https://iframe.mediadelivery.net/embed/${libraryId}/${effectiveBunnyId}`) : resolvedSrc);
+
+  // 10-second Loading Timeout Failsafe
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasError(false);
+    setErrorMsg('');
+
+    if (!effectiveSrc) {
+      const timer = setTimeout(() => {
+        setHasError(true);
+        setErrorMsg('Video source is not available or missing.');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+
+    const timeout = setTimeout(() => {
+      if (!isLoaded) {
+        console.warn('[SafeVideo] Video loading timed out after 10 seconds for src:', effectiveSrc);
+        setHasError(true);
+        setErrorMsg('Video playback timed out. Click retry to refresh access token or stream.');
+      }
+    }, 10000);
+
+    return () => clearTimeout(timeout);
+  }, [effectiveSrc]);
 
   useEffect(() => {
     const topPositions = ['15%', '28%', '58%', '72%', '40%'];
@@ -54,16 +101,39 @@ export default function SafeVideo({
     }
   };
 
-  const effectiveIframe = isIframe || Boolean(bunnyVideoId) || Boolean(embedUrl) || (src && src.includes('mediadelivery.net'));
-  const resolvedSrc = src ? resolveFileUrl(src) : '';
-  const effectiveSrc = embedUrl || (bunnyVideoId ? (bunnyVideoId.includes('http') ? bunnyVideoId : `https://iframe.mediadelivery.net/embed/${libraryId}/${bunnyVideoId}`) : resolvedSrc);
+  const handleRetry = () => {
+    setHasError(false);
+    setIsLoaded(false);
+    setErrorMsg('');
+    onRetry?.();
+  };
 
   return (
     <div
       ref={containerRef}
       className={`group/video relative w-full aspect-video overflow-hidden bg-slate-900 rounded-xl ${containerClassName}`}
     >
-      {!isLoaded && (
+      {hasError ? (
+        <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white z-20 space-y-3">
+          <div className="w-12 h-12 bg-rose-500/20 border border-rose-500/40 rounded-full flex items-center justify-center text-rose-400">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1 max-w-sm">
+            <h4 className="text-xs font-black text-slate-200">Video Playback Error</h4>
+            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+              {errorMsg || 'Unable to stream video. Click retry to reload.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
+      ) : !isLoaded ? (
         <div
           role="status"
           aria-busy="true"
@@ -72,7 +142,7 @@ export default function SafeVideo({
           <Video className="w-10 h-10 mb-2 opacity-50" />
           <span className="text-xs font-semibold">Loading video...</span>
         </div>
-      )}
+      ) : null}
 
       {/* Floating moving email watermark (Task K11) */}
       {authenticatedEmail && (
@@ -100,20 +170,25 @@ export default function SafeVideo({
         {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
       </button>
 
-      {effectiveIframe ? (
+      {effectiveSrc && effectiveIframe ? (
         <iframe
           src={effectiveSrc}
           title={title}
           className={`absolute inset-0 w-full h-full border-0 object-contain transition-opacity duration-300 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
+            isLoaded && !hasError ? 'opacity-100' : 'opacity-0'
           } ${className}`}
           loading="lazy"
           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
           allowFullScreen
           onLoad={() => setIsLoaded(true)}
+          onError={(e) => {
+            console.error('[SafeVideo] iframe load error:', e);
+            setHasError(true);
+            setErrorMsg('Unable to stream video track. Click retry to refresh access token.');
+          }}
           {...rest}
         />
-      ) : (
+      ) : effectiveSrc ? (
         <video
           src={effectiveSrc}
           poster={poster}
@@ -124,12 +199,17 @@ export default function SafeVideo({
           autoPlay={autoPlay}
           muted={muted}
           className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
+            isLoaded && !hasError ? 'opacity-100' : 'opacity-0'
           } ${className}`}
           onLoadedData={() => setIsLoaded(true)}
+          onError={(e) => {
+            console.error('[SafeVideo] video element error:', e);
+            setHasError(true);
+            setErrorMsg('Unable to play video file. Click retry to reload.');
+          }}
           {...rest}
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -10,7 +10,8 @@ import { getTrainerStudents } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
 import { getTrainerAllocatedCourses, getTrainerAllocatedBatches } from '../../utils/trainerFilterHelper';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
-import SecureVideoPlayer from '../common/SafeVideo';
+import SecureVideoPlayer from '../common/SecureVideoPlayer';
+import { authorizeVideoPlayback } from '../../api/progressApi';
 import PageLoader from '../common/PageLoader';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
 
@@ -55,6 +56,31 @@ export default function TrainerSubmissionsPage() {
   const [assignedRecordedCourses, setAssignedRecordedCourses] = useState([]);
   const [expandedRecordedCourseId, setExpandedRecordedCourseId] = useState(null);
   const [activeModuleForVideo, setActiveModuleForVideo] = useState(null);
+  const [playbackData, setPlaybackData] = useState(null);
+
+  const fetchTrainerVideoToken = async (courseId, moduleId) => {
+    if (!courseId || !moduleId) return;
+    try {
+      const res = await authorizeVideoPlayback(user?.id || user?.email, courseId, moduleId);
+      if (res?.success && res?.data) {
+        setPlaybackData(res.data);
+      }
+    } catch (err) {
+      console.warn('[TrainerSubmissions] Playback authorization error:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (expandedRecordedCourseId) {
+      const crs = assignedRecordedCourses.find(c => c.id === expandedRecordedCourseId);
+      const mod = activeModuleForVideo || crs?.modules?.[0];
+      if (crs && mod) {
+        fetchTrainerVideoToken(crs.id, mod.id);
+      }
+    } else {
+      setPlaybackData(null);
+    }
+  }, [expandedRecordedCourseId, activeModuleForVideo, assignedRecordedCourses]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -477,12 +503,13 @@ export default function TrainerSubmissionsPage() {
                             </div>
                             
                             <SecureVideoPlayer
-                              videoRefData={activeModuleForVideo?.videoStorageRef || modules[0].videoStorageRef}
+                              videoRefData={playbackData || activeModuleForVideo?.videoStorageRef || modules[0].videoStorageRef}
                               videoTitle={activeModuleForVideo?.title || modules[0].title}
                               courseTitle={course.title}
                               studentName={trainerName}
                               studentEmail={trainerEmail}
                               isAuthorized={true}
+                              onTokenExpired={() => fetchTrainerVideoToken(course.id, activeModuleForVideo?.id || modules[0]?.id)}
                             />
                           </div>
                         )}

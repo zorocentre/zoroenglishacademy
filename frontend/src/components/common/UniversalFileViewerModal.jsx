@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, FileText, Film, Music, Image as ImageIcon, FileSpreadsheet, Archive, AlertCircle } from 'lucide-react';
+import ReactDOM from 'react-dom';
+import { X, Download, FileText, Film, Music, Image as ImageIcon, FileSpreadsheet, Archive, AlertCircle, Loader2 } from 'lucide-react';
 import { resolveFileUrl, getFileLink, openFileWithSignedLink } from '../../api/fileApi';
 import { useAuth } from '../../context/AuthContext';
 import SafeImage from './SafeImage';
@@ -11,6 +12,19 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
   const [resolvedUrl, setResolvedUrl] = useState('');
   const [resolvedInfo, setResolvedInfo] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [textContent, setTextContent] = useState('');
+  const [textLoading, setTextLoading] = useState(false);
+
+  // Lock body scroll while modal is open (Task 3)
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     let active = true;
@@ -18,6 +32,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
       setResolvedUrl('');
       setResolvedInfo(null);
       setErrorMsg('');
+      setTextContent('');
       return;
     }
     setErrorMsg('');
@@ -59,21 +74,21 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
     return () => { active = false; };
   }, [isOpen, file]);
 
-  if (!isOpen || !file) return null;
-
-  const fileName = resolvedInfo?.name || file.name || file.title || file.filename || 'Attachment File';
-  const fileUrl = resolvedInfo?.url || resolvedUrl || resolveFileUrl(file.url || file.fileUrl || file.path) || '#';
-  const fileSize = resolvedInfo?.size ? `${Math.round(resolvedInfo.size / 1024)} KB` : (file.size || file.fileSize || 'Standard');
+  const fileName = resolvedInfo?.name || file?.name || file?.title || file?.filename || 'Attachment File';
+  const fileUrl = resolvedInfo?.url || resolvedUrl || resolveFileUrl(file?.url || file?.fileUrl || file?.path) || '#';
+  const fileSize = resolvedInfo?.size ? `${Math.round(resolvedInfo.size / 1024)} KB` : (file?.size || file?.fileSize || 'Standard');
 
   // Extract Extension & MIME
   const ext = (fileName.split('.').pop() || '').toLowerCase();
-  const mimeType = (resolvedInfo?.contentType || file.contentType || file.mimeType || file.type || '').toLowerCase();
+  const mimeType = (resolvedInfo?.contentType || file?.contentType || file?.mimeType || file?.type || '').toLowerCase();
 
   const isImage = mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
   const isVideo = mimeType.startsWith('video/') || ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext);
   const isAudio = mimeType.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(ext);
-  const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
-  const isSpreadsheet = ['xls', 'xlsx', 'csv'].includes(ext) || mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'text/csv';
+  const isPdf = mimeType === 'application/pdf' || ext === 'pdf' || fileUrl.includes('.pdf') || (resolvedInfo?.url && resolvedInfo.url.includes('.pdf'));
+  const isTxt = ext === 'txt' || mimeType.startsWith('text/plain');
+  const isCsv = ext === 'csv' || mimeType === 'text/csv';
+  const isSpreadsheet = ['xls', 'xlsx'].includes(ext) || mimeType.includes('spreadsheet') || mimeType.includes('excel');
   const isOffice = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext) ||
                    mimeType.includes('officedocument') ||
                    mimeType.includes('msword') ||
@@ -81,9 +96,43 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                    mimeType.includes('ms-powerpoint');
   const isArchive = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('tar');
 
-  const pdfSrc = hideDownload && isPdf ? (fileUrl.includes('#') ? fileUrl : `${fileUrl}#toolbar=0&navpanes=0`) : fileUrl;
+  // Fetch text/csv contents if applicable
+  useEffect(() => {
+    if (!isOpen || !fileUrl || fileUrl === '#' || (!isTxt && !isCsv)) {
+      setTextContent('');
+      return;
+    }
+    setTextLoading(true);
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers = {};
+    if (token && (fileUrl.startsWith('/api/') || (typeof window !== 'undefined' && fileUrl.startsWith(window.location.origin)))) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    fetch(fileUrl, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((text) => {
+        setTextContent(text);
+        setTextLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load text document:', err);
+        setTextContent('Unable to load document content.');
+        setTextLoading(false);
+      });
+  }, [isOpen, fileUrl, isTxt, isCsv]);
 
-  return (
+  if (!isOpen || !file) return null;
+
+  const isAdmin = user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'SUPER_ADMIN';
+  const isRestrictedRole = ['STUDENT', 'TRAINER', 'CANDIDATE'].includes(user?.role?.toUpperCase());
+  const canDownload = !hideDownload && !isRestrictedRole;
+
+  const csvRows = isCsv && textContent ? textContent.trim().split('\n').map(row => row.split(',').map(c => c.trim().replace(/^"|"$/g, ''))) : [];
+
+  const modalContent = (
     <div 
       onContextMenu={hideDownload ? (e) => e.preventDefault() : undefined}
       className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in"
@@ -98,9 +147,10 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
               {isVideo && <Film className="w-5 h-5" />}
               {isAudio && <Music className="w-5 h-5" />}
               {isPdf && <FileText className="w-5 h-5 text-red-600" />}
-              {isSpreadsheet && <FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
+              {(isSpreadsheet || isCsv) && <FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
+              {isTxt && <FileText className="w-5 h-5 text-sky-600" />}
               {isArchive && <Archive className="w-5 h-5 text-purple-600" />}
-              {!isImage && !isVideo && !isAudio && !isPdf && !isSpreadsheet && !isArchive && (
+              {!isImage && !isVideo && !isAudio && !isPdf && !isSpreadsheet && !isCsv && !isTxt && !isArchive && (
                 <FileText className="w-5 h-5 text-slate-600" />
               )}
             </div>
@@ -148,7 +198,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                     className="max-h-[70vh] w-auto max-w-full object-contain rounded-2xl shadow-lg border border-slate-200 bg-white select-none pointer-events-auto"
                     fallbackSrc="/assets/course-placeholder.svg"
                   />
-                  {user?.role?.toUpperCase() !== 'ADMIN' && (
+                  {!isAdmin && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                       <span className="transform -rotate-45 text-slate-900/10 font-black text-2xl tracking-widest uppercase select-none">
                         {user?.name || user?.email || 'View Only'}
@@ -202,19 +252,70 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                 </div>
               )}
 
-              {/* 4. PDF CUSTOM CANVAS VIEWER */}
+              {/* 4. PDF CUSTOM CANVAS VIEWER (Also renders converted office documents) */}
               {isPdf && (
                 <div className="w-full h-[72vh] rounded-2xl overflow-hidden shadow-lg border border-slate-700">
                   <CustomPdfViewer
                     url={fileUrl}
                     title={fileName}
-                    watermarkText={user?.role?.toUpperCase() !== 'ADMIN' ? (user?.name || user?.email || 'Zoro English Academy') : ''}
+                    watermarkText={!isAdmin ? (user?.name || user?.email || 'Zoro English Academy') : ''}
                   />
                 </div>
               )}
 
-              {/* 5. OFFICE FILES (DOCX / XLSX / PPTX) */}
-              {isOffice && (
+              {/* 5. TXT FILE VIEWER */}
+              {isTxt && (
+                <div className="w-full h-[70vh] bg-white rounded-2xl p-6 overflow-auto border border-slate-200 font-mono text-xs whitespace-pre-wrap select-text leading-relaxed text-slate-800">
+                  {textLoading ? (
+                    <div className="flex items-center justify-center h-full text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                      <span>Loading document...</span>
+                    </div>
+                  ) : (
+                    textContent
+                  )}
+                </div>
+              )}
+
+              {/* 6. CSV TABLE VIEWER */}
+              {isCsv && (
+                <div className="w-full h-[70vh] bg-white rounded-2xl overflow-auto border border-slate-200 shadow-inner">
+                  {textLoading ? (
+                    <div className="flex items-center justify-center h-full text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                      <span>Loading spreadsheet...</span>
+                    </div>
+                  ) : csvRows.length > 0 ? (
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                        <tr>
+                          {csvRows[0].map((header, hIdx) => (
+                            <th key={hIdx} className="p-3 font-extrabold text-slate-800 border-r border-slate-200 last:border-r-0">
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {csvRows.slice(1).map((row, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-slate-50/50">
+                            {row.map((cell, cIdx) => (
+                              <td key={cIdx} className="p-2.5 text-slate-700 border-r border-slate-100 last:border-r-0 font-medium">
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="p-8 text-center text-slate-400">Empty CSV file</div>
+                  )}
+                </div>
+              )}
+
+              {/* 7. UNCONVERTED OFFICE DOCUMENT FALLBACK */}
+              {!isPdf && isOffice && !isCsv && (
                 <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-slate-200 shadow-xl text-center space-y-5">
                   <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto border border-blue-100">
                     {isSpreadsheet ? <FileSpreadsheet className="w-10 h-10 text-emerald-600" /> : <FileText className="w-10 h-10 text-blue-600" />}
@@ -225,11 +326,11 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                       {ext ? `${ext.toUpperCase()} File` : 'Office Document'} • {fileSize}
                     </p>
                     <p className="text-xs text-slate-400 pt-2">
-                      {hideDownload ? 'Document preview is protected in view-only mode.' : 'Office files cannot be previewed in the browser. Please download to view.'}
+                      Document is being prepared for preview.
                     </p>
                   </div>
 
-                  {!hideDownload && fileUrl && fileUrl !== '#' && (
+                  {canDownload && fileUrl && fileUrl !== '#' && (
                     <button
                       type="button"
                       onClick={() => openFileWithSignedLink(fileUrl, fileName)}
@@ -242,23 +343,23 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                 </div>
               )}
 
-              {/* 6. OTHER FALLBACK */}
-              {!isImage && !isVideo && !isAudio && !isPdf && !isOffice && (
+              {/* 8. UNKNOWN BINARY FORMAT FRIENDLY CARD */}
+              {!isImage && !isVideo && !isAudio && !isPdf && !isTxt && !isCsv && !isOffice && (
                 <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-slate-200 shadow-xl text-center space-y-5">
                   <div className="w-20 h-20 bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center mx-auto border border-slate-200">
                     {isArchive ? <Archive className="w-10 h-10 text-purple-600" /> : <FileText className="w-10 h-10 text-slate-600" />}
                   </div>
                   <div className="space-y-1">
-                    <h4 className="font-extrabold text-slate-900 text-base">{fileName}</h4>
+                    <h4 className="font-extrabold text-slate-900 text-base">Preview not available for this file type</h4>
                     <p className="text-xs text-slate-500 font-medium">
                       {ext ? `${ext.toUpperCase()} File` : 'Attachment'} • {fileSize}
                     </p>
                     <p className="text-xs text-slate-400 pt-2">
-                      File is ready for download.
+                      {canDownload ? 'File is ready for download.' : 'Direct in-browser preview is not supported for this file format.'}
                     </p>
                   </div>
 
-                  {!hideDownload && fileUrl && fileUrl !== '#' && (
+                  {canDownload && fileUrl && fileUrl !== '#' && (
                     <button
                       type="button"
                       onClick={() => openFileWithSignedLink(fileUrl, fileName)}
@@ -277,7 +378,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
         {/* Modal Footer */}
         <div className="px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between">
           <div>
-            {!hideDownload && !errorMsg && fileUrl && fileUrl !== '#' && (
+            {canDownload && !errorMsg && fileUrl && fileUrl !== '#' && (
               <button
                 type="button"
                 onClick={() => openFileWithSignedLink(fileUrl, fileName)}
@@ -301,4 +402,6 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
 }

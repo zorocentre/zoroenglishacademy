@@ -579,13 +579,12 @@ public class MeController {
         User user = getCurrentUser();
         String role = user.getRole().toUpperCase();
 
+        List<AttendanceRecord> records;
         if ("ADMIN".equals(role)) {
-            return ApiResponse.ok(attendanceRecordRepository.findAll());
-        }
-
-        if ("STUDENT".equals(role)) {
+            records = new ArrayList<>(attendanceRecordRepository.findAll());
+        } else if ("STUDENT".equals(role)) {
             checkLearningAccess(user);
-            List<AttendanceRecord> records = new ArrayList<>(attendanceRecordRepository.findByStudentId(user.getId()));
+            records = new ArrayList<>(attendanceRecordRepository.findByStudentId(user.getId()));
             if (user.getEmail() != null) {
                 for (AttendanceRecord r : attendanceRecordRepository.findByStudentId(user.getEmail())) {
                     if (records.stream().noneMatch(existing -> existing.getId().equals(r.getId()))) {
@@ -593,15 +592,41 @@ public class MeController {
                     }
                 }
             }
-            return ApiResponse.ok(records);
+        } else {
+            // TRAINER
+            List<Schedule> schedules = scheduleRepository.findByTrainerIdOrTrainerIgnoreCaseOrderByDateAsc(user.getId(), user.getName());
+            Set<String> scheduleIds = schedules.stream().map(Schedule::getId).collect(Collectors.toSet());
+            records = attendanceRecordRepository.findAll().stream()
+                    .filter(ar -> ar.getScheduleId() != null && scheduleIds.contains(ar.getScheduleId()))
+                    .collect(Collectors.toList());
         }
 
-        // TRAINER
-        List<Schedule> schedules = scheduleRepository.findByTrainerIdOrTrainerIgnoreCaseOrderByDateAsc(user.getId(), user.getName());
-        Set<String> scheduleIds = schedules.stream().map(Schedule::getId).collect(Collectors.toSet());
-        List<AttendanceRecord> records = attendanceRecordRepository.findAll().stream()
-                .filter(ar -> ar.getScheduleId() != null && scheduleIds.contains(ar.getScheduleId()))
-                .collect(Collectors.toList());
+        // Populate human-readable course title and trainer name (resolving STUDENT_JOIN markers)
+        Map<String, String> courseTitleMap = new HashMap<>();
+        Map<String, String> scheduleTrainerMap = new HashMap<>();
+        for (AttendanceRecord r : records) {
+            if (r.getCourseId() != null && !r.getCourseId().isBlank()) {
+                String title = courseTitleMap.computeIfAbsent(r.getCourseId(), cid ->
+                        courseRepository.findById(cid).map(Course::getTitle).orElse(cid));
+                r.setCourse(title);
+            }
+            String trainerName = null;
+            if (r.getScheduleId() != null && !r.getScheduleId().isBlank()) {
+                trainerName = scheduleTrainerMap.computeIfAbsent(r.getScheduleId(), sid ->
+                        scheduleRepository.findById(sid).map(Schedule::getTrainer).orElse(null));
+            }
+            if ((trainerName == null || trainerName.isBlank()) && r.getCourseId() != null) {
+                trainerName = courseRepository.findById(r.getCourseId()).map(Course::getAssignedTrainer).orElse(null);
+            }
+            if ("STUDENT_JOIN".equalsIgnoreCase(r.getRecordedBy()) || "STUDENT_JOIN".equalsIgnoreCase(r.getTrainer())) {
+                r.setTrainer(trainerName != null && !trainerName.isBlank() ? trainerName : "-");
+            } else if (r.getRecordedBy() != null && !r.getRecordedBy().isBlank()) {
+                r.setTrainer(r.getRecordedBy());
+            } else {
+                r.setTrainer(trainerName != null && !trainerName.isBlank() ? trainerName : "-");
+            }
+        }
+
         return ApiResponse.ok(records);
     }
 
