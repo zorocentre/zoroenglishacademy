@@ -347,7 +347,7 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
             <img src="/assets/logo.png" alt={`${academyName} Logo`} className="h-7 w-auto object-contain" />
             <div>
               <span className="font-extrabold text-white text-sm block sm:inline">{academyName}</span>
-              <span className="block sm:inline sm:ml-2">Â© 2026 {academyName}. All rights reserved.</span>
+              <span className="block sm:inline sm:ml-2">© 2026 {academyName}. All rights reserved.</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400 font-medium">
