@@ -19,6 +19,9 @@ public class ActivityLog {
     @Column(name = "user_name")
     private String userName;
 
+    @Column(name = "module", length = 64)
+    private String module;
+
     @Column(nullable = false)
     private String action;
 
@@ -35,9 +38,14 @@ public class ActivityLog {
     public ActivityLog() {}
 
     public ActivityLog(String id, String userId, String userName, String action, String details, String ipAddress, LocalDateTime createdAt) {
+        this(id, userId, userName, null, action, details, ipAddress, createdAt);
+    }
+
+    public ActivityLog(String id, String userId, String userName, String module, String action, String details, String ipAddress, LocalDateTime createdAt) {
         this.id = id;
         this.userId = userId;
         this.userName = userName;
+        this.module = module;
         this.action = action;
         this.details = details;
         this.ipAddress = ipAddress;
@@ -66,6 +74,14 @@ public class ActivityLog {
 
     public void setUserName(String userName) {
         this.userName = userName;
+    }
+
+    public String getModule() {
+        return module;
+    }
+
+    public void setModule(String module) {
+        this.module = module;
     }
 
     public String getAction() {
@@ -108,6 +124,7 @@ public class ActivityLog {
         private String id;
         private String userId;
         private String userName;
+        private String module;
         private String action;
         private String details;
         private String ipAddress;
@@ -123,6 +140,10 @@ public class ActivityLog {
         }
         public Builder userName(String userName) {
             this.userName = userName;
+            return this;
+        }
+        public Builder module(String module) {
+            this.module = module;
             return this;
         }
         public Builder action(String action) {
@@ -143,7 +164,7 @@ public class ActivityLog {
         }
 
         public ActivityLog build() {
-            return new ActivityLog(id, userId, userName, action, details, ipAddress, createdAt);
+            return new ActivityLog(id, userId, userName, module, action, details, ipAddress, createdAt);
         }
     }
 

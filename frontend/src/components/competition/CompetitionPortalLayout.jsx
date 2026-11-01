@@ -9,6 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { getMyPortals } from '../../api/competitionApi';
 import { resolveFileUrl } from '../../api/fileApi';
 import PageLoader from '../common/PageLoader';
+import ErrorBoundary from '../common/ErrorBoundary';
+import Logo from '../common/Logo';
 
 export default function CompetitionPortalLayout() {
   const { user, logout } = useAuth();
@@ -120,7 +122,7 @@ export default function CompetitionPortalLayout() {
       {!isExamActive && (
         <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 shrink-0">
         <div className="p-5 flex items-center space-x-3 border-b border-slate-800">
-          <img src="/assets/logo.png" alt="Zoro Logo" className="h-7 w-auto object-contain" />
+          <Logo size="w-8 h-8" alt="Zoro Logo" />
           <div>
             <span className="font-extrabold text-white text-xs block leading-tight">Zoro English Academy</span>
             <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Competition Portal</span>
@@ -233,7 +235,7 @@ export default function CompetitionPortalLayout() {
           <div className="relative w-72 max-w-[80vw] bg-slate-900 text-white flex flex-col h-full shadow-2xl z-10">
             <div className="p-4 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center space-x-2">
-                <img src="/assets/logo.png" alt="Zoro Logo" className="h-6 w-auto" />
+                <Logo size="w-7 h-7" alt="Zoro Logo" />
                 <span className="font-black text-xs">Competition Portal</span>
               </div>
               <button
@@ -348,9 +350,11 @@ export default function CompetitionPortalLayout() {
 
         {/* Content Area */}
         <main className={`flex-1 ${isExamActive ? 'p-0 overflow-y-auto bg-slate-950 text-slate-100' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'}`}>
-          <div key={location.pathname} className={isExamActive ? '' : 'page-transition'}>
-            <Outlet context={{ currentCompetition, setCurrentCompetition, portals, isExamActive, setIsExamActive }} />
-          </div>
+          <ErrorBoundary key={location.key} resetKey={location.key}>
+            <div key={location.pathname} className={isExamActive ? '' : 'page-transition'}>
+              <Outlet context={{ currentCompetition, setCurrentCompetition, portals, isExamActive, setIsExamActive }} />
+            </div>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

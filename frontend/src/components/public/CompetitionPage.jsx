@@ -32,21 +32,61 @@ export default function CompetitionPage({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [registeringComp, setRegisteringComp] = useState(null);
   const [allowRegistration, setAllowRegistration] = useState(true);
+  const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+
+  const getLifecycleInfo = (comp) => {
+    const state = (comp?.lifecycleState || '').toUpperCase();
+    if (state === 'UPCOMING') {
+      return {
+        state: 'UPCOMING',
+        badgeText: 'Upcoming Competition',
+        badgeClass: 'bg-blue-100 text-blue-800 border border-blue-200',
+        btnText: 'Upcoming Competition',
+        btnClass: 'bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer font-extrabold shadow-sm',
+        onClick: () => {
+          const openingTime = comp.regStartAt || comp.regStartDate;
+          const msg = openingTime 
+            ? `Registration has not opened yet. Please wait for our competition announcement. Registration opens on ${formatDateTimeIST(openingTime)}.`
+            : 'Registration has not opened yet. Please wait for our competition announcement.';
+          setInfoModal({ isOpen: true, title: 'Upcoming Competition', message: msg });
+        }
+      };
+    }
+    if (state === 'FINISHED') {
+      return {
+        state: 'FINISHED',
+        badgeText: 'Competition Finished',
+        badgeClass: 'bg-slate-200 text-slate-700 border border-slate-300',
+        btnText: 'Competition Finished',
+        btnClass: 'bg-slate-200 hover:bg-slate-300 text-slate-600 cursor-pointer font-extrabold shadow-sm',
+        onClick: () => {
+          setInfoModal({
+            isOpen: true,
+            title: 'Competition Finished',
+            message: 'The competition registration has ended. Thank you for your interest.'
+          });
+        }
+      };
+    }
+    return {
+      state: 'ACTIVE',
+      badgeText: 'Active',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+      btnText: 'Register Now',
+      btnClass: 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer hover:-translate-y-0.5 shadow-lg',
+      onClick: () => setRegisteringComp(comp)
+    };
+  };
 
   useEffect(() => {
     async function loadComps() {
       setLoading(true);
       try {
-
         const res = await getCompetitions();
         if (res.success && Array.isArray(res.data)) {
-          const activeComps = res.data.filter(c => {
-            const st = (c.status || '').toLowerCase();
-            return st === 'active' || st === 'registration open';
-          });
-          setCompetitions(activeComps);
-          if (activeComps.length > 0) {
-            setSelectedCompId(activeComps[0].id);
+          setCompetitions(res.data);
+          if (res.data.length > 0) {
+            setSelectedCompId(res.data[0].id);
           }
         }
       } catch (err) {
@@ -59,6 +99,7 @@ export default function CompetitionPage({ currentUser }) {
   }, []);
 
   const activeComp = competitions.find(c => c.id === selectedCompId) || competitions[0];
+  const activeLifecycle = getLifecycleInfo(activeComp);
 
   if (loading) {
     return (
@@ -117,8 +158,8 @@ export default function CompetitionPage({ currentUser }) {
 
         {/* Header Title Banner */}
         <div className="text-center max-w-3xl mx-auto space-y-2">
-          <div className="inline-block bg-emerald-100 text-emerald-800 font-extrabold text-xs px-4 py-1.5 rounded-full uppercase tracking-wider">
-            {activeComp.status || 'Active Event'}
+          <div className={`inline-block font-extrabold text-xs px-4 py-1.5 rounded-full uppercase tracking-wider ${activeLifecycle.badgeClass}`}>
+            {activeLifecycle.badgeText}
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
             {compTitle}
@@ -275,15 +316,11 @@ export default function CompetitionPage({ currentUser }) {
             </div>
 
             <button
-              disabled={!allowRegistration}
-              onClick={() => allowRegistration && setRegisteringComp(activeComp)}
-              className={`w-full font-black py-4 rounded-xl shadow-lg transition-transform text-center text-sm ${
-                allowRegistration
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer hover:-translate-y-0.5'
-                  : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-              }`}
+              type="button"
+              onClick={activeLifecycle.onClick}
+              className={`w-full font-black py-4 rounded-xl shadow-lg transition-transform text-center text-sm ${activeLifecycle.btnClass}`}
             >
-              {allowRegistration ? 'Register Now' : 'Registration Closed by Admin'}
+              {activeLifecycle.btnText}
             </button>
           </div>
 
@@ -372,6 +409,30 @@ export default function CompetitionPage({ currentUser }) {
         currentUser={currentUser}
         onClose={() => setRegisteringComp(null)}
       />
+
+      {/* LIFECYCLE INFO DIALOG / TOAST */}
+      {infoModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl text-center space-y-4 border border-slate-200">
+            <div className="w-14 h-14 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <Trophy className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900">{infoModal.title}</h3>
+              <p className="text-xs font-medium text-slate-600 leading-relaxed">{infoModal.message}</p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setInfoModal({ isOpen: false, title: '', message: '' })}
+                className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

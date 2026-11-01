@@ -135,9 +135,9 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
   const modalContent = (
     <div 
       onContextMenu={hideDownload ? (e) => e.preventDefault() : undefined}
-      className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in"
+      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in"
     >
-      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative">
+      <div className="bg-white rounded-none sm:rounded-3xl max-w-5xl w-full h-full sm:h-[92vh] sm:w-[94vw] max-h-none sm:max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative">
         
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -254,11 +254,13 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
 
               {/* 4. PDF CUSTOM CANVAS VIEWER (Also renders converted office documents) */}
               {isPdf && (
-                <div className="w-full h-[72vh] rounded-2xl overflow-hidden shadow-lg border border-slate-700">
+                <div className="w-full h-full min-h-[75vh] flex-1 rounded-2xl overflow-hidden shadow-lg border border-slate-700">
                   <CustomPdfViewer
                     url={fileUrl}
                     title={fileName}
+                    fileType={ext ? ext.toUpperCase() : 'PDF'}
                     watermarkText={!isAdmin ? (user?.name || user?.email || 'Zoro English Academy') : ''}
+                    showTitle={false}
                   />
                 </div>
               )}

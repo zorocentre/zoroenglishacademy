@@ -42,12 +42,12 @@ export default function ConfirmModal({
       onClick={handleDismiss}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-md p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-150 relative"
+        className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-md p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-150 relative max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button 
           onClick={handleDismiss}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full transition-colors cursor-pointer"
+          className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>

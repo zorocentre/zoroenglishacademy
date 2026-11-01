@@ -4,6 +4,7 @@ import { GraduationCap, Trophy, ArrowRight, LogOut, Sparkles } from 'lucide-reac
 import { useAuth } from '../../context/AuthContext';
 import { getMyPortals } from '../../api/competitionApi';
 import PageLoader from '../common/PageLoader';
+import Logo from '../common/Logo';
 
 export default function PortalSelectPage() {
   const { user, logout } = useAuth();
@@ -80,7 +81,7 @@ export default function PortalSelectPage() {
       {/* Top Header */}
       <header className="max-w-5xl w-full mx-auto flex items-center justify-between py-4">
         <div className="flex items-center space-x-3">
-          <img src="/assets/logo.png" alt="Zoro Logo" className="h-8 w-auto object-contain" />
+          <Logo size="w-8 h-8" alt="Zoro Logo" />
           <span className="font-black text-sm tracking-tight text-white">Zoro English Academy</span>
         </div>
         <button

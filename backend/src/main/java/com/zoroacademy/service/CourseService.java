@@ -37,6 +37,17 @@ public class CourseService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ActivityLogService activityLogService;
+
+    private void logActivity(String module, String action, String details) {
+        if (activityLogService != null) {
+            try {
+                activityLogService.logAction("ADMIN", "Admin", module, action, details, "System");
+            } catch (Exception ignored) {}
+        }
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public CourseService(CourseRepository courseRepository,
                          CourseModuleRepository moduleRepository,
@@ -520,7 +531,10 @@ public class CourseService {
                 r.setCourse(course);
             });
         }
-        return courseRepository.save(course);
+        Course saved = courseRepository.save(course);
+        logActivity("COURSES", "COURSE_CREATED", "Created course: " + saved.getTitle() + " (" + saved.getMode() + ")");
+        logActivity("MODULES", "MODULE_CREATED", "Added module '" + saved.getTitle() + "' to course " + course.getTitle());
+        return saved;
     }
 
     @Transactional
@@ -650,6 +664,7 @@ public class CourseService {
             }
         }
 
+        logActivity("COURSES", "COURSE_UPDATED", "Updated course: " + savedCourse.getTitle());
         return savedCourse;
     }
 
@@ -871,6 +886,7 @@ public class CourseService {
             cleanupStoredFilesFromText(course.getThumbnail());
             cleanupStoredFilesFromText(course.getPreviewVideoUrl());
             courseRepository.delete(course);
+            logActivity("COURSES", "COURSE_DELETED", "Deleted course: " + course.getTitle() + " (ID: " + courseId + ")");
         }
     }
 
@@ -907,6 +923,7 @@ public class CourseService {
             } catch (Exception ignored) {}
         }
 
+        logActivity("MODULES", "MODULE_CREATED", "Added module '" + saved.getTitle() + "' to course " + course.getTitle());
         return saved;
     }
 
@@ -994,7 +1011,9 @@ public class CourseService {
             existing.setAssignmentFileName(updated.getAssignmentFileName());
         }
 
-        return moduleRepository.save(existing);
+        CourseModule savedMod = moduleRepository.save(existing);
+        logActivity("MODULES", "MODULE_UPDATED", "Updated module '" + savedMod.getTitle() + "' in course ID " + courseId);
+        return savedMod;
     }
 
     @Transactional
@@ -1012,6 +1031,7 @@ public class CourseService {
                 m.setModuleOrder(i + 1);
                 moduleRepository.save(m);
             }
+            logActivity("MODULES", "MODULE_DELETED", "Deleted module ID " + moduleId + " from course ID " + courseId);
         }
     }
 

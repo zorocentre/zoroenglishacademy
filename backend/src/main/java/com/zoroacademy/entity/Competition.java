@@ -2,11 +2,12 @@ package com.zoroacademy.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -275,8 +276,52 @@ public class Competition {
         this.rules = rules;
     }
 
+    @JsonProperty("lifecycleState")
+    public String getLifecycleState() {
+        ZoneId zone = ZoneId.of("Asia/Kolkata");
+        OffsetDateTime now = ZonedDateTime.now(zone).toOffsetDateTime();
+        OffsetDateTime start = getEffectiveRegStartAt();
+        OffsetDateTime end = getEffectiveRegEndAt();
+
+        if (start == null || now.isBefore(start)) {
+            return "UPCOMING";
+        }
+        if (end != null && now.isAfter(end)) {
+            return "FINISHED";
+        }
+        return "ACTIVE";
+    }
+
+    public OffsetDateTime getEffectiveRegStartAt() {
+        if (regStartAt != null) return regStartAt;
+        if (regStartDate != null && !regStartDate.isBlank()) {
+            try {
+                ZoneId zone = ZoneId.of("Asia/Kolkata");
+                LocalDate d = LocalDate.parse(regStartDate.trim().substring(0, 10));
+                return ZonedDateTime.of(d, LocalTime.MIN, zone).toOffsetDateTime();
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    public OffsetDateTime getEffectiveRegEndAt() {
+        if (regEndAt != null) return regEndAt;
+        if (regEndDate != null && !regEndDate.isBlank()) {
+            try {
+                ZoneId zone = ZoneId.of("Asia/Kolkata");
+                LocalDate d = LocalDate.parse(regEndDate.trim().substring(0, 10));
+                return ZonedDateTime.of(d, LocalTime.of(23, 59, 59, 999_000_000), zone).toOffsetDateTime();
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    @JsonProperty("status")
     public String getStatus() {
-        return status;
+        String state = getLifecycleState();
+        if ("UPCOMING".equals(state)) return "Upcoming";
+        if ("FINISHED".equals(state)) return "Completed";
+        return "Active";
     }
 
     public void setStatus(String status) {

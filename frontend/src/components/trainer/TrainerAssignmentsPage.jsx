@@ -627,10 +627,10 @@ export default function TrainerAssignmentsPage() {
       {/* CREATE EXTRA ASSIGNMENT MODAL */}
       {showCreateModal && !showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90dvh] overflow-y-auto">
             <button
               onClick={() => setShowCreateModal(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"
+              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -955,7 +955,7 @@ export default function TrainerAssignmentsPage() {
       {/* ASSIGNMENT PREVIEW & CONFIRMATION MODAL */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90dvh] overflow-y-auto">
             <div className="border-b border-slate-100 pb-3">
               <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Preview & Confirm</span>
               <h3 className="text-xl font-black text-slate-900">Assignment Summary</h3>

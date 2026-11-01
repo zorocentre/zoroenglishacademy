@@ -27,6 +27,17 @@ public class ScheduleService {
     @org.springframework.beans.factory.annotation.Value("${schedule.resources-unlock-minutes:30}")
     private int resourcesUnlockMinutes = 30;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ActivityLogService activityLogService;
+
+    private void logActivity(String action, String details) {
+        if (activityLogService != null) {
+            try {
+                activityLogService.logAction("ADMIN", "Admin", "SCHEDULES", action, details, "System");
+            } catch (Exception ignored) {}
+        }
+    }
+
     public int getResourcesUnlockMinutes() {
         return resourcesUnlockMinutes;
     }
@@ -427,6 +438,11 @@ public class ScheduleService {
             notifyBatchStudents(saved, true);
         }
 
+        if (activityLogService != null) {
+            activityLogService.logAction(null, null, "SCHEDULES", "UPDATE_SCHEDULE",
+                "Updated schedule: " + saved.getTitle() + " (" + saved.getId() + ")", null);
+        }
+
         return saved;
     }
 
@@ -522,6 +538,11 @@ public class ScheduleService {
             cleanupStoredFilesFromText(schedule.getWorksheetFileUrl());
             cleanupStoredFilesFromText(schedule.getAssignmentFileUrl());
             scheduleRepository.delete(schedule);
+
+            if (activityLogService != null) {
+                activityLogService.logAction(null, null, "SCHEDULES", "DELETE_SCHEDULE",
+                    "Deleted schedule: " + schedule.getTitle() + " (" + schedule.getId() + ")", null);
+            }
         }
     }
 

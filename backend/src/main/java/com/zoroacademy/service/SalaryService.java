@@ -17,12 +17,20 @@ public class SalaryService {
 
     private final SalaryRecordRepository salaryRepository;
     private final NotificationRepository notificationRepository;
+    private final ActivityLogService activityLogService;
 
     @Autowired
     public SalaryService(SalaryRecordRepository salaryRepository,
-                         @Autowired(required = false) NotificationRepository notificationRepository) {
+                         @Autowired(required = false) NotificationRepository notificationRepository,
+                         @Autowired(required = false) ActivityLogService activityLogService) {
         this.salaryRepository = salaryRepository;
         this.notificationRepository = notificationRepository;
+        this.activityLogService = activityLogService;
+    }
+
+    public SalaryService(SalaryRecordRepository salaryRepository,
+                         NotificationRepository notificationRepository) {
+        this(salaryRepository, notificationRepository, null);
     }
 
     @Transactional(readOnly = true)
@@ -44,6 +52,17 @@ public class SalaryService {
             record.setStatus("Paid");
         }
         SalaryRecord saved = salaryRepository.save(record);
+
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getTrainerId(),
+                saved.getTrainerName(),
+                "SALARY",
+                "CREATE_SALARY_RECORD",
+                "Disbursed salary of Rs. " + saved.getAmount() + " for trainer " + (saved.getTrainerName() != null ? saved.getTrainerName() : saved.getTrainerId()) + " (" + saved.getMonth() + ")",
+                null
+            );
+        }
 
         // Notify the trainer when payment is recorded
         if (notificationRepository != null && "Paid".equalsIgnoreCase(saved.getStatus()) && saved.getTrainerId() != null) {
@@ -74,11 +93,34 @@ public class SalaryService {
         if (updated.getTransactionId() != null) existing.setTransactionId(updated.getTransactionId());
         if (updated.getNotes() != null) existing.setNotes(updated.getNotes());
         if (updated.getStatus() != null) existing.setStatus(updated.getStatus());
-        return salaryRepository.save(existing);
+        SalaryRecord saved = salaryRepository.save(existing);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getTrainerId(),
+                saved.getTrainerName(),
+                "SALARY",
+                "UPDATE_SALARY_RECORD",
+                "Updated salary record for trainer " + (saved.getTrainerName() != null ? saved.getTrainerName() : saved.getTrainerId()) + " (" + saved.getId() + ")",
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
     public void deleteSalaryRecord(String id) {
-        salaryRepository.deleteById(id);
+        salaryRepository.findById(id).ifPresent(sr -> {
+            salaryRepository.delete(sr);
+            if (activityLogService != null) {
+                activityLogService.logAction(
+                    sr.getTrainerId(),
+                    sr.getTrainerName(),
+                    "SALARY",
+                    "DELETE_SALARY_RECORD",
+                    "Deleted salary record for " + (sr.getTrainerName() != null ? sr.getTrainerName() : sr.getId()),
+                    null
+                );
+            }
+        });
     }
 }

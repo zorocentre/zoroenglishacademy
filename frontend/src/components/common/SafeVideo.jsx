@@ -211,9 +211,9 @@ export default function SafeVideo({
         type="button"
         onClick={handleToggleFullscreen}
         title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-        className="absolute top-2 right-2 z-30 p-1.5 rounded-lg bg-black/40 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-xs transition opacity-0 group-hover/video:opacity-100 cursor-pointer"
+        className="absolute top-2 right-2 z-30 min-h-[44px] min-w-[44px] p-2 sm:p-1.5 rounded-lg bg-black/50 hover:bg-black/75 text-white/90 hover:text-white backdrop-blur-xs transition opacity-100 sm:opacity-0 sm:group-hover/video:opacity-100 cursor-pointer flex items-center justify-center"
       >
-        {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+        {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
       </button>
 
       {effectiveSrc && effectiveIframe ? (

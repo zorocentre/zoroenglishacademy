@@ -19,7 +19,16 @@ public class ActivityLogController {
 
 
     @GetMapping
-    public ApiResponse<List<ActivityLog>> getLogs() {
+    public ApiResponse<List<ActivityLog>> getLogs(
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String module,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String actor
+    ) {
+        if (fromDate != null || toDate != null || module != null || action != null || actor != null) {
+            return ApiResponse.ok(logService.getLogs(fromDate, toDate, module, action, actor));
+        }
         return ApiResponse.ok(logService.getRecentLogs());
     }
 

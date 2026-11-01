@@ -17,6 +17,7 @@ public class DoubtService {
     private final com.zoroacademy.repository.BatchRepository batchRepository;
     private final com.zoroacademy.repository.StudentCourseBatchRepository studentCourseBatchRepository;
     private final NotificationService notificationService;
+    private final ActivityLogService activityLogService;
 
     @org.springframework.beans.factory.annotation.Autowired
     public DoubtService(DoubtRepository doubtRepository,
@@ -24,17 +25,28 @@ public class DoubtService {
                         @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.CourseRepository courseRepository,
                         @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.BatchRepository batchRepository,
                         @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.StudentCourseBatchRepository studentCourseBatchRepository,
-                        @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService) {
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) ActivityLogService activityLogService) {
         this.doubtRepository = doubtRepository;
         this.userRepository = userRepository;
         this.courseRepository = courseRepository;
         this.batchRepository = batchRepository;
         this.studentCourseBatchRepository = studentCourseBatchRepository;
         this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
+    }
+
+    public DoubtService(DoubtRepository doubtRepository,
+                        com.zoroacademy.repository.UserRepository userRepository,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.CourseRepository courseRepository,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.BatchRepository batchRepository,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.repository.StudentCourseBatchRepository studentCourseBatchRepository,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService) {
+        this(doubtRepository, userRepository, courseRepository, batchRepository, studentCourseBatchRepository, notificationService, null);
     }
 
     public DoubtService(DoubtRepository doubtRepository, com.zoroacademy.repository.UserRepository userRepository) {
-        this(doubtRepository, userRepository, null, null, null, null);
+        this(doubtRepository, userRepository, null, null, null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -168,6 +180,17 @@ public class DoubtService {
 
         Doubt saved = doubtRepository.save(doubt);
 
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getStudentId(),
+                saved.getStudentName(),
+                "DOUBTS",
+                "CREATE_DOUBT",
+                "Student submitted doubt: " + (saved.getQuestion() != null ? (saved.getQuestion().length() > 60 ? saved.getQuestion().substring(0, 60) + "..." : saved.getQuestion()) : "Doubt") + " for course " + saved.getCourseTitle(),
+                null
+            );
+        }
+
         // Notifications on creation
         if (notificationService != null) {
             // 1. Notify Admin
@@ -208,6 +231,17 @@ public class DoubtService {
         doubt.setStatus("Resolved");
         Doubt saved = doubtRepository.save(doubt);
 
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getTrainerId() != null ? saved.getTrainerId() : "TRAINER",
+                saved.getTrainerName() != null ? saved.getTrainerName() : "Trainer",
+                "DOUBTS",
+                "REPLY_DOUBT",
+                "Replied to doubt: " + (saved.getQuestion() != null ? (saved.getQuestion().length() > 60 ? saved.getQuestion().substring(0, 60) + "..." : saved.getQuestion()) : saved.getId()) + " by " + (saved.getTrainerName() != null ? saved.getTrainerName() : "Trainer"),
+                null
+            );
+        }
+
         if (saved.getStudentId() != null && !saved.getStudentId().isBlank() && notificationService != null) {
             notificationService.createNotification(com.zoroacademy.entity.Notification.builder()
                     .id("notif_" + java.util.UUID.randomUUID())
@@ -224,6 +258,18 @@ public class DoubtService {
 
     @Transactional
     public void deleteDoubt(String id) {
-        doubtRepository.deleteById(id);
+        doubtRepository.findById(id).ifPresent(d -> {
+            doubtRepository.delete(d);
+            if (activityLogService != null) {
+                activityLogService.logAction(
+                    null,
+                    null,
+                    "DOUBTS",
+                    "DELETE_DOUBT",
+                    "Deleted doubt: " + (d.getQuestion() != null ? (d.getQuestion().length() > 60 ? d.getQuestion().substring(0, 60) + "..." : d.getQuestion()) : d.getId()),
+                    null
+                );
+            }
+        });
     }
 }

@@ -772,7 +772,7 @@ export default function TrainerAttendancePage() {
       {/* ATTENDANCE CORRECTION MODAL (Mandatory Remark) */}
       {correctionModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center space-x-3">
                 <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl">
@@ -786,7 +786,7 @@ export default function TrainerAttendancePage() {
               <button
                 type="button"
                 onClick={() => setCorrectionModal(prev => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

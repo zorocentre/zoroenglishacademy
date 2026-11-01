@@ -14,16 +14,21 @@ public class EnquiryService {
     private final EnquiryRepository enquiryRepository;
     private final CourseRepository courseRepository;
     private final EmailService emailService;
+    private final ActivityLogService activityLogService;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public EnquiryService(EnquiryRepository enquiryRepository, CourseRepository courseRepository, @org.springframework.beans.factory.annotation.Autowired(required = false) EmailService emailService) {
+    public EnquiryService(EnquiryRepository enquiryRepository,
+                          CourseRepository courseRepository,
+                          @org.springframework.beans.factory.annotation.Autowired(required = false) EmailService emailService,
+                          @org.springframework.beans.factory.annotation.Autowired(required = false) ActivityLogService activityLogService) {
         this.enquiryRepository = enquiryRepository;
         this.courseRepository = courseRepository;
         this.emailService = emailService;
+        this.activityLogService = activityLogService;
     }
 
     public EnquiryService(EnquiryRepository enquiryRepository, CourseRepository courseRepository) {
-        this(enquiryRepository, courseRepository, null);
+        this(enquiryRepository, courseRepository, null, null);
     }
 
 
@@ -55,6 +60,16 @@ public class EnquiryService {
         }
 
         Enquiry saved = enquiryRepository.save(enquiry);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                null,
+                saved.getName(),
+                "ENQUIRIES",
+                "CREATE_ENQUIRY",
+                "New enquiry from " + saved.getName() + " (" + saved.getEmail() + ") for " + (saved.getCourseInterest() != null ? saved.getCourseInterest() : "course"),
+                null
+            );
+        }
         if (emailService != null) {
             try {
                 emailService.sendEnquiryAcknowledgement(saved);
@@ -69,11 +84,34 @@ public class EnquiryService {
                 .orElseThrow(() -> new IllegalArgumentException("Enquiry not found: " + id));
 
         enquiry.setStatus(status);
-        return enquiryRepository.save(enquiry);
+        Enquiry saved = enquiryRepository.save(enquiry);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                null,
+                null,
+                "ENQUIRIES",
+                "UPDATE_ENQUIRY_STATUS",
+                "Updated enquiry status to " + status + " for " + saved.getName(),
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
     public void deleteEnquiry(String id) {
-        enquiryRepository.deleteById(id);
+        enquiryRepository.findById(id).ifPresent(enq -> {
+            enquiryRepository.delete(enq);
+            if (activityLogService != null) {
+                activityLogService.logAction(
+                    null,
+                    null,
+                    "ENQUIRIES",
+                    "DELETE_ENQUIRY",
+                    "Deleted enquiry from " + enq.getName() + " (" + enq.getId() + ")",
+                    null
+                );
+            }
+        });
     }
 }

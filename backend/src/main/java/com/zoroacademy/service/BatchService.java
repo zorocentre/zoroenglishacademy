@@ -22,6 +22,17 @@ public class BatchService {
     private final ScheduleRepository scheduleRepository;
     private final AssignmentRepository assignmentRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ActivityLogService activityLogService;
+
+    private void logActivity(String module, String action, String details) {
+        if (activityLogService != null) {
+            try {
+                activityLogService.logAction("ADMIN", "Admin", module, action, details, "System");
+            } catch (Exception ignored) {}
+        }
+    }
+
     public BatchService(BatchRepository batchRepository,
                         CourseRepository courseRepository,
                         UserRepository userRepository,
@@ -214,6 +225,7 @@ public class BatchService {
 
         Batch saved = batchRepository.save(batch);
         enrichBatch(saved);
+        logActivity("BATCHES", "BATCH_CREATED", "Created batch: " + saved.getName() + " for course " + saved.getCourseName());
         return saved;
     }
 
@@ -312,6 +324,7 @@ public class BatchService {
             }
         }
 
+        logActivity("BATCHES", "BATCH_UPDATED", "Updated batch: " + savedBatch.getName());
         return savedBatch;
     }
 
@@ -328,5 +341,6 @@ public class BatchService {
             throw new ConflictException("Cannot delete batch with " + enrollments.size() + " active enrollments");
         }
         batchRepository.deleteById(id);
+        logActivity("BATCHES", "BATCH_DELETED", "Deleted batch ID " + id);
     }
 }

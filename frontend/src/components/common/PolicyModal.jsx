@@ -59,7 +59,7 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
       <div
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative"
+        className="bg-white rounded-3xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -79,7 +79,7 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 rounded-full transition border border-slate-200 cursor-pointer shadow-2xs"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 rounded-full transition border border-slate-200 cursor-pointer shadow-2xs"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />

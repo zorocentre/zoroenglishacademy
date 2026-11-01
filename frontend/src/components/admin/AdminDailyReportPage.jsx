@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Trophy,  ChevronLeft, ChevronRight, Printer, Download, 
+  Calendar, Trophy, ChevronLeft, ChevronRight, Printer, Download, 
   Users, UserCheck, Clock, CreditCard, Wallet, BookOpen, 
   FileText, CheckCircle2, XCircle, AlertCircle, RefreshCw, Activity, Layers, Filter
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import { getActivityLogs } from '../../api/activityLogApi';
 import { getCompetitions, getCompetitionActivityLogs } from '../../api/competitionApi';
 import { exportToExcel } from '../../utils/excelExporter';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import Logo from '../common/Logo';
 
 export default function AdminDailyReportPage() {
   const { academyName, tagline } = useWebsiteSettings();
@@ -27,6 +28,9 @@ export default function AdminDailyReportPage() {
   const [feeRecords, setFeeRecords] = useState([]);
   const [salaryPayments, setSalaryPayments] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
+  const [selectedModuleFilter, setSelectedModuleFilter] = useState('ALL');
+  const [selectedActionFilter, setSelectedActionFilter] = useState('ALL');
+  const [selectedActorFilter, setSelectedActorFilter] = useState('ALL');
   const [activeReportTab, setActiveReportTab] = useState('all'); // 'all' | 'competitions'
   const [competitionList, setCompetitionList] = useState([]);
   const [competitionLogs, setCompetitionLogs] = useState([]);
@@ -43,7 +47,7 @@ export default function AdminDailyReportPage() {
         getAttendanceRecords(),
         getFeeRecords(),
         getSalaryPayments(),
-        getActivityLogs(fromDate, toDate),
+        getActivityLogs(fromDate, toDate, selectedModuleFilter, selectedActionFilter, selectedActorFilter),
         getCompetitions(),
         getCompetitionActivityLogs({ fromDate, toDate, competitionId: selectedCompFilter, eventType: selectedEventTypeFilter })
       ]);
@@ -64,7 +68,7 @@ export default function AdminDailyReportPage() {
 
   useEffect(() => {
     loadAllData();
-  }, [fromDate, toDate, selectedCompFilter, selectedEventTypeFilter]);
+  }, [fromDate, toDate, selectedCompFilter, selectedEventTypeFilter, selectedModuleFilter, selectedActionFilter, selectedActorFilter]);
 
   // Quick preset shortcuts
   const setTodayRange = () => {
@@ -118,6 +122,22 @@ export default function AdminDailyReportPage() {
   const totalSalaryPaid = filteredSalaries.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
   const isSingleDay = fromDate === toDate;
+
+  const groupedActivityLogs = React.useMemo(() => {
+    const groups = {};
+    (activityLogs || []).forEach(log => {
+      const day = log.date || (log.createdAt ? log.createdAt.slice(0, 10) : 'Unknown');
+      if (!groups[day]) groups[day] = [];
+      groups[day].push(log);
+    });
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [activityLogs]);
+
+  const uniqueModules = [
+    'ALL', 'COURSES', 'MODULES', 'BATCHES', 'STUDENTS', 'TRAINERS',
+    'ATTENDANCE', 'SCHEDULES', 'ASSIGNMENTS', 'DOUBTS', 'ENQUIRIES',
+    'FEES', 'EXPENSES', 'SALARY', 'NOTIFICATIONS', 'SETTINGS', 'COMPETITIONS'
+  ];
 
   // Excel Export Handler
   const handleExportExcel = () => {
@@ -302,7 +322,7 @@ export default function AdminDailyReportPage() {
         {/* Printable Letterhead */}
         <div className="border-b-2 border-slate-900 pb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center space-x-4">
-            <img src="/assets/logo.png" alt={academyName} className="h-12 w-auto object-contain" />
+            <Logo size="w-12 h-12" alt={academyName} />
             <div>
               <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">{academyName}</h2>
               <p className="text-xs text-blue-600 font-bold tracking-wide">
@@ -509,52 +529,117 @@ export default function AdminDailyReportPage() {
 
         {/* SECTION 2: GRANULAR SYSTEM & ADMIN ACTIVITY LOGS */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider border-l-4 border-purple-600 pl-3 flex items-center gap-2">
               <Activity className="w-4 h-4 text-purple-600" />
-              <span>2. Granular Admin Activity Log ({activityLogs.length} Actions)</span>
+              <span>2. Activity Tracking Log ({activityLogs.length} Events)</span>
             </h3>
             <span className="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
-              Tracked Changes
+              Grouped by Day
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
-              <thead>
-                <tr className="bg-slate-100 text-slate-600 uppercase font-bold text-[11px]">
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Action</th>
-                  <th className="py-3 px-4">Description / Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {activityLogs.length > 0 ? (
-                  activityLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50">
-                      <td className="py-3.5 px-4 font-mono text-slate-600">
-                        {formatReadableDate(log.date)} <span className="text-slate-400 font-normal">({log.time})</span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2.5 py-0.5 rounded-md">
-                          {log.category}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">{log.action}</td>
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-normal max-w-md">{log.details}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="py-6 text-center text-slate-400 font-bold whitespace-normal">
-                      No admin activities recorded for the selected date range ({fromDate} to {toDate}).
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          {/* Activity Filters Toolbar */}
+          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-3 text-xs print:hidden">
+            <div className="flex items-center space-x-2">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <label className="font-bold text-slate-600">Module:</label>
+              <select
+                value={selectedModuleFilter}
+                onChange={(e) => setSelectedModuleFilter(e.target.value)}
+                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none cursor-pointer"
+              >
+                {uniqueModules.map(m => (
+                  <option key={m} value={m}>{m === 'ALL' ? 'All Modules' : m}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <label className="font-bold text-slate-600">Event / Action:</label>
+              <input
+                type="text"
+                placeholder="Filter by action..."
+                value={selectedActionFilter === 'ALL' ? '' : selectedActionFilter}
+                onChange={(e) => setSelectedActionFilter(e.target.value || 'ALL')}
+                className="px-2.5 py-1 bg-white border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none w-36"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <label className="font-bold text-slate-600">Actor:</label>
+              <input
+                type="text"
+                placeholder="Filter by actor..."
+                value={selectedActorFilter === 'ALL' ? '' : selectedActorFilter}
+                onChange={(e) => setSelectedActorFilter(e.target.value || 'ALL')}
+                className="px-2.5 py-1 bg-white border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none w-36"
+              />
+            </div>
+
+            {(selectedModuleFilter !== 'ALL' || selectedActionFilter !== 'ALL' || selectedActorFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setSelectedModuleFilter('ALL');
+                  setSelectedActionFilter('ALL');
+                  setSelectedActorFilter('ALL');
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer ml-auto"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
+
+          {groupedActivityLogs.length > 0 ? (
+            <div className="space-y-4">
+              {groupedActivityLogs.map(([day, logsForDay]) => (
+                <div key={day} className="rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="bg-slate-100 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                    <span className="font-extrabold text-xs text-slate-800 flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                      {formatReadableDate(day)}
+                    </span>
+                    <span className="bg-purple-100 text-purple-800 font-black text-[10px] px-2 py-0.5 rounded-full">
+                      {logsForDay.length} {logsForDay.length === 1 ? 'event' : 'events'}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] border-b border-slate-100">
+                          <th className="py-2 px-4">Time</th>
+                          <th className="py-2 px-4">Module</th>
+                          <th className="py-2 px-4">Action</th>
+                          <th className="py-2 px-4">Actor</th>
+                          <th className="py-2 px-4">Description / Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                        {logsForDay.map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-4 font-mono text-slate-500 text-[11px]">{log.time}</td>
+                            <td className="py-2.5 px-4">
+                              <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                {log.module || log.category}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 font-extrabold text-slate-900">{log.action}</td>
+                            <td className="py-2.5 px-4 font-bold text-slate-800">{log.userName || 'Admin'}</td>
+                            <td className="py-2.5 px-4 text-slate-600 whitespace-normal max-w-md">{log.details}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-400 font-bold text-xs">
+              No activity logs recorded for the selected filters.
+            </div>
+          )}
         </div>
 
         {/* SECTION 3: TRAINER FACULTY ACTIVITY */}

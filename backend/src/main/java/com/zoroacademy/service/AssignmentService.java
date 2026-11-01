@@ -301,6 +301,11 @@ public class AssignmentService {
                     .build());
         }
 
+        if (activityLogService != null) {
+            activityLogService.logAction(null, null, "ASSIGNMENTS", "CREATE_ASSIGNMENT",
+                "Created assignment: " + saved.getTitle() + " for course " + saved.getCourse(), null);
+        }
+
         return saved;
     }
 
@@ -342,7 +347,12 @@ public class AssignmentService {
             userRepository.findById(existing.getTrainerId()).ifPresent(u -> existing.setTrainer(u.getName()));
         }
 
-        return assignmentRepository.save(existing);
+        Assignment saved = assignmentRepository.save(existing);
+        if (activityLogService != null) {
+            activityLogService.logAction(null, null, "ASSIGNMENTS", "UPDATE_ASSIGNMENT",
+                "Updated assignment: " + saved.getTitle() + " (" + saved.getId() + ")", null);
+        }
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -619,6 +629,15 @@ public class AssignmentService {
                     .message("Trainer " + saved.getStudentName() + " submitted assignment for '" + saved.getAssignmentTitle() + "' in " + saved.getCourseTitle() + ".")
                     .readStatus(false)
                     .build());
+        } else {
+            activityLogService.logAction(
+                    saved.getStudentId() != null ? saved.getStudentId() : "STUDENT",
+                    saved.getStudentName() != null ? saved.getStudentName() : "Student",
+                    "ASSIGNMENTS",
+                    "STUDENT_SUBMISSION_UPLOADED",
+                    "Student " + saved.getStudentName() + " submitted assignment for '" + saved.getAssignmentTitle() + "' in " + saved.getCourseTitle(),
+                    null
+            );
         }
 
         if ("module".equalsIgnoreCase(saved.getSourceType())) {
@@ -720,6 +739,10 @@ public class AssignmentService {
         if (a != null) {
             cleanupStoredFilesFromText(a.getAttachment());
             assignmentRepository.delete(a);
+            if (activityLogService != null) {
+                activityLogService.logAction(null, null, "ASSIGNMENTS", "DELETE_ASSIGNMENT",
+                    "Deleted assignment: " + a.getTitle() + " (" + a.getId() + ")", null);
+            }
         }
     }
 
@@ -730,6 +753,10 @@ public class AssignmentService {
             cleanupStoredFilesFromText(submission.getAttachment());
             cleanupStoredFilesFromText(submission.getCorrectionAttachment());
             submissionRepository.delete(submission);
+            if (activityLogService != null) {
+                activityLogService.logAction(null, null, "ASSIGNMENTS", "DELETE_SUBMISSION",
+                    "Deleted submission for " + submission.getStudentName() + " on assignment " + submission.getAssignmentTitle(), null);
+            }
         }
     }
 }

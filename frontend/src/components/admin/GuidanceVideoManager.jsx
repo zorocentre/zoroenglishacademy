@@ -582,7 +582,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
       {/* MODAL 1: PREVIEW STREAM MODAL */}
       {previewVideo && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-4 space-y-3 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-4 space-y-3 shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between text-white pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2 min-w-0 pr-2">
                 <Video className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -593,7 +593,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
               <button
                 type="button"
                 onClick={() => setPreviewVideo(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -619,7 +619,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form 
             onSubmit={handleSaveCaptionEdit} 
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200"
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[90dvh] overflow-y-auto"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -629,7 +629,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
               <button
                 type="button"
                 onClick={() => setEditingVideo(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -675,7 +675,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form 
             onSubmit={handleReplaceVideoSubmit} 
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200"
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[90dvh] overflow-y-auto"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -686,7 +686,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
                 type="button"
                 disabled={isReplacing}
                 onClick={() => setReplacingVideo(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

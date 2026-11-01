@@ -5,6 +5,7 @@ import {
   User, Video, Clock, LogOut, Bell, CheckSquare, X, Wallet, FileSpreadsheet, Layers, Trophy, MessageSquare, Award, FileCheck
 } from 'lucide-react';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import Logo from '../common/Logo';
 
 export default function DashboardSidebar({ role, activeScreen, setActiveScreen, isMobileOpen, onMobileClose }) {
   const { academyName } = useWebsiteSettings();
@@ -70,11 +71,7 @@ export default function DashboardSidebar({ role, activeScreen, setActiveScreen, 
       {/* Brand Header (Fixed at Top) */}
       <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
-          <img 
-            src="/assets/logo.png" 
-            alt={`${academyName} Logo`} 
-            className="h-9 w-auto object-contain" 
-          />
+          <Logo size="w-9 h-9" alt={`${academyName} Logo`} />
           <div>
             <h1 className="font-extrabold text-xs text-white tracking-tight leading-none">{academyName}</h1>
             <p className="text-[10px] text-blue-400 font-semibold tracking-wide uppercase mt-0.5">{role} Portal</p>

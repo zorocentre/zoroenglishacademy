@@ -358,7 +358,7 @@ export default function SecureVideoPlayer({
     <div
       ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl border border-slate-900 bg-slate-950 select-none"
+      className="relative w-full aspect-video rounded-xl sm:rounded-3xl overflow-hidden shadow-2xl border border-slate-900 bg-slate-950 select-none"
     >
       {/* Bunny Stream Embed Player iframe */}
       <iframe
@@ -376,10 +376,10 @@ export default function SecureVideoPlayer({
       {authenticatedEmail && (
         <div
           style={{ top: watermarkPos.top, left: watermarkPos.left }}
-          className="absolute pointer-events-none transition-all duration-1000 ease-in-out bg-black/40 backdrop-blur-xs px-3 py-1 rounded-full border border-white/10 text-xs font-mono font-medium text-white/70 shadow-lg z-20 flex items-center gap-1.5 select-none"
+          className="absolute pointer-events-none transition-all duration-1000 ease-in-out bg-black/40 backdrop-blur-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 text-[10px] sm:text-xs font-mono font-medium text-white/70 shadow-lg z-20 flex items-center gap-1.5 select-none max-w-[85vw] truncate"
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>{authenticatedEmail}</span>
+          <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 shrink-0" />
+          <span className="truncate">{authenticatedEmail}</span>
         </div>
       )}
 

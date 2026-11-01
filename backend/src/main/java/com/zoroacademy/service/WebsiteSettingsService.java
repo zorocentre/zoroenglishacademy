@@ -56,10 +56,19 @@ public class WebsiteSettingsService {
 
     private final WebsiteSettingsRepository settingsRepository;
     private final ObjectMapper objectMapper;
+    private final ActivityLogService activityLogService;
 
-    public WebsiteSettingsService(WebsiteSettingsRepository settingsRepository, ObjectMapper objectMapper) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public WebsiteSettingsService(WebsiteSettingsRepository settingsRepository,
+                                  ObjectMapper objectMapper,
+                                  @org.springframework.beans.factory.annotation.Autowired(required = false) ActivityLogService activityLogService) {
         this.settingsRepository = settingsRepository;
         this.objectMapper = objectMapper;
+        this.activityLogService = activityLogService;
+    }
+
+    public WebsiteSettingsService(WebsiteSettingsRepository settingsRepository, ObjectMapper objectMapper) {
+        this(settingsRepository, objectMapper, null);
     }
 
     @Transactional(readOnly = true)
@@ -154,6 +163,17 @@ public class WebsiteSettingsService {
             }
         }
 
-        return settingsRepository.save(settings);
+        WebsiteSettings saved = settingsRepository.save(settings);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                null,
+                null,
+                "SETTINGS",
+                "UPDATE_SETTINGS",
+                "Updated website and academy settings",
+                null
+            );
+        }
+        return saved;
     }
 }

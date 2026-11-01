@@ -1,12 +1,97 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PhoneCall, LogIn, Menu, X } from 'lucide-react';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import Logo from '../common/Logo';
 
 export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogin, onOpenEnquire, siteSettings: propSettings }) {
   const { settings: contextSettings } = useWebsiteSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('home');
 
   const siteSettings = propSettings || contextSettings;
+  const isLandingPage = activeScreen === 'public-home';
+
+  useEffect(() => {
+    if (!isLandingPage) return;
+
+    const sections = ['home', 'courses', 'competitions', 'about', 'contact'];
+
+    const handleScroll = () => {
+      // If near top of page, home is active
+      if (window.scrollY < 80) {
+        setActiveSection('home');
+        return;
+      }
+
+      // Check sections based on scroll offset with navbar clearance
+      const scrollPosition = window.scrollY + 140;
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sections[i]);
+        if (el) {
+          const top = el.offsetTop;
+          if (scrollPosition >= top) {
+            setActiveSection(sections[i]);
+            return;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isLandingPage]);
+
+  const scrollToSection = (sectionId) => {
+    if (!isLandingPage) {
+      if (sectionId === 'courses') {
+        setActiveScreen('public-course');
+        return;
+      }
+      if (sectionId === 'competitions') {
+        setActiveScreen('public-competition');
+        return;
+      }
+      if (sectionId === 'contact') {
+        setActiveScreen('public-contact');
+        return;
+      }
+      // Return to landing page
+      setActiveScreen('public-home');
+      setTimeout(() => {
+        if (sectionId === 'home') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          setActiveSection('home');
+        } else {
+          const el = document.getElementById(sectionId);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 150);
+      return;
+    }
+
+    if (sectionId === 'home') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setActiveSection('home');
+    } else {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+        setActiveSection(sectionId);
+      }
+    }
+  };
+
+  const isNavActive = (sectionId) => {
+    if (isLandingPage) {
+      return activeSection === sectionId;
+    }
+    if (sectionId === 'courses') return activeScreen === 'public-course';
+    if (sectionId === 'competitions') return activeScreen === 'public-competition';
+    if (sectionId === 'contact') return activeScreen === 'public-contact';
+    if (sectionId === 'home') return activeScreen === 'public-home';
+    return false;
+  };
 
   const handleLoginClick = () => {
     onOpenLogin();
@@ -19,58 +104,52 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
         {/* Logo */}
         <div 
           className="flex items-center cursor-pointer group"
-          onClick={() => setActiveScreen('public-home')}
+          onClick={() => scrollToSection('home')}
         >
-          <img 
-            src="/assets/logo.png" 
-            alt={`${siteSettings?.generalInfo?.academyName || 'Zoro English Academy'} Logo`} 
-            className="h-10 sm:h-11 w-auto object-contain group-hover:scale-105 transition-transform" 
+          <Logo 
+            size="w-10 h-10 sm:w-11 sm:h-11"
+            className="group-hover:scale-105 transition-transform"
+            showText={true}
+            academyName={siteSettings?.generalInfo?.academyName || 'Zoro English Academy'}
+            tagline={siteSettings?.generalInfo?.tagline || 'Learn | Practice | Grow'}
+            textClassName="ml-2.5 sm:ml-3"
           />
-          <div className="ml-2.5 sm:ml-3">
-            <div className="text-lg sm:text-xl font-black tracking-tight text-blue-950 leading-none">
-              {siteSettings?.generalInfo?.academyName || 'Zoro English Academy'}
-            </div>
-            <div className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase tracking-wider mt-0.5">
-              {siteSettings?.generalInfo?.tagline || 'Learn | Practice | Grow'}
-            </div>
-          </div>
         </div>
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center space-x-8 text-sm font-semibold text-slate-600">
           <button 
-            onClick={() => setActiveScreen('public-home')}
-            className={`hover:text-blue-700 transition-colors cursor-pointer ${activeScreen === 'public-home' ? 'text-blue-700 font-bold' : ''}`}
+            type="button"
+            onClick={() => scrollToSection('home')}
+            className={`transition-colors cursor-pointer pb-1 ${isNavActive('home') ? 'text-blue-700 font-extrabold border-b-2 border-blue-700' : 'hover:text-blue-700'}`}
           >
             Home
           </button>
           <button 
-            onClick={() => {
-              setActiveScreen('public-home');
-              setTimeout(() => {
-                const el = document.getElementById('about');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }, 100);
-            }}
-            className="hover:text-blue-700 transition-colors cursor-pointer"
+            type="button"
+            onClick={() => scrollToSection('about')}
+            className={`transition-colors cursor-pointer pb-1 ${isNavActive('about') ? 'text-blue-700 font-extrabold border-b-2 border-blue-700' : 'hover:text-blue-700'}`}
           >
             About
           </button>
           <button 
-            onClick={() => setActiveScreen('public-course')}
-            className={`hover:text-blue-700 transition-colors cursor-pointer ${activeScreen === 'public-course' ? 'text-blue-700 font-bold' : ''}`}
+            type="button"
+            onClick={() => scrollToSection('courses')}
+            className={`transition-colors cursor-pointer pb-1 ${isNavActive('courses') ? 'text-blue-700 font-extrabold border-b-2 border-blue-700' : 'hover:text-blue-700'}`}
           >
             Courses
           </button>
           <button 
-            onClick={() => setActiveScreen('public-competition')}
-            className={`hover:text-blue-700 transition-colors cursor-pointer ${activeScreen === 'public-competition' ? 'text-blue-700 font-bold' : ''}`}
+            type="button"
+            onClick={() => scrollToSection('competitions')}
+            className={`transition-colors cursor-pointer pb-1 ${isNavActive('competitions') ? 'text-blue-700 font-extrabold border-b-2 border-blue-700' : 'hover:text-blue-700'}`}
           >
             Competitions
           </button>
           <button 
-            onClick={() => setActiveScreen('public-contact')}
-            className={`hover:text-blue-700 transition-colors cursor-pointer ${activeScreen === 'public-contact' ? 'text-blue-700 font-bold' : ''}`}
+            type="button"
+            onClick={() => scrollToSection('contact')}
+            className={`transition-colors cursor-pointer pb-1 ${isNavActive('contact') ? 'text-blue-700 font-extrabold border-b-2 border-blue-700' : 'hover:text-blue-700'}`}
           >
             Contact
           </button>
@@ -79,6 +158,7 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
         {/* Desktop Action CTAs: Login & Enquire Now */}
         <div className="hidden md:flex items-center space-x-3">
           <button 
+            type="button"
             onClick={handleLoginClick}
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center space-x-1.5 cursor-pointer"
           >
@@ -87,6 +167,7 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
           </button>
 
           <button 
+            type="button"
             onClick={onOpenEnquire}
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center space-x-1.5 cursor-pointer"
           >
@@ -96,11 +177,11 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
         </div>
 
         {/* Mobile Actions: Login Button immediately to the LEFT of Hamburger Icon */}
-        <div className="flex md:hidden items-center space-x-2">
+        <div className="flex md:hidden items-center space-x-2 shrink-0">
           <button 
             type="button"
             onClick={handleLoginClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-xl font-extrabold text-xs shadow-xs transition-all flex items-center space-x-1 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl font-extrabold text-xs shadow-xs transition-all flex items-center space-x-1 cursor-pointer min-h-[38px]"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Login</span>
@@ -109,7 +190,7 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -122,42 +203,37 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-3 animate-in slide-in-from-top-2">
           <button
-            onClick={() => { setActiveScreen('public-home'); setMobileMenuOpen(false); }}
-            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${activeScreen === 'public-home' ? 'text-blue-700' : 'text-slate-700'}`}
+            type="button"
+            onClick={() => { scrollToSection('home'); setMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${isNavActive('home') ? 'text-blue-700 font-extrabold' : 'text-slate-700'}`}
           >
             Home
           </button>
           <button
-            onClick={() => {
-              setActiveScreen('public-home');
-              setMobileMenuOpen(false);
-              setTimeout(() => {
-                const el = document.getElementById('about');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }, 100);
-            }}
-            className="block w-full text-left py-2 font-bold text-sm text-slate-700 border-b border-slate-100"
+            type="button"
+            onClick={() => { scrollToSection('about'); setMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${isNavActive('about') ? 'text-blue-700 font-extrabold' : 'text-slate-700'}`}
           >
             About
           </button>
           <button
-            onClick={() => { setActiveScreen('public-course'); setMobileMenuOpen(false); }}
-            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${activeScreen === 'public-course' ? 'text-blue-700' : 'text-slate-700'}`}
+            type="button"
+            onClick={() => { scrollToSection('courses'); setMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${isNavActive('courses') ? 'text-blue-700 font-extrabold' : 'text-slate-700'}`}
           >
             Courses
           </button>
           <button
-            onClick={() => { setActiveScreen('public-competition'); setMobileMenuOpen(false); }}
-            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${activeScreen === 'public-competition' ? 'text-blue-700' : 'text-slate-700'}`}
+            type="button"
+            onClick={() => { scrollToSection('competitions'); setMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${isNavActive('competitions') ? 'text-blue-700 font-extrabold' : 'text-slate-700'}`}
           >
             Competitions
           </button>
           <button
-            onClick={() => {
-              setActiveScreen('public-contact');
-              setMobileMenuOpen(false);
-            }}
-            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${activeScreen === 'public-contact' ? 'text-blue-700' : 'text-slate-700'}`}
+            type="button"
+            onClick={() => { scrollToSection('contact'); setMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 font-bold text-sm border-b border-slate-100 ${isNavActive('contact') ? 'text-blue-700 font-extrabold' : 'text-slate-700'}`}
           >
             Contact
           </button>

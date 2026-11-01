@@ -1,7 +1,16 @@
 import { apiGet, apiPost, apiResponse, getItem } from './client';
 
-export const getActivityLogs = async (fromDate, toDate) => {
-  const res = await apiGet('/activity-logs');
+export const getActivityLogs = async (fromDate, toDate, moduleFilter, actionFilter, actorFilter) => {
+  const params = new URLSearchParams();
+  if (fromDate) params.set('fromDate', fromDate);
+  if (toDate) params.set('toDate', toDate);
+  if (moduleFilter && moduleFilter !== 'ALL') params.set('module', moduleFilter);
+  if (actionFilter && actionFilter !== 'ALL') params.set('action', actionFilter);
+  if (actorFilter && actorFilter !== 'ALL') params.set('actor', actorFilter);
+
+  const query = params.toString();
+  const url = query ? `/activity-logs?${query}` : '/activity-logs';
+  const res = await apiGet(url);
   if (!res || !res.success) {
     return {
       success: false,
@@ -14,19 +23,15 @@ export const getActivityLogs = async (fromDate, toDate) => {
     id: l.id,
     date: l.createdAt ? new Date(l.createdAt).toISOString().split('T')[0] : '',
     time: l.createdAt ? new Date(l.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-    category: l.action || 'General',
+    createdAt: l.createdAt,
+    module: l.module || 'GENERAL',
+    category: l.module || l.action || 'General',
     action: l.action || 'Action',
     details: l.details || '',
-    userName: l.userName || 'Admin'
+    userName: l.userName || 'Admin',
+    userId: l.userId
   }));
 
-  if (fromDate && toDate) {
-    logs = logs.filter(l => l.date >= fromDate && l.date <= toDate);
-  } else if (fromDate) {
-    logs = logs.filter(l => l.date >= fromDate);
-  }
-
-  logs.sort((a, b) => b.date.localeCompare(a.date));
   return apiResponse(logs);
 };
 

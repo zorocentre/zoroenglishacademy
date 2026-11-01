@@ -96,7 +96,6 @@ export default function AdminCompetitionPage() {
     regStartDate: '',
     regEndDate: '',
     venue: '',
-    status: 'Active',
     registrationFee: '',
     instructions: '',
     rules: '',
@@ -137,7 +136,6 @@ export default function AdminCompetitionPage() {
       startAt: '',
       endAt: '',
       venue: '',
-      status: 'Active',
       registrationFee: '',
       instructions: '',
       rules: '',
@@ -271,8 +269,9 @@ export default function AdminCompetitionPage() {
     if (!formData.title.trim()) return;
     if (!validateTimings()) return;
 
+    const { status: _omittedCreateStatus, ...cleanCreateForm } = formData;
     const payload = {
-      ...formData,
+      ...cleanCreateForm,
       registrationFee: formData.registrationFee !== '' ? Number(formData.registrationFee) : 0,
       regStartAt: toIsoOrNull(formData.regStartAt),
       regEndAt: toIsoOrNull(formData.regEndAt),
@@ -306,8 +305,9 @@ export default function AdminCompetitionPage() {
     if (!editingComp || !formData.title.trim()) return;
     if (!validateTimings()) return;
 
+    const { status: _omittedUpdateStatus, ...cleanUpdateForm } = formData;
     const payload = {
-      ...formData,
+      ...cleanUpdateForm,
       registrationFee: formData.registrationFee !== '' ? Number(formData.registrationFee) : 0,
       regStartAt: toIsoOrNull(formData.regStartAt),
       regEndAt: toIsoOrNull(formData.regEndAt),
@@ -380,7 +380,6 @@ export default function AdminCompetitionPage() {
       startAt: startAtVal,
       endAt: endAtVal,
       venue: comp.venue || '',
-      status: comp.status === 'Registration Open' ? 'Active' : (comp.status || 'Active'),
       registrationFee: comp.registrationFee !== null && comp.registrationFee !== undefined ? String(comp.registrationFee) : '',
       instructions: comp.instructions || '',
       rules: comp.rules || '',
@@ -415,7 +414,7 @@ export default function AdminCompetitionPage() {
   const totalCount = competitions.length;
   const activeCount = competitions.filter(c => c.status === 'Active' || c.status === 'Registration Open').length;
   const upcomingCount = competitions.filter(c => c.status === 'Upcoming').length;
-  const completedCount = competitions.filter(c => c.status === 'Completed').length;
+  const completedCount = competitions.filter(c => c.status === 'Completed' || c.status === 'Finished').length;
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">
@@ -644,10 +643,10 @@ export default function AdminCompetitionPage() {
       {/* CREATE / EDIT MODAL */}
       {(showAddModal || editingComp) && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto text-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90dvh] overflow-y-auto text-xs">
             <button
               onClick={() => { setShowAddModal(false); setEditingComp(null); }}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
+              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -685,31 +684,15 @@ export default function AdminCompetitionPage() {
                 </div>
               </div>
 
-              {/* Status & Registration Fee Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Status *</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
-                  >
-                    <option value="Active">Active (Public on Landing Page)</option>
-                    <option value="Inactive">Inactive (Hidden)</option>
-                    <option value="Upcoming">Upcoming (Scheduled)</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Registration Fee (₹)</label>
-                  <MoneyInput
-                    placeholder="e.g. 500"
-                    value={formData.registrationFee}
-                    onChange={(e) => setFormData({ ...formData, registrationFee: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white"
-                  />
-                </div>
+              {/* Registration Fee */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Registration Fee (₹)</label>
+                <MoneyInput
+                  placeholder="e.g. 500 (Leave blank or 0 for Free)"
+                  value={formData.registrationFee}
+                  onChange={(e) => setFormData({ ...formData, registrationFee: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white"
+                />
               </div>
 
               {/* Registration Window (datetime-local in IST) */}
@@ -973,10 +956,10 @@ export default function AdminCompetitionPage() {
 
         return (
           <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto text-xs">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90dvh] overflow-y-auto text-xs">
               <button
                 onClick={() => setViewingComp(null)}
-                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
+                className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -318,7 +318,7 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
 
     const confirmModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
           <div className="flex items-center space-x-3 text-blue-600">
             <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center shrink-0">
               <ShieldCheck className="w-5 h-5 text-blue-600" />
@@ -431,7 +431,7 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
   if (successDialog) {
     const successModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-9 h-9" />
           </div>
@@ -485,7 +485,7 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
   if (failureDialog) {
     const failModalEl = (
       <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
           <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <AlertCircle className="w-9 h-9" />
           </div>
@@ -512,10 +512,10 @@ export default function CompetitionRegisterModal({ competition, isOpen, onClose,
 
   const mainModalEl = (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto text-xs animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5 max-h-[90dvh] overflow-y-auto text-xs animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer transition"
+          className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer transition"
           aria-label="Close modal"
         >
           <X className="w-4 h-4" />

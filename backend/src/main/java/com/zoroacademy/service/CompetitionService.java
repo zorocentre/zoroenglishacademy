@@ -93,6 +93,9 @@ public class CompetitionService {
     @Autowired(required = false)
     private CompetitionActivityLogService activityLogService;
 
+    @Autowired(required = false)
+    private ActivityLogService generalActivityLogService;
+
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
 
@@ -100,6 +103,13 @@ public class CompetitionService {
         if (activityLogService != null && compId != null) {
             try {
                 activityLogService.logEvent(compId, compTitle, eventType, actorId, actorName, actorRole, details);
+            } catch (Exception ignored) {
+            }
+        }
+        if (generalActivityLogService != null) {
+            try {
+                generalActivityLogService.logAction(actorId, actorName, "COMPETITIONS", eventType,
+                        (compTitle != null ? "[" + compTitle + "] " : "") + details, null);
             } catch (Exception ignored) {
             }
         }
@@ -189,41 +199,25 @@ public class CompetitionService {
 
     public static boolean isRegistrationOpen(Competition comp) {
         if (comp == null) return false;
-        if (!"Active".equalsIgnoreCase(comp.getStatus())) return false;
-        ZoneId zone = ZoneId.of("Asia/Kolkata");
-        OffsetDateTime now = ZonedDateTime.now(zone).toOffsetDateTime();
-
-        // 1. Check regStart: defaults to 00:00:00 IST of regStartDate
-        OffsetDateTime start = comp.getRegStartAt();
-        if (start == null && comp.getRegStartDate() != null && !comp.getRegStartDate().isBlank()) {
-            try {
-                LocalDate d = LocalDate.parse(comp.getRegStartDate().trim().substring(0, 10));
-                start = ZonedDateTime.of(d, LocalTime.MIN, zone).toOffsetDateTime();
-            } catch (Exception ignored) {}
-        }
-        if (start != null && now.isBefore(start)) {
-            return false;
-        }
-
-        // 2. Check regEnd: defaults to 23:59:59.999 IST of regEndDate
-        OffsetDateTime end = comp.getRegEndAt();
-        if (end == null && comp.getRegEndDate() != null && !comp.getRegEndDate().isBlank()) {
-            try {
-                LocalDate d = LocalDate.parse(comp.getRegEndDate().trim().substring(0, 10));
-                end = ZonedDateTime.of(d, LocalTime.of(23, 59, 59, 999_000_000), zone).toOffsetDateTime();
-            } catch (Exception ignored) {}
-        }
-        if (end != null && now.isAfter(end)) {
-            return false;
-        }
-
-        return true;
+        return "ACTIVE".equalsIgnoreCase(comp.getLifecycleState());
     }
 
     @Transactional(readOnly = true)
     public List<Competition> getPublicActiveCompetitions() {
+        ZoneId zone = ZoneId.of("Asia/Kolkata");
+        OffsetDateTime now = ZonedDateTime.now(zone).toOffsetDateTime();
         return competitionRepository.findAll().stream()
-                .filter(CompetitionService::isRegistrationOpen)
+                .filter(c -> {
+                    OffsetDateTime regEnd = c.getEffectiveRegEndAt();
+                    if (regEnd == null) return true;
+                    // Auto-removal: 2 days after registrationEnd the competition is no longer returned by the public landing API
+                    return !now.isAfter(regEnd.plusDays(2));
+                })
+                .sorted((a, b) -> {
+                    int orderA = "ACTIVE".equals(a.getLifecycleState()) ? 0 : ("UPCOMING".equals(a.getLifecycleState()) ? 1 : 2);
+                    int orderB = "ACTIVE".equals(b.getLifecycleState()) ? 0 : ("UPCOMING".equals(b.getLifecycleState()) ? 1 : 2);
+                    return Integer.compare(orderA, orderB);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -390,6 +384,7 @@ public class CompetitionService {
         }
 
         validateCompetitionTimings(competition);
+        competition.setStatus(competition.getStatus());
 
         Competition saved = competitionRepository.save(competition);
         String compId = saved.getId();
@@ -449,6 +444,8 @@ public class CompetitionService {
                 assessmentRepository.save(ca);
             }
         }
+
+        logCompetitionActivity(saved.getId(), saved.getTitle(), "CREATE_COMPETITION", null, null, "ADMIN", "Created competition: " + saved.getTitle());
 
         return saved;
     }
@@ -521,7 +518,14 @@ public class CompetitionService {
     @Transactional
     public CompetitionRegistration registerStudent(String compId, CompetitionRegistration reg) {
         Competition comp = getCompetitionById(compId);
-        if (!isRegistrationOpen(comp)) {
+        String state = comp.getLifecycleState();
+        if ("UPCOMING".equals(state)) {
+            throw new ConflictException("Registration has not opened yet. Please wait for our competition announcement.");
+        }
+        if ("FINISHED".equals(state)) {
+            throw new ConflictException("The competition registration has ended. Thank you for your interest.");
+        }
+        if (!"ACTIVE".equals(state)) {
             throw new ConflictException("Registration for this competition is closed.");
         }
         if (reg.getId() == null || reg.getId().isBlank()) {
@@ -550,6 +554,7 @@ public class CompetitionService {
 
         reg.setCompetition(comp);
         CompetitionRegistration saved = registrationRepository.save(reg);
+        logCompetitionActivity(comp.getId(), comp.getTitle(), "REGISTER_STUDENT", saved.getStudentId(), saved.getStudentName(), "STUDENT", "Student " + (saved.getStudentName() != null ? saved.getStudentName() : saved.getStudentEmail()) + " registered for competition");
         if (emailService != null) {
             try {
                 emailService.sendCompetitionRegistrationConfirmation(saved);
@@ -589,7 +594,8 @@ public class CompetitionService {
         if (updated.getRegistrationFee() != null) comp.setRegistrationFee(updated.getRegistrationFee());
         if (updated.getDescription() != null) comp.setDescription(updated.getDescription());
         if (updated.getRules() != null) comp.setRules(updated.getRules());
-        if (updated.getStatus() != null) comp.setStatus(updated.getStatus());
+        // Status is dynamically derived from timestamps; ignore any client-submitted status value
+        comp.setStatus(comp.getStatus());
 
         // Timestamp and review fields
         if (updated.getRegStartAt() != null) comp.setRegStartAt(updated.getRegStartAt());
@@ -643,7 +649,9 @@ public class CompetitionService {
 
         validateCompetitionTimings(comp);
 
-        return competitionRepository.save(comp);
+        Competition saved = competitionRepository.save(comp);
+        logCompetitionActivity(saved.getId(), saved.getTitle(), "UPDATE_COMPETITION", null, null, "ADMIN", "Updated competition: " + saved.getTitle());
+        return saved;
     }
 
     @Transactional
@@ -654,6 +662,7 @@ public class CompetitionService {
             deleteAttachedFileIfPresent(comp.getBannerUrl());
         }
         competitionRepository.deleteById(id);
+        logCompetitionActivity(id, comp != null ? comp.getTitle() : id, "DELETE_COMPETITION", null, null, "ADMIN", "Deleted competition: " + (comp != null ? comp.getTitle() : id));
     }
 
     private void deleteAttachedFileIfPresent(String fileUrl) {
@@ -844,7 +853,9 @@ public class CompetitionService {
         } else {
             set.setTrainerId(null);
         }
-        return setRepository.save(set);
+        CompetitionSet saved = setRepository.save(set);
+        logCompetitionActivity(compId, null, "ASSIGN_TRAINER_SET", trainerId, null, "ADMIN", "Assigned trainer " + (trainerId != null ? trainerId : "none") + " to Set " + setCode);
+        return saved;
     }
 
     // --- Syllabus (Phase 6 & Tasks M6/M7) ---
@@ -927,7 +938,9 @@ public class CompetitionService {
                 syllabus.setFileType(getFileExtension(sf.getOriginalName()));
             });
         }
-        return syllabusRepository.save(syllabus);
+        CompetitionSyllabus saved = syllabusRepository.save(syllabus);
+        logCompetitionActivity(comp.getId(), comp.getTitle(), "SAVE_SYLLABUS", null, null, "ADMIN", "Saved competition syllabus: " + saved.getTitle());
+        return saved;
     }
 
     @Transactional
@@ -937,6 +950,7 @@ public class CompetitionService {
                 fileStorageService.deleteFile(syl.getStoredFileId());
             }
             syllabusRepository.delete(syl);
+            logCompetitionActivity(compId, null, "DELETE_SYLLABUS", null, null, "ADMIN", "Deleted competition syllabus");
         });
     }
 
@@ -1024,7 +1038,9 @@ public class CompetitionService {
             video.setSortOrder(currentCount + 1);
         }
         ensureVideoUrls(video);
-        return guidanceVideoRepository.save(video);
+        CompetitionGuidanceVideo saved = guidanceVideoRepository.save(video);
+        logCompetitionActivity(comp.getId(), comp.getTitle(), "SAVE_GUIDANCE_VIDEO", null, null, "ADMIN", "Saved guidance video: " + saved.getTitle());
+        return saved;
     }
 
     @Transactional
@@ -1208,7 +1224,9 @@ public class CompetitionService {
             material.setId("csm_" + UUID.randomUUID());
         }
         material.setCompetitionId(comp.getId());
-        return studyMaterialRepository.save(material);
+        CompetitionStudyMaterial saved = studyMaterialRepository.save(material);
+        logCompetitionActivity(comp.getId(), comp.getTitle(), "SAVE_STUDY_MATERIAL", null, null, "ADMIN", "Saved study material: " + saved.getTitle());
+        return saved;
     }
 
     @Transactional
@@ -1218,6 +1236,7 @@ public class CompetitionService {
                 fileStorageService.deleteFile(mat.getStoredFileId());
             }
             studyMaterialRepository.delete(mat);
+            logCompetitionActivity(mat.getCompetitionId(), null, "DELETE_STUDY_MATERIAL", null, null, "ADMIN", "Deleted study material: " + mat.getTitle());
         });
     }
 
@@ -1330,6 +1349,7 @@ public class CompetitionService {
         CompetitionAssessment saved = assessmentRepository.save(asmt);
         saved.setQuestionCount((long) questions.size());
         saved.setTargetQuestions(questions.size());
+        logCompetitionActivity(comp.getId(), comp.getTitle(), "PUBLISH_ASSESSMENT", null, null, "ADMIN", "Published assessment: " + saved.getTitle());
         return saved;
     }
 
@@ -1578,6 +1598,8 @@ public class CompetitionService {
                 }
             }
         }
+
+        logCompetitionActivity(asmt.getCompetitionId(), null, "REPUBLISH_ASSESSMENT", adminUser != null ? adminUser.getId() : null, adminUser != null ? adminUser.getName() : null, "ADMIN", "Republished assessment: " + saved.getTitle() + " (v" + nextVer + ")");
 
         return saved;
     }
@@ -3599,14 +3621,20 @@ public class CompetitionService {
         AssessmentAttempt savedAttempt = assessmentAttemptRepository.save(attempt);
 
         // Immediately recalculate leaderboard so live board reflects final score
+        String compIdForEval = null;
         try {
             CompetitionAssessment evalAsmt = assessmentRepository.findById(attempt.getAssessmentId()).orElse(null);
-            if (evalAsmt != null && "FINAL".equalsIgnoreCase(evalAsmt.getType()) && evalAsmt.getCompetitionId() != null) {
-                recalculateLeaderboard(evalAsmt.getCompetitionId(), null);
+            if (evalAsmt != null) {
+                compIdForEval = evalAsmt.getCompetitionId();
+                if ("FINAL".equalsIgnoreCase(evalAsmt.getType()) && compIdForEval != null) {
+                    recalculateLeaderboard(compIdForEval, null);
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to recalculate leaderboard after evaluating voice answer: {}", e.getMessage());
         }
+
+        logCompetitionActivity(compIdForEval, null, "SAVE_EVALUATION", user.getId(), user.getName(), user.getRole(), "Evaluated answer for question " + answer.getQuestionId() + ", marks awarded: " + marksAwarded);
 
         Map<String, Object> resp = new HashMap<>();
         resp.put("success", true);

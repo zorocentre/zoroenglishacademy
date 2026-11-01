@@ -27,6 +27,17 @@ public class AttendanceService {
 
     private java.time.Clock clock = java.time.Clock.system(com.zoroacademy.util.ScheduleTimeUtil.KOLKATA_ZONE);
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ActivityLogService activityLogService;
+
+    private void logActivity(String action, String details, String actor) {
+        if (activityLogService != null) {
+            try {
+                activityLogService.logAction(actor != null ? actor : "TRAINER", actor != null ? actor : "Trainer", "ATTENDANCE", action, details, "System");
+            } catch (Exception ignored) {}
+        }
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public AttendanceService(AttendanceRecordRepository attendanceRepository,
                              TrainerAttendanceRecordRepository trainerAttendanceRepository,
@@ -363,6 +374,7 @@ public class AttendanceService {
         att.setRemarkAt(java.time.LocalDateTime.now());
         AttendanceRecord saved = attendanceRepository.save(att);
         enrichAttendanceRecord(saved);
+        logActivity("ATTENDANCE_REMARK_UPDATED", "Updated remark for student " + studentId + " on schedule " + scheduleId + ": " + remark, remarkBy);
         return saved;
     }
 
@@ -406,6 +418,7 @@ public class AttendanceService {
         tratt.setUpdatedAt(java.time.LocalDateTime.now());
         TrainerAttendanceRecord saved = trainerAttendanceRepository.save(tratt);
         enrichTrainerAttendanceRecord(saved);
+        logActivity("ATTENDANCE_REMARK_UPDATED", "Updated trainer remark for trainer " + trainerId + " on schedule " + scheduleId + ": " + remark, remarkBy);
         return saved;
     }
 
@@ -454,6 +467,7 @@ public class AttendanceService {
         record.setUpdatedAt(java.time.LocalDateTime.now());
         TrainerAttendanceRecord saved = trainerAttendanceRepository.save(record);
         enrichTrainerAttendanceRecord(saved);
+        logActivity("TRAINER_JOINED_SESSION", "Trainer " + trainerName + " started/joined session " + scheduleId, trainerName);
         return saved;
     }
 
@@ -555,6 +569,7 @@ public class AttendanceService {
         }
 
         enrichAttendanceRecord(saved);
+        logActivity("ATTENDANCE_CORRECTED", "Attendance corrected for student " + studentId + " on schedule " + scheduleId + " to " + normalizedStatus + " (Remark: " + remark + ")", changedBy);
         return saved;
     }
 }

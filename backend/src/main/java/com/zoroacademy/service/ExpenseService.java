@@ -11,10 +11,18 @@ import java.util.List;
 public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
-    public ExpenseService(ExpenseRepository expenseRepository) {
+    private final ActivityLogService activityLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExpenseService(ExpenseRepository expenseRepository,
+                          @org.springframework.beans.factory.annotation.Autowired(required = false) ActivityLogService activityLogService) {
         this.expenseRepository = expenseRepository;
+        this.activityLogService = activityLogService;
     }
 
+    public ExpenseService(ExpenseRepository expenseRepository) {
+        this(expenseRepository, null);
+    }
 
     @Transactional(readOnly = true)
     public List<Expense> getAllExpenses() {
@@ -26,7 +34,18 @@ public class ExpenseService {
         if (expense.getId() == null || expense.getId().isBlank()) {
             expense.setId("exp_" + java.util.UUID.randomUUID());
         }
-        return expenseRepository.save(expense);
+        Expense saved = expenseRepository.save(expense);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                null,
+                null,
+                "EXPENSES",
+                "CREATE_EXPENSE",
+                "Created expense: " + (saved.getCategory() != null ? saved.getCategory() : "Expense") + " (Rs. " + saved.getAmount() + ")",
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
@@ -38,11 +57,34 @@ public class ExpenseService {
         if (updated.getDate() != null) existing.setDate(updated.getDate());
         if (updated.getDescription() != null) existing.setDescription(updated.getDescription());
         if (updated.getReceiptUrl() != null) existing.setReceiptUrl(updated.getReceiptUrl());
-        return expenseRepository.save(existing);
+        Expense saved = expenseRepository.save(existing);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                null,
+                null,
+                "EXPENSES",
+                "UPDATE_EXPENSE",
+                "Updated expense: " + (saved.getCategory() != null ? saved.getCategory() : saved.getId()) + " (Rs. " + saved.getAmount() + ")",
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
     public void deleteExpense(String id) {
-        expenseRepository.deleteById(id);
+        expenseRepository.findById(id).ifPresent(exp -> {
+            expenseRepository.delete(exp);
+            if (activityLogService != null) {
+                activityLogService.logAction(
+                    null,
+                    null,
+                    "EXPENSES",
+                    "DELETE_EXPENSE",
+                    "Deleted expense: " + (exp.getCategory() != null ? exp.getCategory() : exp.getId()) + " (Rs. " + exp.getAmount() + ")",
+                    null
+                );
+            }
+        });
     }
 }

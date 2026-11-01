@@ -3,6 +3,7 @@ import { UserPlus, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { sanitizePhone, validatePhone, SUBMIT_PHONE_ERROR } from '../utils/phoneValidator';
 import PhoneInput from '../components/common/PhoneInput';
+import Logo from '../components/common/Logo';
 
 export default function RegisterPage({ setActiveScreen }) {
   const { registerStudent } = useAuth();
@@ -52,10 +53,10 @@ export default function RegisterPage({ setActiveScreen }) {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-3">
-        <img 
-          src="/assets/logo.png" 
+        <Logo 
+          size="w-16 h-16" 
           alt="Zoro English Academy Logo" 
-          className="h-16 w-auto mx-auto object-contain" 
+          className="mx-auto"
         />
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">
           Student Registration

@@ -3,6 +3,7 @@ import { LogIn, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authenticateUser } from '../api/userApi';
 import ButtonSpinner from '../components/common/ButtonSpinner';
+import Logo from '../components/common/Logo';
 
 export default function LoginPage({ setActiveScreen, onLoginSuccess }) {
   const { login, authNotice, clearAuthNotice } = useAuth();
@@ -60,10 +61,10 @@ export default function LoginPage({ setActiveScreen, onLoginSuccess }) {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-3">
-        <img 
-          src="/assets/logo.png" 
+        <Logo 
+          size="w-16 h-16" 
           alt="Zoro English Academy Logo" 
-          className="h-16 w-auto mx-auto object-contain" 
+          className="mx-auto"
         />
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">
           Zoro English Academy

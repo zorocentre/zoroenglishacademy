@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import { authenticateUser } from '../../api/userApi';
 import ButtonSpinner from '../common/ButtonSpinner';
+import Logo from '../common/Logo';
 
 export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenEnquire }) {
   const { login, authNotice, clearAuthNotice } = useAuth();
@@ -58,22 +59,22 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenEnqu
 
   const modalContent = (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-slate-100">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-slate-100 max-h-[90dvh] overflow-y-auto">
         
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+          className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header Branding */}
         <div className="text-center space-y-2 mb-6">
-          <img 
-            src="/assets/logo.png" 
+          <Logo 
+            size="w-14 h-14" 
             alt={`${academyName} Logo`} 
-            className="h-14 w-auto mx-auto object-contain" 
+            className="mx-auto"
           />
           <h3 className="text-2xl font-black text-slate-900 tracking-tight">
             Sign In

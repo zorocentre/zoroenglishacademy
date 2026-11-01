@@ -127,7 +127,18 @@ public class FeeService {
         } else {
             fee.setStatus("Pending");
         }
-        return feeRepository.save(fee);
+        StudentFee saved = feeRepository.save(fee);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getStudentId(),
+                saved.getStudentName(),
+                "FEES",
+                "CREATE_FEE_RECORD",
+                "Created fee record for student " + saved.getStudentName() + " (Total: ₹" + saved.getTotalFee() + ")",
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
@@ -233,7 +244,18 @@ public class FeeService {
         if (updated.getBatch() != null) fee.setBatch(updated.getBatch());
         if (updated.getBatchId() != null) fee.setBatchId(updated.getBatchId());
 
-        return feeRepository.save(fee);
+        StudentFee saved = feeRepository.save(fee);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                saved.getStudentId(),
+                saved.getStudentName(),
+                "FEES",
+                "UPDATE_FEE_RECORD",
+                "Updated fee record for student " + saved.getStudentName() + " (" + saved.getId() + ")",
+                null
+            );
+        }
+        return saved;
     }
 
     @Transactional
@@ -247,6 +269,16 @@ public class FeeService {
             throw new ConflictException("Cannot delete fee record with recorded payments");
         }
         feeRepository.delete(fee);
+        if (activityLogService != null) {
+            activityLogService.logAction(
+                fee.getStudentId(),
+                fee.getStudentName(),
+                "FEES",
+                "DELETE_FEE_RECORD",
+                "Deleted fee record for student " + fee.getStudentName() + " (" + fee.getId() + ")",
+                null
+            );
+        }
     }
 
     @Transactional

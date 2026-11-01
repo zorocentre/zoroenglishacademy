@@ -7,6 +7,7 @@ import PublicNavbar from './components/layout/PublicNavbar';
 import DashboardSidebar from './components/layout/DashboardSidebar';
 import DashboardHeader from './components/layout/DashboardHeader';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import Logo from './components/common/Logo';
 
 import HomePage from './components/public/HomePage';
 import CoursePage from './components/public/CoursePage';
@@ -337,14 +338,16 @@ function PublicLayout({ onOpenLogin, onOpenEnquire }) {
         siteSettings={siteSettings}
       />
       <main className="flex-1">
-        <div key={location.pathname} className="page-transition">
-          <Outlet context={{ onOpenLogin, onOpenEnquire, setActiveScreen: handleSetActiveScreen }} />
-        </div>
+        <ErrorBoundary key={location.key} resetKey={location.key}>
+          <div key={location.pathname} className="page-transition">
+            <Outlet context={{ onOpenLogin, onOpenEnquire, setActiveScreen: handleSetActiveScreen }} />
+          </div>
+        </ErrorBoundary>
       </main>
       <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-center space-x-3 text-center sm:text-left gap-2 sm:gap-0">
-            <img src="/assets/logo.png" alt={`${academyName} Logo`} className="h-7 w-auto object-contain" />
+            <Logo size="w-7 h-7" alt={`${academyName} Logo`} />
             <div>
               <span className="font-extrabold text-white text-sm block sm:inline">{academyName}</span>
               <span className="block sm:inline sm:ml-2">© 2026 {academyName}. All rights reserved.</span>
@@ -457,7 +460,7 @@ function DashboardLayout({ expectedRole }) {
         />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <Suspense fallback={<PortalLoadingFallback />}>
-            <ErrorBoundary>
+            <ErrorBoundary key={location.key} resetKey={location.key}>
               <div key={location.pathname} className="page-transition">
                 <Outlet context={{ 
                   setActiveScreen: handleSetActiveScreen, 

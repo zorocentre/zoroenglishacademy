@@ -20,6 +20,54 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
   const [siteSettings, setSiteSettings] = useState(null);
   const [heroImages, setHeroImages] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+
+  const getLifecycleInfo = (comp) => {
+    const state = (comp?.lifecycleState || '').toUpperCase();
+    if (state === 'UPCOMING') {
+      return {
+        state: 'UPCOMING',
+        badgeText: 'Upcoming Competition',
+        badgeClass: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+        badgeCardClass: 'bg-blue-50 text-blue-700 border border-blue-200',
+        btnText: 'Upcoming Competition',
+        btnClass: 'bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer font-bold shadow',
+        onClick: () => {
+          const openingTime = comp.regStartAt || comp.regStartDate;
+          const msg = openingTime 
+            ? `Registration has not opened yet. Please wait for our competition announcement. Registration opens on ${openingTime}.`
+            : 'Registration has not opened yet. Please wait for our competition announcement.';
+          setInfoModal({ isOpen: true, title: 'Upcoming Competition', message: msg });
+        }
+      };
+    }
+    if (state === 'FINISHED') {
+      return {
+        state: 'FINISHED',
+        badgeText: 'Competition Finished',
+        badgeClass: 'bg-slate-700/50 text-slate-300 border border-slate-600',
+        badgeCardClass: 'bg-slate-100 text-slate-600 border border-slate-200',
+        btnText: 'Competition Finished',
+        btnClass: 'bg-slate-200 hover:bg-slate-300 text-slate-600 cursor-pointer font-bold shadow',
+        onClick: () => {
+          setInfoModal({
+            isOpen: true,
+            title: 'Competition Finished',
+            message: 'The competition registration has ended. Thank you for your interest.'
+          });
+        }
+      };
+    }
+    return {
+      state: 'ACTIVE',
+      badgeText: 'Active',
+      badgeClass: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
+      badgeCardClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      btnText: 'Register Now',
+      btnClass: 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer shadow',
+      onClick: () => setRegisteringComp(comp)
+    };
+  };
 
   useEffect(() => {
     async function loadHomeData() {
@@ -43,14 +91,10 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
         }
 
         if (compRes.status === 'fulfilled' && compRes.value?.success && Array.isArray(compRes.value?.data)) {
-          // Filter ONLY Active competitions for Public Landing Page (Requirement #7 & #8)
-          const activeComps = compRes.value.data.filter(c => {
-            const st = (c.status || '').toLowerCase();
-            return st === 'active' || st === 'registration open';
-          });
-          setActiveCompetitions(activeComps);
-          if (activeComps.length > 0) {
-            setFeaturedComp(activeComps[0]); // Dynamically select FIRST active competition
+          const comps = compRes.value.data;
+          setActiveCompetitions(comps);
+          if (comps.length > 0) {
+            setFeaturedComp(comps[0]);
           } else {
             setFeaturedComp(null);
           }
@@ -93,7 +137,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
   const showCourses = true;
 
   return (
-    <div className="bg-slate-50 min-h-screen">
+    <div id="home" className="bg-slate-50 min-h-screen scroll-mt-20">
       {/* HERO SECTION */}
       <HeroCarousel images={heroImages}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
@@ -158,7 +202,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
 
       {/* COURSES SECTION - Dynamic Course Thumbnail Handling (Requirement #2 & #3) */}
       {showCourses && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <section id="courses" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-mt-20">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{landingContent.featuresTitle}</h2>
             <p className="text-slate-500 text-sm mt-2">{landingContent.featuresSubtitle}</p>
@@ -226,9 +270,10 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
         const compTitle = featuredComp.title || featuredComp.name || 'Competition';
         const compFee = Number(featuredComp.registrationFee || 0);
         const featuredCompBanner = featuredComp.bannerUrl || featuredComp.banner ? resolveFileUrl(featuredComp.bannerUrl || featuredComp.banner) : null;
+        const featLife = getLifecycleInfo(featuredComp);
 
         return (
-          <section className="bg-slate-900 text-white py-16">
+          <section id="competitions" className="bg-slate-900 text-white py-16 scroll-mt-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               {(landingContent.spotlightTitle || landingContent.spotlightSubtitle) && (
                 <div className="mb-6 space-y-1">
@@ -265,8 +310,8 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
               <div className="flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider">
-                    {featuredComp.status || 'Active Event'}
+                  <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${featLife.badgeClass}`}>
+                    {featLife.badgeText}
                   </span>
                   {featuredComp.category && (
                     <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider">
@@ -328,11 +373,15 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
               <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setRegisteringComp(featuredComp)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-8 py-4 rounded-xl text-base shadow-lg transition-transform transform hover:scale-105 cursor-pointer flex items-center space-x-2"
+                  onClick={featLife.onClick}
+                  className={`font-black px-8 py-4 rounded-xl text-base shadow-lg transition-transform transform hover:scale-105 cursor-pointer flex items-center space-x-2 ${
+                    featLife.state === 'ACTIVE'
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                  }`}
                 >
                   <Trophy className="w-5 h-5 text-slate-950" />
-                  <span>Register Now</span>
+                  <span>{featLife.btnText}</span>
                 </button>
                 <button
                   type="button"
@@ -382,27 +431,46 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
                         )}
                       </div>
                       <div className="p-6 space-y-2">
-                        <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase">
-                          {comp.category || 'National Competition'}
-                        </span>
-                        <h4 className="text-base font-black text-slate-900">{compName}</h4>
-                        {comp.description && (
-                          <p className="text-xs text-slate-500 line-clamp-2">{comp.description}</p>
-                        )}
-                        <div className="text-xs font-semibold text-slate-700 pt-1">
-                          Fee: <strong className="text-emerald-700">{Number(comp.registrationFee || 0) > 0 ? `₹${Number(comp.registrationFee).toLocaleString('en-IN')}` : 'FREE'}</strong>
-                        </div>
+                        {(() => {
+                          const cardLife = getLifecycleInfo(comp);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${cardLife.badgeCardClass}`}>
+                                  {cardLife.badgeText}
+                                </span>
+                                {comp.category && (
+                                  <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase">
+                                    {comp.category}
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="text-base font-black text-slate-900">{compName}</h4>
+                              {comp.description && (
+                                <p className="text-xs text-slate-500 line-clamp-2">{comp.description}</p>
+                              )}
+                              <div className="text-xs font-semibold text-slate-700 pt-1">
+                                Fee: <strong className="text-emerald-700">{Number(comp.registrationFee || 0) > 0 ? `₹${Number(comp.registrationFee).toLocaleString('en-IN')}` : 'FREE'}</strong>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="p-6 pt-0">
-                      <button
-                        type="button"
-                        onClick={() => setRegisteringComp(comp)}
-                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow transition cursor-pointer flex items-center justify-center space-x-1.5"
-                      >
-                        <Trophy className="w-4 h-4 text-white" />
-                        <span>Register Now</span>
-                      </button>
+                      {(() => {
+                        const cardLife = getLifecycleInfo(comp);
+                        return (
+                          <button
+                            type="button"
+                            onClick={cardLife.onClick}
+                            className={`w-full py-3 px-4 rounded-xl font-bold text-xs shadow transition cursor-pointer flex items-center justify-center space-x-1.5 ${cardLife.btnClass}`}
+                          >
+                            <Trophy className="w-4 h-4" />
+                            <span>{cardLife.btnText}</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -413,7 +481,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
       )}
 
       {/* ABOUT SECTION (Database-backed from website settings) */}
-      <section id="about" className="py-20 bg-slate-50 border-t border-slate-200">
+      <section id="about" className="py-20 bg-slate-50 border-t border-slate-200 scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-3xl mx-auto space-y-4">
             <span className="text-xs font-black tracking-wider uppercase bg-blue-100 text-blue-700 px-3.5 py-1.5 rounded-full">
@@ -459,7 +527,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
       </section>
 
       {/* CONTACT SECTION (Database-backed from website settings) */}
-      <section id="contact" className="py-20 bg-white border-t border-slate-200">
+      <section id="contact" className="py-20 bg-white border-t border-slate-200 scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-3xl mx-auto space-y-4">
             <span className="text-xs font-black tracking-wider uppercase bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full">
@@ -530,6 +598,30 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
           onClose={() => setRegisteringComp(null)}
           currentUser={null}
         />
+      )}
+
+      {/* LIFECYCLE INFO DIALOG / TOAST */}
+      {infoModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl text-center space-y-4 border border-slate-200">
+            <div className="w-14 h-14 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <Trophy className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900">{infoModal.title}</h3>
+              <p className="text-xs font-medium text-slate-600 leading-relaxed">{infoModal.message}</p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setInfoModal({ isOpen: false, title: '', message: '' })}
+                className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
