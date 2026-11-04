@@ -94,6 +94,18 @@ public class Schedule {
     @Column(length = 20)
     private String audience = "STUDENT";
 
+    @Column(name = "trainer_joined", nullable = false)
+    private Boolean trainerJoined = false;
+
+    @Column(name = "credited_duration_minutes", nullable = false)
+    private Integer creditedDurationMinutes = 0;
+
+    @Column(name = "credited_at")
+    private LocalDateTime creditedAt;
+
+    @Column(name = "salary_payment_id", length = 128)
+    private String salaryPaymentId;
+
     @Transient
     private Boolean locked;
 
@@ -168,6 +180,38 @@ public class Schedule {
 
     public void setAudience(String audience) {
         this.audience = audience;
+    }
+
+    public Boolean getTrainerJoined() {
+        return trainerJoined;
+    }
+
+    public void setTrainerJoined(Boolean trainerJoined) {
+        this.trainerJoined = trainerJoined != null ? trainerJoined : false;
+    }
+
+    public Integer getCreditedDurationMinutes() {
+        return creditedDurationMinutes;
+    }
+
+    public void setCreditedDurationMinutes(Integer creditedDurationMinutes) {
+        this.creditedDurationMinutes = creditedDurationMinutes != null ? creditedDurationMinutes : 0;
+    }
+
+    public LocalDateTime getCreditedAt() {
+        return creditedAt;
+    }
+
+    public void setCreditedAt(LocalDateTime creditedAt) {
+        this.creditedAt = creditedAt;
+    }
+
+    public String getSalaryPaymentId() {
+        return salaryPaymentId;
+    }
+
+    public void setSalaryPaymentId(String salaryPaymentId) {
+        this.salaryPaymentId = salaryPaymentId;
     }
 
     public Schedule() {}

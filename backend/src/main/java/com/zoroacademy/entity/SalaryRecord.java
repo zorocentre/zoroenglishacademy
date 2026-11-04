@@ -41,6 +41,30 @@ public class SalaryRecord {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "from_date", length = 50)
+    private String fromDate;
+
+    @Column(name = "to_date", length = 50)
+    private String toDate;
+
+    @Column(name = "online_session_salary", precision = 12, scale = 2)
+    private BigDecimal onlineSessionSalary = BigDecimal.ZERO;
+
+    @Column(name = "recorded_session_salary", precision = 12, scale = 2)
+    private BigDecimal recordedSessionSalary = BigDecimal.ZERO;
+
+    @Column(name = "total_salary", precision = 12, scale = 2)
+    private BigDecimal totalSalary = BigDecimal.ZERO;
+
+    @Column(name = "session_count")
+    private Integer sessionCount = 0;
+
+    @Column(name = "credited_hours", precision = 8, scale = 2)
+    private BigDecimal creditedHours = BigDecimal.ZERO;
+
+    @Column(name = "created_by", length = 128)
+    private String createdBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -159,6 +183,70 @@ public class SalaryRecord {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getFromDate() {
+        return fromDate;
+    }
+
+    public void setFromDate(String fromDate) {
+        this.fromDate = fromDate;
+    }
+
+    public String getToDate() {
+        return toDate;
+    }
+
+    public void setToDate(String toDate) {
+        this.toDate = toDate;
+    }
+
+    public BigDecimal getOnlineSessionSalary() {
+        return onlineSessionSalary;
+    }
+
+    public void setOnlineSessionSalary(BigDecimal onlineSessionSalary) {
+        this.onlineSessionSalary = onlineSessionSalary != null ? onlineSessionSalary : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getRecordedSessionSalary() {
+        return recordedSessionSalary;
+    }
+
+    public void setRecordedSessionSalary(BigDecimal recordedSessionSalary) {
+        this.recordedSessionSalary = recordedSessionSalary != null ? recordedSessionSalary : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getTotalSalary() {
+        return totalSalary != null && totalSalary.compareTo(BigDecimal.ZERO) > 0 ? totalSalary : amount;
+    }
+
+    public void setTotalSalary(BigDecimal totalSalary) {
+        this.totalSalary = totalSalary != null ? totalSalary : BigDecimal.ZERO;
+    }
+
+    public Integer getSessionCount() {
+        return sessionCount;
+    }
+
+    public void setSessionCount(Integer sessionCount) {
+        this.sessionCount = sessionCount != null ? sessionCount : 0;
+    }
+
+    public BigDecimal getCreditedHours() {
+        return creditedHours;
+    }
+
+    public void setCreditedHours(BigDecimal creditedHours) {
+        this.creditedHours = creditedHours != null ? creditedHours : BigDecimal.ZERO;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
     }
 
     public static Builder builder() {

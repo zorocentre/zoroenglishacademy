@@ -98,4 +98,30 @@ public class ScheduleController {
         }
         return ApiResponse.ok(scheduleService.getTrainerAudienceSchedules());
     }
+
+    @GetMapping("/online-session-history")
+    public ApiResponse<List<Schedule>> getOnlineSessionHistory(
+            @RequestParam(required = false) String trainerId,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.zoroacademy.security.UserPrincipal principal,
+            org.springframework.security.core.Authentication auth) {
+        if (!isAdmin(principal, auth)) {
+            throw new org.springframework.security.access.AccessDeniedException("Admin access required");
+        }
+        return ApiResponse.ok(scheduleService.getOnlineSessionHistory(trainerId, fromDate, toDate));
+    }
+
+    @GetMapping("/unpaid-credited-sessions")
+    public ApiResponse<List<Schedule>> getUnpaidCreditedSessions(
+            @RequestParam String trainerId,
+            @RequestParam String fromDate,
+            @RequestParam String toDate,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.zoroacademy.security.UserPrincipal principal,
+            org.springframework.security.core.Authentication auth) {
+        if (!isAdmin(principal, auth)) {
+            throw new org.springframework.security.access.AccessDeniedException("Admin access required");
+        }
+        return ApiResponse.ok(scheduleService.getUnpaidCreditedSessions(trainerId, fromDate, toDate));
+    }
 }

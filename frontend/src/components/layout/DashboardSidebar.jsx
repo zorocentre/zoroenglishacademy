@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Users, BookOpen, UserCheck, Calendar, 
   CreditCard, FileText, HelpCircle, BarChart3, Settings, 
-  User, Video, Clock, LogOut, Bell, CheckSquare, X, Wallet, FileSpreadsheet, Layers, Trophy, MessageSquare, Award, FileCheck
+  User, Video, Clock, LogOut, Bell, CheckSquare, X, Wallet, FileSpreadsheet, Layers, Trophy, MessageSquare, Award, FileCheck, History
 } from 'lucide-react';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import Logo from '../common/Logo';
@@ -21,6 +21,7 @@ export default function DashboardSidebar({ role, activeScreen, setActiveScreen, 
       { id: 'admin-attendance', label: 'Attendance', icon: Clock },
       { id: 'admin-schedule', label: 'Schedule', icon: Calendar },
       { id: 'admin-trainer-sessions', label: 'Trainers Session', icon: Video },
+      { id: 'admin-session-history', label: 'Online Session History', icon: History },
       { id: 'admin-assignments', label: 'Assignments', icon: FileText },
       { id: 'admin-trainer-assignments', label: 'Trainer Assignments', icon: Award },
       { id: 'admin-doubts', label: 'Doubts', icon: HelpCircle },

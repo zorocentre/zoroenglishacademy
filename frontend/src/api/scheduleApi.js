@@ -145,3 +145,22 @@ export const getAdminTrainerSessions = async () => {
   return res;
 };
 
+export const getOnlineSessionHistory = async (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.trainerId && params.trainerId !== 'all') query.append('trainerId', params.trainerId);
+  if (params.fromDate) query.append('fromDate', params.fromDate);
+  if (params.toDate) query.append('toDate', params.toDate);
+  const qs = query.toString();
+  const url = qs ? `/schedules/online-session-history?${qs}` : '/schedules/online-session-history';
+  return await apiGet(url);
+};
+
+export const getUnpaidCreditedSessions = async ({ trainerId, fromDate, toDate }) => {
+  if (!trainerId || !fromDate || !toDate) {
+    return apiResponse([], false, 'Trainer, From date and To date are required');
+  }
+  const query = new URLSearchParams({ trainerId, fromDate, toDate }).toString();
+  return await apiGet(`/schedules/unpaid-credited-sessions?${query}`);
+};
+
+

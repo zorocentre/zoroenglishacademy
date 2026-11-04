@@ -609,6 +609,10 @@ public class ScheduleService {
         Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new IllegalArgumentException("Schedule not found: " + scheduleId));
 
+        if ("Cancelled".equalsIgnoreCase(schedule.getStatus())) {
+            throw new com.zoroacademy.exception.BadRequestException("Cannot join a cancelled session");
+        }
+
         boolean isStaff = "ADMIN".equalsIgnoreCase(userRole) || "SUPER_ADMIN".equalsIgnoreCase(userRole) || "TRAINER".equalsIgnoreCase(userRole);
 
         // 1. Resolve student user
@@ -648,6 +652,25 @@ public class ScheduleService {
             if (!enrolled) {
                 throw new org.springframework.security.access.AccessDeniedException("Student is not enrolled in this session's course/batch");
             }
+        } else if ("TRAINER".equalsIgnoreCase(userRole)) {
+            // Verify that the trainer is the assigned trainer for this schedule
+            boolean matchesTrainer = false;
+            if (schedule.getTrainerId() != null && !schedule.getTrainerId().isBlank()) {
+                if (schedule.getTrainerId().equalsIgnoreCase(studentId) ||
+                    (student != null && schedule.getTrainerId().equalsIgnoreCase(student.getId()))) {
+                    matchesTrainer = true;
+                }
+            }
+            if (!matchesTrainer && schedule.getTrainer() != null && !schedule.getTrainer().isBlank()) {
+                if (student != null && schedule.getTrainer().equalsIgnoreCase(student.getName())) {
+                    matchesTrainer = true;
+                } else if (studentEmail != null && schedule.getTrainer().equalsIgnoreCase(studentEmail)) {
+                    matchesTrainer = true;
+                }
+            }
+            if (!matchesTrainer) {
+                throw new org.springframework.security.access.AccessDeniedException("You are not the assigned trainer for this session");
+            }
         }
 
         // 3. Time check [start, end] strictly using Asia/Kolkata
@@ -677,7 +700,7 @@ public class ScheduleService {
             throw new com.zoroacademy.exception.BadRequestException("Meeting link not set. Contact admin.");
         }
 
-        // 5. Mark Attendance for student or trainer as PRESENT
+        // 5. Mark Attendance for student or trainer as PRESENT & credit working hours for trainer
         if (!isStaff && student != null && attendanceRecordRepository != null) {
             String sId = student.getId();
             com.zoroacademy.entity.AttendanceRecord att = attendanceRecordRepository.findByStudentIdAndScheduleId(sId, schedule.getId())
@@ -694,10 +717,10 @@ public class ScheduleService {
             att.setStatus("Present");
             att.setJoinedAt(java.time.LocalDateTime.now());
             attendanceRecordRepository.save(att);
-        } else if ("TRAINER".equalsIgnoreCase(userRole) && trainerAttendanceRecordRepository != null) {
+        } else if ("TRAINER".equalsIgnoreCase(userRole)) {
             String trId = studentId != null ? studentId : (student != null ? student.getId() : schedule.getTrainerId());
             String trName = student != null ? student.getName() : schedule.getTrainer();
-            if (trId != null && !trId.isBlank()) {
+            if (trId != null && !trId.isBlank() && trainerAttendanceRecordRepository != null) {
                 com.zoroacademy.entity.TrainerAttendanceRecord trAtt = trainerAttendanceRecordRepository.findByScheduleIdAndTrainerId(schedule.getId(), trId)
                         .orElse(com.zoroacademy.entity.TrainerAttendanceRecord.builder()
                                 .id("tratt_" + java.util.UUID.randomUUID())
@@ -713,6 +736,15 @@ public class ScheduleService {
                 trAtt.setUpdatedAt(java.time.LocalDateTime.now());
                 trainerAttendanceRecordRepository.save(trAtt);
             }
+
+            // Working hours credit (Phase 2): Idempotent, snapshot scheduled duration
+            if (!Boolean.TRUE.equals(schedule.getTrainerJoined())) {
+                int duration = calculateScheduledDurationMinutes(schedule);
+                schedule.setTrainerJoined(true);
+                schedule.setCreditedDurationMinutes(duration);
+                schedule.setCreditedAt(java.time.LocalDateTime.now());
+                scheduleRepository.save(schedule);
+            }
         }
 
         java.util.Map<String, Object> response = new java.util.HashMap<>();
@@ -720,8 +752,67 @@ public class ScheduleService {
         response.put("meetUrl", meetUrl);
         response.put("scheduleId", schedule.getId());
         response.put("status", "Present");
+        response.put("trainerJoined", schedule.getTrainerJoined());
+        response.put("creditedDurationMinutes", schedule.getCreditedDurationMinutes());
         response.put("message", "Joined successfully");
         return response;
+    }
+
+    public int calculateScheduledDurationMinutes(Schedule s) {
+        if (s == null) return 0;
+        if (s.getStartAt() != null && s.getEndAt() != null) {
+            long diff = java.time.Duration.between(s.getStartAt(), s.getEndAt()).toMinutes();
+            if (diff > 0) return (int) diff;
+        }
+        if (s.getStartTime() != null && !s.getStartTime().isBlank() &&
+            s.getEndTime() != null && !s.getEndTime().isBlank()) {
+            try {
+                int sMin = com.zoroacademy.util.ScheduleTimeUtil.parseTimeToMinutes(s.getStartTime());
+                int eMin = com.zoroacademy.util.ScheduleTimeUtil.parseTimeToMinutes(s.getEndTime());
+                if (eMin > sMin) {
+                    return eMin - sMin;
+                } else if (eMin < sMin) {
+                    return (1440 - sMin) + eMin;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (s.getTime() != null && !s.getTime().isBlank()) {
+            int sMin = com.zoroacademy.util.ScheduleTimeUtil.parseTimeToMinutes(s.getTime());
+            int eMin = com.zoroacademy.util.ScheduleTimeUtil.parseEndTimeToMinutes(s.getTime());
+            if (eMin > sMin) {
+                return eMin - sMin;
+            } else if (eMin < sMin) {
+                return (1440 - sMin) + eMin;
+            }
+        }
+        return 60;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Schedule> getOnlineSessionHistory(String trainerId, String fromDate, String toDate) {
+        String tId = (trainerId != null && !trainerId.isBlank() && !"all".equalsIgnoreCase(trainerId)) ? trainerId.trim() : null;
+        String fDate = (fromDate != null && !fromDate.isBlank()) ? fromDate.trim() : null;
+        String tDate = (toDate != null && !toDate.isBlank()) ? toDate.trim() : null;
+        return scheduleRepository.findOnlineSessionHistory(tId, fDate, tDate);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Schedule> getUnpaidCreditedSessions(String trainerId, String fromDate, String toDate) {
+        if (trainerId == null || trainerId.isBlank()) {
+            throw new IllegalArgumentException("Trainer identifier is required");
+        }
+        if (fromDate == null || fromDate.isBlank() || toDate == null || toDate.isBlank()) {
+            throw new IllegalArgumentException("From date and To date are required");
+        }
+        String trainerName = trainerId;
+        com.zoroacademy.entity.User trainer = userRepository.findById(trainerId).orElse(null);
+        if (trainer == null) {
+            trainer = userRepository.findByEmailIgnoreCase(trainerId).orElse(null);
+        }
+        if (trainer != null && trainer.getName() != null) {
+            trainerName = trainer.getName();
+        }
+        return scheduleRepository.findUnpaidCreditedSessions(trainerId, trainerName, fromDate, toDate);
     }
 
     @Transactional

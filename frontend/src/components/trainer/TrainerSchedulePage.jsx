@@ -222,7 +222,7 @@ export default function TrainerSchedulePage({ setActiveScreen }) {
                       </p>
                     </div>
 
-                    {/* Action Button: Start Session (enabled only inside window, disabled after end) */}
+                    {/* Action Button: Join Meeting (enabled only inside window, disabled after end) */}
                     <div className="self-start sm:self-auto min-w-[200px]">
                       {joinState.enabled ? (
                         <button 
@@ -231,7 +231,7 @@ export default function TrainerSchedulePage({ setActiveScreen }) {
                           className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold flex items-center justify-center space-x-2 shadow-sm transition-transform active:scale-95 cursor-pointer text-white bg-purple-700 hover:bg-purple-800"
                         >
                           <Video className="w-4 h-4 fill-current" />
-                          <span>Start Session (Google Meet)</span>
+                          <span>Join Meeting</span>
                         </button>
                       ) : (
                         <button 

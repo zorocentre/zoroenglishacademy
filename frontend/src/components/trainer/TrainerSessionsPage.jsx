@@ -346,7 +346,7 @@ export default function TrainerSessionsPage() {
                         </p>
                       </div>
 
-                      {/* Action Buttons: Start Session / Copy Meet Link */}
+                      {/* Action Buttons: Join Meeting / Copy Meet Link */}
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         {joinState.enabled ? (
                           <button 
@@ -355,7 +355,7 @@ export default function TrainerSessionsPage() {
                             className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-5 py-2.5 rounded-xl shadow-md text-xs flex items-center space-x-2 cursor-pointer transition-transform active:scale-95"
                           >
                             <Video className="w-4 h-4 fill-current" />
-                            <span>Start Session (Google Meet)</span>
+                            <span>Join Meeting</span>
                           </button>
                         ) : (
                           <button 

@@ -5,7 +5,6 @@ import { getTrainerCourseAccessList, revokeTrainerCourseAccess } from '../../api
 import { logActivity } from '../../api/activityLogApi';
 import { sanitizePhone, validatePhone, formatPhone, SUBMIT_PHONE_ERROR } from '../../utils/phoneValidator';
 import ConfirmModal from '../common/ConfirmModal';
-import MoneyInput from '../common/MoneyInput';
 import PhoneInput from '../common/PhoneInput';
 import { useDialog } from '../../context/DialogContext';
 
@@ -173,8 +172,6 @@ export default function ManageTrainersPage() {
     password: '',
     phone: '',
     specialty: 'English Communication',
-    salaryAmount: '25000',
-    salaryCreditDate: '25',
     joinedOn: new Date().toISOString().split('T')[0]
   });
 
@@ -414,8 +411,6 @@ export default function ManageTrainersPage() {
       password: '',
       phone: '',
       specialty: 'English Communication',
-      salaryAmount: '25000',
-      salaryCreditDate: '25',
       joinedOn: new Date().toISOString().split('T')[0]
     });
   };
@@ -519,8 +514,6 @@ export default function ManageTrainersPage() {
                 <th className="py-3 px-4">Password</th>
                 <th className="py-3 px-4">Specialty</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Monthly Salary</th>
-                <th className="py-3 px-4">Salary Credit Date</th>
                 <th className="py-3 px-4">Date of Joining</th>
                 <th className="py-3 px-4">Phone</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -571,8 +564,6 @@ export default function ManageTrainersPage() {
                           {isActive ? 'Active' : 'Inactive'}
                         </button>
                       </td>
-                      <td className="py-4 px-4 font-black text-emerald-600">₹{parseFloat(trainer.salaryAmount || 25000).toLocaleString()}</td>
-                      <td className="py-4 px-4 font-bold text-blue-700">{trainer.salaryCreditDate || '25'}th of every month</td>
                       <td className="py-4 px-4 text-slate-600 font-medium">{trainer.joinedOn || trainer.dateOfJoining || ''}</td>
                       <td className="py-4 px-4 text-slate-500 font-mono">{formatPhone(trainer.phone) || 'N/A'}</td>
                       <td className="py-4 px-4 text-right space-x-2">
@@ -596,8 +587,6 @@ export default function ManageTrainersPage() {
                             password: '',
                             phone: trainer.phone || '',
                             specialty: trainer.specialty || 'English Communication',
-                            salaryAmount: trainer.salaryAmount || '25000',
-                            salaryCreditDate: trainer.salaryCreditDate || '25',
                             joinedOn: trainer.joinedOn || new Date().toISOString().split('T')[0]
                           });
                         }}
@@ -674,32 +663,6 @@ export default function ManageTrainersPage() {
                 {emailError && (
                   <p className="text-[11px] font-bold text-rose-600 mt-1">{emailError}</p>
                 )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Monthly Salary (₹)</label>
-                  <MoneyInput
-                    required
-                    placeholder="e.g. 25000"
-                    value={formData.salaryAmount}
-                    onChange={(e) => setFormData({ ...formData, salaryAmount: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Salary Credit Date</label>
-                  <select
-                    value={formData.salaryCreditDate}
-                    onChange={(e) => setFormData({ ...formData, salaryCreditDate: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                  >
-                    {[...Array(31)].map((_, i) => (
-                      <option key={i + 1} value={String(i + 1)}>{i + 1}th of every month</option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

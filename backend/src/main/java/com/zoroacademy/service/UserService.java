@@ -506,8 +506,12 @@ public class UserService {
         user.setStatus(dto.getStatus() != null ? dto.getStatus() : "Active");
         user.setSpecialty(dto.getSpecialty());
         user.setCode(dto.getCode());
-        user.setSalaryAmount(dto.getSalaryAmount());
-        user.setSalaryCreditDate(dto.getSalaryCreditDate());
+        if (dto.getSalaryAmount() != null) {
+            user.setSalaryAmount(dto.getSalaryAmount());
+        }
+        if (dto.getSalaryCreditDate() != null) {
+            user.setSalaryCreditDate(dto.getSalaryCreditDate());
+        }
 
         final boolean isNewTrainer = user.getPassword() == null || user.getPassword().isBlank();
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {

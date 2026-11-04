@@ -2,7 +2,10 @@ package com.zoroacademy.controller;
 
 import com.zoroacademy.common.ApiResponse;
 import com.zoroacademy.entity.SalaryRecord;
+import com.zoroacademy.entity.Schedule;
+import com.zoroacademy.security.UserPrincipal;
 import com.zoroacademy.service.SalaryService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,10 +15,10 @@ import java.util.List;
 public class SalaryController {
 
     private final SalaryService salaryService;
+
     public SalaryController(SalaryService salaryService) {
         this.salaryService = salaryService;
     }
-
 
     @GetMapping
     public ApiResponse<List<SalaryRecord>> getAllSalaryRecords() {
@@ -27,9 +30,17 @@ public class SalaryController {
         return ApiResponse.ok(salaryService.getTrainerSalaryRecords(trainerId));
     }
 
+    @GetMapping("/{id}/sessions")
+    public ApiResponse<List<Schedule>> getPaymentSessions(@PathVariable String id) {
+        return ApiResponse.ok(salaryService.getPaymentSessions(id));
+    }
+
     @PostMapping
-    public ApiResponse<SalaryRecord> createSalaryRecord(@RequestBody SalaryRecord record) {
-        return ApiResponse.ok(salaryService.createSalaryRecord(record), "Salary record created");
+    public ApiResponse<SalaryRecord> createSalaryRecord(
+            @RequestBody SalaryRecord record,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String adminUser = principal != null ? (principal.getName() != null ? principal.getName() : principal.getUsername()) : "Admin";
+        return ApiResponse.ok(salaryService.createSalaryRecord(record, adminUser), "Salary record created");
     }
 
     @PutMapping("/{id}")
