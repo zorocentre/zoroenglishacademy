@@ -73,6 +73,9 @@ public class CompetitionService {
     private BunnyStreamService bunnyStreamService;
 
     @Autowired(required = false)
+    private BunnyTokenService bunnyTokenService;
+
+    @Autowired(required = false)
     private com.zoroacademy.config.BunnyStreamProperties bunnyStreamProperties;
 
     @Autowired(required = false)
@@ -701,6 +704,56 @@ public class CompetitionService {
     public CompetitionRegistration updateRegistration(String regId, CompetitionRegistration updated) {
         CompetitionRegistration reg = registrationRepository.findById(regId)
                 .orElseThrow(() -> new IllegalArgumentException("Registration not found: " + regId));
+
+        String compId = reg.getCompetition() != null ? reg.getCompetition().getId() : null;
+
+        // Validate and update participant details
+        if (updated.getStudentName() != null && !updated.getStudentName().isBlank()) {
+            reg.setStudentName(updated.getStudentName().trim());
+        }
+
+        if (updated.getStudentEmail() != null && !updated.getStudentEmail().isBlank()) {
+            String newEmail = updated.getStudentEmail().trim().toLowerCase();
+            if (!newEmail.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
+                throw new com.zoroacademy.exception.BadRequestException("Invalid email address format.");
+            }
+            if (compId != null && !newEmail.equalsIgnoreCase(reg.getStudentEmail())) {
+                List<CompetitionRegistration> existing = registrationRepository.findByCompetitionId(compId);
+                boolean conflict = existing.stream().anyMatch(r -> !r.getId().equals(regId) && newEmail.equalsIgnoreCase(r.getStudentEmail()));
+                if (conflict) {
+                    throw new com.zoroacademy.exception.ConflictException("Another registration in this competition already exists with this email address.");
+                }
+            }
+            reg.setStudentEmail(newEmail);
+        }
+
+        if (updated.getStudentPhone() != null && !updated.getStudentPhone().isBlank()) {
+            String newPhone = updated.getStudentPhone().trim();
+            if (compId != null && !newPhone.equalsIgnoreCase(reg.getStudentPhone())) {
+                List<CompetitionRegistration> existing = registrationRepository.findByCompetitionId(compId);
+                boolean conflict = existing.stream().anyMatch(r -> !r.getId().equals(regId) && newPhone.equalsIgnoreCase(r.getStudentPhone()));
+                if (conflict) {
+                    throw new com.zoroacademy.exception.ConflictException("Another registration in this competition already exists with this phone number.");
+                }
+            }
+            reg.setStudentPhone(newPhone);
+        }
+
+        if (updated.getAge() != null) {
+            if (updated.getAge() <= 0) {
+                throw new com.zoroacademy.exception.BadRequestException("Age must be greater than 0.");
+            }
+            reg.setAge(updated.getAge());
+        }
+
+        if (updated.getSchool() != null) {
+            reg.setSchool(updated.getSchool().trim());
+        }
+
+        if (updated.getCity() != null) {
+            reg.setCity(updated.getCity().trim());
+        }
+
         if (updated.getPaymentStatus() != null) reg.setPaymentStatus(updated.getPaymentStatus());
         if (updated.getRazorpayOrderId() != null) reg.setRazorpayOrderId(updated.getRazorpayOrderId());
         if (updated.getRazorpayPaymentId() != null) reg.setRazorpayPaymentId(updated.getRazorpayPaymentId());
@@ -957,19 +1010,24 @@ public class CompetitionService {
     // --- Guidance Videos (Phase 6 & Admin Guidance Videos Redesign) ---
     @Transactional(readOnly = true)
     public List<CompetitionGuidanceVideo> getGuidanceVideos(String compId) {
-        return guidanceVideoRepository.findByCompetitionIdOrderBySortOrderAsc(compId);
+        List<CompetitionGuidanceVideo> videos = guidanceVideoRepository.findByCompetitionIdOrderBySortOrderAsc(compId);
+        for (CompetitionGuidanceVideo video : videos) {
+            ensureVideoUrls(video);
+        }
+        return videos;
     }
 
     private void ensureVideoUrls(CompetitionGuidanceVideo video) {
         if (video.getBunnyVideoId() != null && !video.getBunnyVideoId().isBlank()) {
-            String libId = (bunnyStreamProperties != null && bunnyStreamProperties.getLibraryId() != null && !bunnyStreamProperties.getLibraryId().isBlank())
-                    ? bunnyStreamProperties.getLibraryId() : "784226";
-            String cdn = (bunnyStreamProperties != null && bunnyStreamProperties.getCdnHost() != null && !bunnyStreamProperties.getCdnHost().isBlank())
-                    ? bunnyStreamProperties.getCdnHost() : "video.bunnycdn.com";
-            if (video.getEmbedUrl() == null || video.getEmbedUrl().isBlank()) {
+            if (bunnyTokenService != null) {
+                video.setEmbedUrl(bunnyTokenService.generateSignedEmbedUrl(video.getBunnyVideoId()));
+                video.setPlaybackUrl(bunnyTokenService.generateSignedPlaybackUrl(video.getBunnyVideoId()));
+            } else {
+                String libId = (bunnyStreamProperties != null && bunnyStreamProperties.getLibraryId() != null && !bunnyStreamProperties.getLibraryId().isBlank())
+                        ? bunnyStreamProperties.getLibraryId() : "784226";
+                String cdn = (bunnyStreamProperties != null && bunnyStreamProperties.getCdnHost() != null && !bunnyStreamProperties.getCdnHost().isBlank())
+                        ? bunnyStreamProperties.getCdnHost() : "video.bunnycdn.com";
                 video.setEmbedUrl("https://iframe.mediadelivery.net/embed/" + libId + "/" + video.getBunnyVideoId());
-            }
-            if (video.getPlaybackUrl() == null || video.getPlaybackUrl().isBlank()) {
                 video.setPlaybackUrl("https://" + cdn + "/" + video.getBunnyVideoId() + "/playlist.m3u8");
             }
         }

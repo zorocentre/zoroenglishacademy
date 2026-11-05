@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiResponse } from './client';
+import { apiGet, apiPost, apiPut, apiDelete, apiResponse } from './client';
 import { logActivity } from './activityLogApi';
 
 export const getCompetitionRegistrations = async () => {
@@ -128,6 +128,17 @@ export const updateCompetitionRegistration = async (id, updateData) => {
     return apiResponse(res.data, true, 'Registration updated successfully');
   }
   return apiResponse(null, false, res?.message || 'Failed to update registration');
+};
+
+export const deleteCompetitionRegistration = async (id) => {
+  if (!id) {
+    return apiResponse(false, false, 'Registration ID is required');
+  }
+  const res = await apiDelete(`/competitions/registrations/${encodeURIComponent(id)}`);
+  if (res && res.success) {
+    return apiResponse(true, true, 'Registration deleted successfully');
+  }
+  return apiResponse(false, false, res?.message || 'Failed to delete registration');
 };
 
 export const getRegistrationCredential = async (regId) => {

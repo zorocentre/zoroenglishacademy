@@ -5,8 +5,10 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { apiGet } from '../../api/client';
 import { getTrainerCourseRequests } from '../../api/courseApi';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminDashboard({ setActiveScreen }) {
+  const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
     studentCount: 0,
     totalStudents: 0,
@@ -88,11 +90,17 @@ export default function AdminDashboard({ setActiveScreen }) {
         }
       } catch (err) {
         console.error("Dashboard data load error:", err);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchDashboardData();
   }, []);
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading admin dashboard..." />;
+  }
 
   const {
     studentCount,

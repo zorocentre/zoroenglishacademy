@@ -3,8 +3,10 @@ import React from 'react';
 export default function PageLoader({
   fullPage = false,
   message = 'Loading...',
+  text,
   className = ''
 }) {
+  const displayMsg = text || message || 'Loading...';
   return (
     <div
       role="status"
@@ -16,12 +18,12 @@ export default function PageLoader({
       <div className="relative flex items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-[#0F52BA] animate-spin" />
       </div>
-      {message && (
+      {displayMsg && (
         <p className="mt-4 text-xs font-bold text-slate-500 tracking-wide animate-pulse">
-          {message}
+          {displayMsg}
         </p>
       )}
-      <span className="sr-only">{message}</span>
+      <span className="sr-only">{displayMsg}</span>
     </div>
   );
 }

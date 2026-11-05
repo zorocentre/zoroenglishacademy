@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Search, Filter, Calendar, Users, DollarSign, 
-  CheckCircle2, XCircle, AlertCircle, RefreshCw, Layers, ShieldCheck, Download, Eye, EyeOff, Copy, Check, Key, X, Edit 
+  CheckCircle2, XCircle, AlertCircle, RefreshCw, Layers, ShieldCheck, Download, Eye, EyeOff, Copy, Check, Key, X, Edit, Trash2, Edit3 
 } from 'lucide-react';
 import { 
   getCompetitionRegistrations, 
   updateRegistrationStatus, 
   updateCompetitionRegistration,
+  deleteCompetitionRegistration,
   getRegistrationCredential,
   resetRegistrationPassword
 } from '../../api/competitionRegistrationApi';
 import { getCompetitions } from '../../api/competitionApi';
 import ConfirmModal from '../common/ConfirmModal';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminCompetitionRegistrationsPage() {
   const [registrations, setRegistrations] = useState([]);
@@ -31,6 +33,19 @@ export default function AdminCompetitionRegistrationsPage() {
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resettingLoading, setResettingLoading] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState('');
+  const [editingStudentReg, setEditingStudentReg] = useState(null);
+  const [editForm, setEditForm] = useState({
+    studentName: '',
+    studentEmail: '',
+    studentPhone: '',
+    age: '',
+    school: '',
+    city: ''
+  });
+  const [editErrors, setEditErrors] = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteModalReg, setDeleteModalReg] = useState(null);
+  const [deletingReg, setDeletingReg] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     razorpayOrderId: '',
     razorpayPaymentId: '',
@@ -177,6 +192,85 @@ export default function AdminCompetitionRegistrationsPage() {
     }
   };
 
+  const handleOpenEditStudent = (student) => {
+    setEditingStudentReg(student);
+    setEditForm({
+      studentName: student.studentName || '',
+      studentEmail: student.studentEmail || '',
+      studentPhone: student.studentPhone || '',
+      age: student.age != null ? String(student.age) : '',
+      school: student.school || '',
+      city: student.city || ''
+    });
+    setEditErrors({});
+  };
+
+  const handleSaveEditStudent = async (e) => {
+    e.preventDefault();
+    const errors = {};
+    if (!editForm.studentName.trim()) errors.studentName = 'Participant name is required.';
+    if (!editForm.studentEmail.trim()) {
+      errors.studentEmail = 'Email address is required.';
+    } else if (!/^[^s@]+@[^s@]+\.[^s@]+$/.test(editForm.studentEmail.trim())) {
+      errors.studentEmail = 'Please enter a valid email address.';
+    }
+    const cleanPhone = editForm.studentPhone.replace(/[^0-9]/g, '');
+    if (!editForm.studentPhone.trim()) {
+      errors.studentPhone = 'Phone number is required.';
+    } else if (cleanPhone.length < 10) {
+      errors.studentPhone = 'Please enter a valid phone number (at least 10 digits).';
+    }
+    if (editForm.age && (isNaN(Number(editForm.age)) || Number(editForm.age) <= 0)) {
+      errors.age = 'Age must be a valid positive number.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const payload = {
+        studentName: editForm.studentName.trim(),
+        studentEmail: editForm.studentEmail.trim().toLowerCase(),
+        studentPhone: editForm.studentPhone.trim(),
+        age: editForm.age ? parseInt(editForm.age, 10) : null,
+        school: editForm.school.trim() || null,
+        city: editForm.city.trim() || null
+      };
+      const res = await updateCompetitionRegistration(editingStudentReg.id, payload);
+      if (res && res.success) {
+        setEditingStudentReg(null);
+        await loadData();
+      } else {
+        setEditErrors({ form: res?.message || 'Failed to update registration' });
+      }
+    } catch (err) {
+      setEditErrors({ form: err?.message || 'Failed to update registration' });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleConfirmDeleteReg = async () => {
+    if (!deleteModalReg) return;
+    setDeletingReg(true);
+    try {
+      const res = await deleteCompetitionRegistration(deleteModalReg.id);
+      if (res && res.success) {
+        setDeleteModalReg(null);
+        await loadData();
+      } else {
+        alert(res?.message || 'Failed to delete registration');
+      }
+    } catch (err) {
+      alert(err?.message || 'Failed to delete registration');
+    } finally {
+      setDeletingReg(false);
+    }
+  };
+
   const filteredRegistrations = registrations.filter(r => {
     const matchesSearch = !searchTerm || (
       r.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -213,6 +307,10 @@ export default function AdminCompetitionRegistrationsPage() {
     acc[compKey].push(reg);
     return acc;
   }, {});
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading competition registrations..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">
@@ -476,7 +574,7 @@ export default function AdminCompetitionRegistrationsPage() {
                               {student.registrationStatus}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right space-x-2">
+                          <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                             <button
                               onClick={() => setViewingReg(student)}
                               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
@@ -485,16 +583,30 @@ export default function AdminCompetitionRegistrationsPage() {
                               <Eye className="w-4 h-4" />
                             </button>
                             <button
+                              onClick={() => handleOpenEditStudent(student)}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer"
+                              title="Edit Registration Details"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleOpenEditPayment(student)}
                               className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg cursor-pointer"
                               title="Edit Payment / Order Details"
                             >
-                              <Edit className="w-4 h-4" />
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteModalReg(student)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                              title="Delete Registration"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                             {student.registrationStatus !== 'Cancelled' && (
                               <button
                                 onClick={() => setCancelModalReg(student)}
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"
                                 title="Cancel Registration"
                               >
                                 <XCircle className="w-4 h-4" />
@@ -775,6 +887,165 @@ export default function AdminCompetitionRegistrationsPage() {
         </div>
       )}
 
+      {/* EDIT PARTICIPANT REGISTRATION MODAL */}
+      {editingStudentReg && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 text-xs animate-in fade-in zoom-in-95 max-h-[90dvh] overflow-y-auto">
+            <button
+              onClick={() => setEditingStudentReg(null)}
+              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-2 text-indigo-600">
+              <Edit className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-lg font-black text-slate-900">Edit Participant Registration</h3>
+            </div>
+
+            <p className="text-slate-500 text-xs">
+              Update participant details for <strong className="text-slate-800">{editingStudentReg.competitionName}</strong>.
+            </p>
+
+            {editErrors.form && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl font-bold flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{editErrors.form}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditStudent} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Participant Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.studentName}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, studentName: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                  placeholder="e.g. John Doe"
+                />
+                {editErrors.studentName && (
+                  <p className="text-[10px] text-rose-600 font-bold mt-0.5">{editErrors.studentName}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={editForm.studentEmail}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, studentEmail: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    placeholder="e.g. john@example.com"
+                  />
+                  {editErrors.studentEmail && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-0.5">{editErrors.studentEmail}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={editForm.studentPhone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, studentPhone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    placeholder="e.g. 9876543210"
+                  />
+                  {editErrors.studentPhone && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-0.5">{editErrors.studentPhone}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Age
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={editForm.age}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, age: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    placeholder="e.g. 14"
+                  />
+                  {editErrors.age && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-0.5">{editErrors.age}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    School / College
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.school}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, school: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    placeholder="School name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.city}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    placeholder="City"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudentReg(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs cursor-pointer flex items-center space-x-1.5"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>{savingEdit ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE REGISTRATION CONFIRM MODAL */}
+      <ConfirmModal
+        isOpen={Boolean(deleteModalReg)}
+        onClose={() => setDeleteModalReg(null)}
+        onConfirm={handleConfirmDeleteReg}
+        title="Delete Competition Registration"
+        message={`Are you sure you want to permanently delete registration for "${deleteModalReg?.studentName}" in "${deleteModalReg?.competitionName}"?\n\nThis will permanently delete the candidate's competition registration, assigned set, test attempts, submitted answers, and evaluations. Their regular Zoro student account, course enrollments, and fees will NOT be touched.`}
+        confirmText="Delete Registration"
+        cancelText="Keep"
+      />
     </div>
   );
 }

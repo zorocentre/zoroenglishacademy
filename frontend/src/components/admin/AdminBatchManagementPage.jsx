@@ -4,6 +4,7 @@ import { getBatches, createBatch, updateBatch, deleteBatch } from '../../api/bat
 import { getCourses } from '../../api/courseApi';
 import { getTrainers } from '../../api/userApi';
 import ConfirmModal from '../common/ConfirmModal';
+import PageLoader from '../common/PageLoader';
 import { useDialog } from '../../context/DialogContext';
 
 export default function AdminBatchManagementPage() {
@@ -12,7 +13,7 @@ export default function AdminBatchManagementPage() {
   const [coursesList, setCoursesList] = useState([]);
   const [trainersList, setTrainersList] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   
   const [editingBatch, setEditingBatch] = useState(null);
   const [deleteBatchData, setDeleteBatchData] = useState(null);
@@ -190,6 +191,10 @@ export default function AdminBatchManagementPage() {
     const isStudentAudience = !c.audience || c.audience.toLowerCase() === 'student';
     return isOnlineOrHybrid && isStudentAudience;
   });
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading batches..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">

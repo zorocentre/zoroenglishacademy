@@ -273,8 +273,12 @@ public class BunnyStreamService {
             throw new RuntimeException("Bunny Stream upload failed: " + e.getMessage(), e);
         }
 
-        String streamUrl = String.format("https://%s/%s/playlist.m3u8", properties.getCdnHost(), videoId);
-        String embedUrl = String.format("https://iframe.mediadelivery.net/embed/%s/%s", libraryId, videoId);
+        String streamUrl = (tokenService != null)
+                ? tokenService.generateSignedPlaybackUrl(videoId)
+                : String.format("https://%s/%s/playlist.m3u8", properties.getCdnHost(), videoId);
+        String embedUrl = (tokenService != null)
+                ? tokenService.generateSignedEmbedUrl(videoId)
+                : String.format("https://iframe.mediadelivery.net/embed/%s/%s", libraryId, videoId);
 
         Video video = Video.builder()
                 .id(videoId)
@@ -442,18 +446,25 @@ public class BunnyStreamService {
             effectiveVideoId = videoOrModuleId;
         }
 
-        // Strict Requirement: If the video has no course, DENY access
-        if (courseId == null || courseId.isBlank()) {
-            return VideoPlaybackResponse.builder()
-                    .authorized(false)
-                    .videoId(effectiveVideoId)
-                    .message("Access Denied: Video is not associated with any active course.")
-                    .build();
-        }
-
-        // Verification: Admin and Trainer are authorized; Student must have active enrollment
+        // If the video has no course association, allow access for administrators, trainers,
+        // or authenticated participants (e.g. competition guidance, syllabus, or assessment questions)
         boolean isAuthorized = false;
         String authMessage = "Authorized";
+
+        if (courseId == null || courseId.isBlank()) {
+            if ("ADMIN".equalsIgnoreCase(userRole) || "SUPER_ADMIN".equalsIgnoreCase(userRole) || "TRAINER".equalsIgnoreCase(userRole)) {
+                isAuthorized = true;
+            } else if (authenticatedUserId != null && !authenticatedUserId.isBlank()) {
+                isAuthorized = true;
+            } else {
+                return VideoPlaybackResponse.builder()
+                        .authorized(false)
+                        .videoId(effectiveVideoId)
+                        .message("Access Denied: Authentication required to stream videos.")
+                        .build();
+            }
+        } else {
+            // Verification: Admin and Trainer are authorized; Student must have active enrollment
 
         if ("ADMIN".equalsIgnoreCase(userRole) || "SUPER_ADMIN".equalsIgnoreCase(userRole)) {
             isAuthorized = true;
@@ -513,6 +524,7 @@ public class BunnyStreamService {
         } else {
             isAuthorized = false;
             authMessage = "Access Denied: Authentication required to stream course videos.";
+        }
         }
 
         if (!isAuthorized) {

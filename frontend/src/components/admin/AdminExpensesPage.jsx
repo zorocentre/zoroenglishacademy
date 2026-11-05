@@ -7,6 +7,7 @@ import { exportToExcel } from '../../utils/excelExporter';
 import ConfirmModal from '../common/ConfirmModal';
 import MoneyInput from '../common/MoneyInput';
 import { useDialog } from '../../context/DialogContext';
+import PageLoader from '../common/PageLoader';
 
 // Salary is EXCLUDED from manual expense categories because trainer salary is fetched automatically from Trainer Salary Management
 const MANUAL_EXPENSE_CATEGORIES = [
@@ -257,6 +258,10 @@ export default function AdminExpensesPage({ setActiveScreen }) {
     const cat = exp.category || 'Other';
     categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + (parseFloat(exp.amount) || 0);
   });
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading expenses..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">

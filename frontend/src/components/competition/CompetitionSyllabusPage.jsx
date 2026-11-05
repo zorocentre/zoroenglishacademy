@@ -147,6 +147,7 @@ export default function CompetitionSyllabusPage() {
                     <div className="rounded-2xl overflow-hidden aspect-video bg-slate-950 shadow-inner">
                       <SafeVideo
                         bunnyVideoId={selectedVideo.bunnyVideoId}
+                        embedUrl={selectedVideo.embedUrl}
                         title={selectedVideo.title}
                         className="w-full h-full"
                       />

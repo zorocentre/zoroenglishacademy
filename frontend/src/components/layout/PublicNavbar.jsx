@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PhoneCall, LogIn, Menu, X } from 'lucide-react';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import Logo from '../common/Logo';
@@ -7,6 +7,8 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
   const { settings: contextSettings } = useWebsiteSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
+  const isManualScrollingRef = useRef(false);
+  const manualScrollTimerRef = useRef(null);
 
   const siteSettings = propSettings || contextSettings;
   const isLandingPage = activeScreen === 'public-home';
@@ -17,6 +19,7 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
     const sections = ['home', 'courses', 'competitions', 'about', 'contact'];
 
     const handleScroll = () => {
+      if (isManualScrollingRef.current) return;
       // If near top of page, home is active
       if (window.scrollY < 80) {
         setActiveSection('home');
@@ -39,10 +42,20 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (manualScrollTimerRef.current) clearTimeout(manualScrollTimerRef.current);
+    };
   }, [isLandingPage]);
 
   const scrollToSection = (sectionId) => {
+    if (manualScrollTimerRef.current) clearTimeout(manualScrollTimerRef.current);
+    isManualScrollingRef.current = true;
+    setActiveSection(sectionId);
+    manualScrollTimerRef.current = setTimeout(() => {
+      isManualScrollingRef.current = false;
+    }, 850);
+
     if (!isLandingPage) {
       if (sectionId === 'courses') {
         setActiveScreen('public-course');

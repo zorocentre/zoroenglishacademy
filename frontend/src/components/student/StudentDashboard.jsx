@@ -9,9 +9,11 @@ import { getSchedules } from '../../api/scheduleApi';
 import { getAssignments, getSubmissions } from '../../api/assignmentApi';
 import { getDoubts } from '../../api/doubtApi';
 import { getMyAttendanceRecords } from '../../api/attendanceApi';
+import PageLoader from '../common/PageLoader';
 
 export default function StudentDashboard({ setActiveScreen }) {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [totalDue, setTotalDue] = useState(0);
   const [feeRecords, setFeeRecords] = useState([]);
   const [upcomingSession, setUpcomingSession] = useState(null);
@@ -101,8 +103,14 @@ export default function StudentDashboard({ setActiveScreen }) {
 
     } catch (err) {
       console.error('Failed to load student dashboard data:', err);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading student dashboard..." />;
+  }
 
   const studentStats = [
     { title: 'Upcoming Sessions', value: counts.upcomingSessions, icon: Video, color: 'bg-blue-50 text-blue-700 border-blue-200' },

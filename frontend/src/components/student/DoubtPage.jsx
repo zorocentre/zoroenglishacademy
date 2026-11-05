@@ -4,9 +4,11 @@ import { getDoubts, createDoubt } from '../../api/doubtApi';
 import { getStudentEnrolledCourses } from '../../api/enrollmentApi';
 import { useAuth } from '../../context/AuthContext';
 import { getFriendlyDoubtId } from '../../utils/doubtRefUtil';
+import PageLoader from '../common/PageLoader';
 
 export default function DoubtPage({ setActiveScreen }) {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [doubtsList, setDoubtsList] = useState([]);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
@@ -22,8 +24,7 @@ export default function DoubtPage({ setActiveScreen }) {
   const studentIdentifier = user?.id || user?.email || '';
 
   useEffect(() => {
-    loadDoubts();
-    loadCourses();
+    Promise.all([loadDoubts(), loadCourses()]).finally(() => setLoading(false));
   }, [studentIdentifier]);
 
   const loadCourses = async () => {
@@ -62,6 +63,10 @@ export default function DoubtPage({ setActiveScreen }) {
       console.error('Failed to load doubts:', err);
     }
   };
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading doubts..." />;
+  }
 
   const selectedCourse = enrolledCourses.find(c => (c.courseId || c.id) === selectedCourseId) || (enrolledCourses[0] || null);
   const isRecorded = selectedCourse?.courseMode?.toLowerCase() === 'recorded' || selectedCourse?.mode?.toLowerCase() === 'recorded';

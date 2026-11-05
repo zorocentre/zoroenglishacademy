@@ -3,6 +3,7 @@ import { MessageSquare, Search, Trash2, Eye, Calendar, Phone, Mail, BookOpen, Cl
 import { getEnquiries, deleteEnquiry } from '../../api/enquiryApi';
 import { getTrainerCourseRequests, updateTrainerCourseRequestStatus, deleteTrainerCourseRequest } from '../../api/courseApi';
 import ConfirmModal from '../common/ConfirmModal';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminEnquiryPage() {
   const [activeTab, setActiveTab] = useState('public'); // 'public' | 'trainer'
@@ -74,6 +75,10 @@ export default function AdminEnquiryPage() {
   });
 
   const pendingTrainerCount = trainerRequests.filter(r => r.status === 'Pending').length;
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading enquiries..." />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">

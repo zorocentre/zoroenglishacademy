@@ -10,6 +10,7 @@ import { uploadFile, openFileWithSignedLink } from '../../api/fileApi';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminTrainerAssignmentsPage() {
   const { showError } = useDialog();
@@ -155,6 +156,10 @@ export default function AdminTrainerAssignmentsPage() {
 
   const pendingCount = submissions.filter(s => s.status !== 'Corrected' && s.status !== 'Reviewed').length;
   const correctedCount = submissions.filter(s => s.status === 'Corrected' || s.status === 'Reviewed').length;
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading trainer assignments..." />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">

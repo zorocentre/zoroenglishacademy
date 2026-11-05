@@ -601,6 +601,7 @@ export default function GuidanceVideoManager({ competitionId, competitionTitle =
             <div className="rounded-xl overflow-hidden aspect-video bg-black">
               <SafeVideo 
                 bunnyVideoId={previewVideo.bunnyVideoId} 
+                embedUrl={previewVideo.embedUrl}
                 title={previewVideo.caption || previewVideo.title}
                 className="w-full h-full" 
                 autoPlay 

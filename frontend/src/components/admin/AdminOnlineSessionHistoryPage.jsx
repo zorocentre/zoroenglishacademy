@@ -128,6 +128,10 @@ export default function AdminOnlineSessionHistoryPage() {
     return filteredSchedules.slice(start, start + pageSize);
   }, [filteredSchedules, currentPage, pageSize]);
 
+  if (loading) {
+    return <PageLoader fullPage message="Loading session history..." />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}

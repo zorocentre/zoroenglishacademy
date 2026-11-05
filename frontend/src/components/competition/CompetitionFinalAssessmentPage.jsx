@@ -408,7 +408,13 @@ export default function CompetitionFinalAssessmentPage() {
   // VIEW 1: RESULTS & SCORECARD VIEW
   // ==========================================
   if (resultsData) {
-    const isPendingVoice = resultsData.attempt?.status === 'EVALUATION_PENDING';
+    const hasSubjective = (resultsData.questions || []).some(q => {
+      const fmt = (q.answerFormat || q.type || q.questionFormat || '').toUpperCase();
+      return fmt === 'VOICE' || fmt === 'VOICE_RECORDING' || fmt === 'TEXT' || fmt === 'WRITTEN';
+    });
+    const isPendingVoice = resultsData.attempt?.status === 'EVALUATION_PENDING' || 
+      resultsData.attempt?.evaluationMode === 'MANUAL_PENDING' ||
+      (hasSubjective && resultsData.attempt?.status !== 'COMPLETED' && resultsData.attempt?.status !== 'EVALUATED');
     const score = resultsData.attempt?.totalMarks ?? resultsData.attempt?.score ?? 0;
     const totalMarks = resultsData.attempt?.maxMarks || resultsData.assessment?.totalMarks || 30;
     const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
@@ -468,17 +474,29 @@ export default function CompetitionFinalAssessmentPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
-              <div className="text-right">
-                <p className="text-xs text-indigo-200 font-medium">Marks Obtained</p>
-                <div className="text-3xl font-black text-white">
-                  {score} <span className="text-indigo-300 text-lg font-normal">/ {totalMarks}</span>
+            {isPendingVoice ? (
+              <div className="flex items-center gap-3 bg-amber-500/20 border border-amber-300/40 rounded-xl p-4 max-w-md">
+                <Clock className="w-6 h-6 text-amber-300 shrink-0" />
+                <div>
+                  <p className="text-xs text-amber-200 font-semibold uppercase tracking-wider">Evaluation Pending</p>
+                  <p className="text-sm font-bold text-white mt-0.5">
+                    Exam submitted. Results will be displayed after the trainer evaluation.
+                  </p>
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-bold text-white text-sm">
-                {percentage}%
+            ) : (
+              <div className="flex items-center gap-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
+                <div className="text-right">
+                  <p className="text-xs text-indigo-200 font-medium">Marks Obtained</p>
+                  <div className="text-3xl font-black text-white">
+                    {score} <span className="text-indigo-300 text-lg font-normal">/ {totalMarks}</span>
+                  </div>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-bold text-white text-sm">
+                  {percentage}%
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Pending Voice Evaluation Alert */}
@@ -504,10 +522,18 @@ export default function CompetitionFinalAssessmentPage() {
 
           <div className="space-y-4">
             {(resultsData.questions || []).map((q, idx) => {
+              const qTypeStr = (q.answerFormat || q.type || q.questionFormat || '').toUpperCase();
+              const isVoice = qTypeStr === 'VOICE' || qTypeStr === 'VOICE_RECORDING';
+              const isWritten = qTypeStr === 'TEXT' || qTypeStr === 'WRITTEN';
+              const isMcq = !isVoice && !isWritten;
+
               const studentAnswer = q.studentAnswer || resultsData.attempt?.answers?.[q.id] || {};
-              const isVoice = q.type === 'VOICE' || q.questionFormat === 'VOICE' || q.answerFormat === 'VOICE_RECORDING';
               const isCorrect = studentAnswer.isCorrect;
-              const hasAnswered = isVoice ? !!studentAnswer.voiceFileId : !!studentAnswer.selectedOptionId;
+              const hasAnswered = isVoice 
+                ? !!studentAnswer.voiceFileId 
+                : isWritten 
+                  ? !!(studentAnswer.textAnswer && studentAnswer.textAnswer.trim().length > 0)
+                  : !!studentAnswer.selectedOptionId;
 
               return (
                 <div 
@@ -515,11 +541,13 @@ export default function CompetitionFinalAssessmentPage() {
                   className={`bg-white border rounded-2xl p-5 sm:p-6 shadow-sm transition-all ${
                     isVoice 
                       ? 'border-indigo-200 bg-indigo-50/10' 
-                      : isCorrect 
-                        ? 'border-emerald-200 bg-emerald-50/10' 
-                        : hasAnswered 
-                          ? 'border-rose-200 bg-rose-50/10' 
-                          : 'border-slate-200'
+                      : isWritten
+                        ? 'border-blue-200 bg-blue-50/10'
+                        : isCorrect 
+                          ? 'border-emerald-200 bg-emerald-50/10' 
+                          : hasAnswered 
+                            ? 'border-rose-200 bg-rose-50/10' 
+                            : 'border-slate-200'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -528,9 +556,13 @@ export default function CompetitionFinalAssessmentPage() {
                         {idx + 1}
                       </span>
                       <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                        isVoice ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'
+                        isVoice 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : isWritten 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-slate-100 text-slate-700'
                       }`}>
-                        {q.type || (isVoice ? 'VOICE' : 'MCQ')}
+                        {isVoice ? 'VOICE' : isWritten ? 'WRITTEN' : 'MCQ'}
                       </span>
                       <span className="text-xs font-semibold text-slate-500">
                         {q.marks || 1} {q.marks === 1 ? 'Mark' : 'Marks'}
@@ -538,7 +570,7 @@ export default function CompetitionFinalAssessmentPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {isVoice ? (
+                      {(isVoice || isWritten) ? (
                         <span className="text-xs px-3 py-1 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-200">
                           {studentAnswer.marksAwarded != null ? `${studentAnswer.marksAwarded} Marks Awarded` : 'Pending Review'}
                         </span>
@@ -588,7 +620,7 @@ export default function CompetitionFinalAssessmentPage() {
                   )}
 
                   {/* Text answer submission review */}
-                  {q.answerFormat === 'TEXT' && studentAnswer.textAnswer && (
+                  {isWritten && studentAnswer.textAnswer && (
                     <div className="mt-4 bg-blue-50/70 border border-blue-200 rounded-xl p-4">
                       <div className="flex items-center gap-2 text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">
                         <FileText className="w-4 h-4 text-blue-700" /> Your Written Submission
@@ -606,7 +638,7 @@ export default function CompetitionFinalAssessmentPage() {
                   )}
 
                   {/* MCQ Options */}
-                  {!isVoice && q.options && (
+                  {isMcq && q.options && (
                     <div className="mt-4 space-y-2">
                       {q.options.map(opt => {
                         const isStudentChoice = studentAnswer.selectedOptionId === opt.id;
@@ -678,7 +710,9 @@ export default function CompetitionFinalAssessmentPage() {
     const currentQuestion = questions[currentQuestionIndex];
     const totalQuestions = questions.length;
     const currentAnswer = currentQuestion ? studentAnswers[currentQuestion.id] : null;
-    const isCurrentVoice = currentQuestion?.type === 'VOICE';
+    const currentQType = (currentQuestion?.answerFormat || currentQuestion?.type || currentQuestion?.questionFormat || '').toUpperCase();
+    const isCurrentVoice = currentQType === 'VOICE' || currentQType === 'VOICE_RECORDING';
+    const isCurrentWritten = currentQType === 'TEXT' || currentQType === 'WRITTEN';
     const isFlagged = currentQuestion ? !!flaggedQuestions[currentQuestion.id] : false;
     const assignedSetCode = assignedSet?.code || attemptData.assignedSet?.code || 'A';
     const setStyle = SET_STYLES[assignedSetCode] || SET_STYLES.A;
@@ -770,9 +804,13 @@ export default function CompetitionFinalAssessmentPage() {
                       Q{currentQuestionIndex + 1}
                     </span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      isCurrentVoice ? 'bg-purple-500/20 text-purple-300' : 'bg-slate-800 text-slate-300'
+                      isCurrentVoice 
+                        ? 'bg-purple-500/20 text-purple-300' 
+                        : isCurrentWritten 
+                          ? 'bg-blue-500/20 text-blue-300' 
+                          : 'bg-slate-800 text-slate-300'
                     }`}>
-                      {currentQuestion.type || 'MCQ'}
+                      {isCurrentVoice ? 'VOICE' : isCurrentWritten ? 'WRITTEN' : 'MCQ'}
                     </span>
                     <span className="text-xs font-semibold text-slate-400">
                       {currentQuestion.marks || 1} {currentQuestion.marks === 1 ? 'Mark' : 'Marks'}

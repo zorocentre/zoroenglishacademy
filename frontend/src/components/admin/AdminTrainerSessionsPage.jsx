@@ -234,6 +234,10 @@ export default function AdminTrainerSessionsPage({ setActiveScreen: _setActiveSc
     }
   };
 
+  if (loading) {
+    return <PageLoader fullPage message="Loading trainer sessions..." />;
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">
       {/* Header Banner */}

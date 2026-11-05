@@ -366,6 +366,10 @@ export default function AdminSalaryPage() {
     return Math.max(0, o + r);
   }, [onlineSalary, recordedSalary]);
 
+  if (loading) {
+    return <PageLoader fullPage message="Loading trainer salaries..." />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Header */}

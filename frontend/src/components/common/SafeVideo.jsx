@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Video, Maximize2, Minimize2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { resolveFileUrl } from '../../api/fileApi';
+import { resolveFileUrl, getFileLink } from '../../api/fileApi';
+import { getVideoPlayback } from '../../api/videoApi';
 
 export default function SafeVideo({
   src,
@@ -45,13 +46,61 @@ export default function SafeVideo({
     }
   }
 
+  const [authorizedEmbedUrl, setAuthorizedEmbedUrl] = useState('');
+  const [authorizedStorageUrl, setAuthorizedStorageUrl] = useState('');
+
   const effectiveBunnyId = bunnyVideoId || refParsed?.bunnyVideoId || refParsed?.videoId || (typeof refParsed === 'string' && !refParsed.startsWith('http') && !refParsed.startsWith('/') ? refParsed : null);
   const effectiveEmbedUrl = embedUrl || refParsed?.embedUrl || (refParsed?.videoId && refParsed?.token ? `https://iframe.mediadelivery.net/embed/${refParsed.libraryId || libraryId}/${refParsed.videoId}?token=${refParsed.token}${refParsed.expiresAt ? `&expires=${refParsed.expiresAt}` : ''}` : null);
   const rawSrc = src || refParsed?.videoUrl || refParsed?.url || '';
   const resolvedSrc = rawSrc ? resolveFileUrl(rawSrc) : '';
 
-  const effectiveIframe = isIframe || Boolean(effectiveBunnyId) || Boolean(effectiveEmbedUrl) || (resolvedSrc && resolvedSrc.includes('mediadelivery.net'));
-  const effectiveSrc = effectiveEmbedUrl || (effectiveBunnyId ? (effectiveBunnyId.includes('http') ? effectiveBunnyId : `https://iframe.mediadelivery.net/embed/${libraryId}/${effectiveBunnyId}`) : resolvedSrc);
+  // Asynchronously resolve signed token authorization for Bunny Stream or signed link for Storage
+  useEffect(() => {
+    let active = true;
+
+    if (effectiveEmbedUrl && effectiveEmbedUrl.includes('token=')) {
+      setAuthorizedEmbedUrl(effectiveEmbedUrl);
+      return;
+    }
+
+    if (effectiveBunnyId && !effectiveBunnyId.startsWith('http') && !effectiveBunnyId.startsWith('/')) {
+      getVideoPlayback(effectiveBunnyId).then((res) => {
+        if (!active) return;
+        if (res && res.success && res.data?.embedUrl) {
+          setAuthorizedEmbedUrl(res.data.embedUrl);
+        } else if (effectiveEmbedUrl) {
+          setAuthorizedEmbedUrl(effectiveEmbedUrl);
+        }
+      }).catch((err) => {
+        if (!active) return;
+        console.warn('[SafeVideo] Playback token authorization error:', err);
+        if (effectiveEmbedUrl) {
+          setAuthorizedEmbedUrl(effectiveEmbedUrl);
+        }
+      });
+      return;
+    }
+
+    if (rawSrc && (rawSrc.startsWith('/api/files/') || rawSrc.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))) {
+      const fileId = rawSrc.replace(/^\/?api\/files\//, '').split('?')[0];
+      getFileLink(fileId).then((link) => {
+        if (!active) return;
+        const resolved = link?.url || link?.fileUrl || link?.directUrl;
+        if (resolved) {
+          setAuthorizedStorageUrl(resolved);
+        }
+      }).catch(() => {});
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveBunnyId, effectiveEmbedUrl, rawSrc, replayKey]);
+
+  const finalEmbedUrl = authorizedEmbedUrl || effectiveEmbedUrl;
+  const finalStorageUrl = authorizedStorageUrl || resolvedSrc;
+  const effectiveIframe = isIframe || Boolean(effectiveBunnyId) || Boolean(finalEmbedUrl) || (finalStorageUrl && finalStorageUrl.includes('mediadelivery.net'));
+  const effectiveSrc = finalEmbedUrl || (effectiveBunnyId ? (effectiveBunnyId.includes('http') ? effectiveBunnyId : `https://iframe.mediadelivery.net/embed/${libraryId}/${effectiveBunnyId}`) : finalStorageUrl);
 
   // Player.js listener to clear loading timeouts on real player events (ready, play, timeupdate)
   useEffect(() => {

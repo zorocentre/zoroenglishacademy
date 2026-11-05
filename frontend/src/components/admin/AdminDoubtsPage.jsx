@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle, MessageSquare, Send, CheckCircle2, User, Search, Layers, Clock } from 'lucide-react';
 import { getDoubts, resolveDoubt } from '../../api/doubtApi';
 import { getFriendlyDoubtId } from '../../utils/doubtRefUtil';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminDoubtsPage() {
   const [activeModeTab, setActiveModeTab] = useState('Online'); // 'Online' | 'Recorded' | 'Hybrid'
@@ -67,6 +68,10 @@ export default function AdminDoubtsPage() {
     acc[batch].push(d);
     return acc;
   }, {});
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading doubts..." />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">

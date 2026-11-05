@@ -113,3 +113,39 @@ export function istInputToUtcIso(localDtStr) {
   if (isNaN(d.getTime())) return null;
   return d.toISOString();
 }
+
+/**
+ * Formats a time or timestamp string strictly in Asia/Kolkata timezone with 12-hour AM/PM format (e.g. "10:30 PM").
+ * Handles UTC ISO strings, strings without timezone offset (appends Z), and pure time strings.
+ */
+export function formatIstTime(ts) {
+  if (!ts) return '';
+  const trimmed = String(ts).trim();
+  if (!trimmed) return '';
+
+  // If already in simple time format e.g. "10:30 AM"
+  if (/^\d{1,2}:\d{2}\s*(am|pm)$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  let s = trimmed;
+  // If ISO string without timezone offset, treat as UTC
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s) && !/[Z+-]/.test(s.slice(19))) {
+    s += 'Z';
+  } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(s)) {
+    s = s.replace(' ', 'T') + 'Z';
+  }
+
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return trimmed;
+    return d.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return trimmed;
+  }
+}

@@ -7,10 +7,12 @@ import { uploadFile, resolveFileUrl } from '../../api/fileApi';
 import { sanitizePhone, validatePhone, formatPhone, SUBMIT_PHONE_ERROR } from '../../utils/phoneValidator';
 import { useDialog } from '../../context/DialogContext';
 import PhoneInput from '../common/PhoneInput';
+import PageLoader from '../common/PageLoader';
 
 export default function StudentProfilePage() {
   const { user, updateUserInContext } = useAuth();
   const { showError, showWarning } = useDialog();
+  const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   
@@ -28,9 +30,14 @@ export default function StudentProfilePage() {
 
   useEffect(() => {
     if (user?.email || user?.id) {
-      getStudentEnrolledCourses(user.id || user.email).then(courses => {
-        setEnrolledCourses(courses || []);
-      });
+      setLoading(true);
+      getStudentEnrolledCourses(user.id || user.email)
+        .then(courses => {
+          setEnrolledCourses(courses || []);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
       setProfileData({
         name: user.name || '',
         email: user.email || '',
@@ -40,8 +47,14 @@ export default function StudentProfilePage() {
         avatar: user.avatar || ''
       });
       setSelectedPhoto(user.avatar || '');
+    } else {
+      setLoading(false);
     }
   }, [user]);
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading student profile..." />;
+  }
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];

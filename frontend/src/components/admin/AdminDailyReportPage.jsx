@@ -13,6 +13,7 @@ import { getCompetitions, getCompetitionActivityLogs } from '../../api/competiti
 import { exportToExcel } from '../../utils/excelExporter';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import Logo from '../common/Logo';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminDailyReportPage() {
   const { academyName, tagline } = useWebsiteSettings();
@@ -188,6 +189,10 @@ export default function AdminDailyReportPage() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading daily reports..." />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">

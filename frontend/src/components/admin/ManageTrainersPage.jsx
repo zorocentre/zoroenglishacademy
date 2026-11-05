@@ -7,9 +7,11 @@ import { sanitizePhone, validatePhone, formatPhone, SUBMIT_PHONE_ERROR } from '.
 import ConfirmModal from '../common/ConfirmModal';
 import PhoneInput from '../common/PhoneInput';
 import { useDialog } from '../../context/DialogContext';
+import PageLoader from '../common/PageLoader';
 
 export default function ManageTrainersPage() {
   const { showSuccess, showError, showWarning } = useDialog();
+  const [loading, setLoading] = useState(true);
   const [trainers, setTrainers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [joinedDate, setJoinedDate] = useState('');
@@ -176,8 +178,13 @@ export default function ManageTrainersPage() {
   });
 
   const loadData = async () => {
-    const res = await getTrainers();
-    setTrainers(res.data || []);
+    setLoading(true);
+    try {
+      const res = await getTrainers();
+      setTrainers(res.data || []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -438,6 +445,10 @@ export default function ManageTrainersPage() {
 
     return true;
   });
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading trainers..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">

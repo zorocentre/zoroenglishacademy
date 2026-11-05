@@ -1,3 +1,4 @@
+import { formatIstTime } from '../../utils/dateFormatter';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   CheckCircle2, BookOpen, Layers, Check, Calendar, AlertCircle,
@@ -309,7 +310,7 @@ export default function TrainerAttendancePage() {
         let timeLabel = '';
         if (record.joinedAt) {
           try {
-            timeLabel = new Date(record.joinedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = formatIstTime(record.joinedAt);
           } catch {}
         }
         return { status: 'PRESENT', record, timeLabel };

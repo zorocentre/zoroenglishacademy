@@ -6,51 +6,35 @@ import {
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Configure PDF.js worker with multi-layer hardening
+// Configure PDF.js worker with resilient blob URL and URL fallback
 let workerBlobUrl = null;
 
 function setupPdfWorker() {
   if (typeof window === 'undefined' || !pdfjsLib.GlobalWorkerOptions) return;
+  if (pdfjsLib.GlobalWorkerOptions.workerSrc) return;
 
-  // 1. Try native module worker via workerPort
-  try {
-    if (typeof Worker !== 'undefined') {
-      const worker = new Worker(
-        new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url),
-        { type: 'module' }
-      );
-      pdfjsLib.GlobalWorkerOptions.workerPort = worker;
-      return;
-    }
-  } catch (portErr) {
-    console.warn('Native module workerPort creation failed, attempting blob worker fallback:', portErr);
-  }
+  if (pdfjsWorker) {
+    // 1. Initialize with URL immediately
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-  // 2. Fetch worker script and create a blob URL with text/javascript MIME
-  if (!workerBlobUrl && pdfjsWorker) {
+    // 2. Asynchronously create a text/javascript Blob URL to avoid nginx .mjs MIME type restrictions
     try {
       fetch(pdfjsWorker)
-        .then((res) => res.text())
+        .then((res) => {
+          if (res.ok) return res.text();
+          throw new Error(`Worker fetch returned ${res.status}`);
+        })
         .then((code) => {
           const blob = new Blob([code], { type: 'text/javascript' });
           workerBlobUrl = URL.createObjectURL(blob);
           pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
         })
-        .catch((fetchErr) => {
-          console.warn('Blob worker fallback failed, falling back to URL workerSrc:', fetchErr);
-          pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+        .catch((err) => {
+          console.warn('Worker blob creation fallback failed; continuing with URL workerSrc:', err);
         });
-      return;
     } catch (e) {
-      console.warn('Blob worker setup failed:', e);
+      console.warn('Worker setup error:', e);
     }
-  }
-
-  // 3. Fallback to direct workerSrc URL
-  try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-  } catch (e) {
-    console.warn('PDF.js worker fallback initialization error:', e);
   }
 }
 
@@ -205,9 +189,14 @@ export default function CustomPdfViewer({
 
     return () => {
       active = false;
-      try {
-        if (loadingTask) loadingTask.destroy();
-      } catch {}
+      if (loadingTask) {
+        try {
+          const p = loadingTask.destroy();
+          if (p && typeof p.catch === 'function') {
+            p.catch(() => {});
+          }
+        } catch {}
+      }
     };
   }, [url]);
 
@@ -438,7 +427,7 @@ export default function CustomPdfViewer({
       </header>
 
       {/* Main Canvas Scroll View Area */}
-      <div className="flex-1 overflow-auto p-4 sm:p-8 flex items-center justify-center relative bg-slate-950/70">
+      <div ref={containerRef} className="flex-1 overflow-auto p-4 sm:p-8 flex flex-col items-center relative bg-slate-950/70">
         {loading && (
           <div className="flex flex-col items-center justify-center text-slate-400 space-y-3 py-16">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -453,7 +442,7 @@ export default function CustomPdfViewer({
           </div>
         )}
 
-        <div className={`relative shadow-2xl transition-transform ${loading || error ? 'hidden' : 'block'}`}>
+        <div className={`relative shadow-2xl transition-transform my-auto ${loading || error ? 'hidden' : 'block'}`}>
           <canvas
             ref={canvasRef}
             onContextMenu={(e) => e.preventDefault()}

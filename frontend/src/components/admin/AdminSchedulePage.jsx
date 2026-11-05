@@ -11,6 +11,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
 import { isValidGoogleMeetUrl, parseTimeToMinutes } from '../../utils/scheduleSortUtil';
+import PageLoader from '../common/PageLoader';
 
 const ALLOWED_EXTENSIONS = [
   'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt',
@@ -732,6 +733,10 @@ export default function AdminSchedulePage() {
     setFileErrors({});
     setShowAddModal(true);
   };
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading schedules..." />;
+  }
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen p-6 sm:p-8">

@@ -10,6 +10,7 @@ import { getCourses, updateCourse } from '../../api/courseApi';
 import ConfirmModal from '../common/ConfirmModal';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminAssignmentsPage() {
   const [activeTab, setActiveTab] = useState('Online'); // 'Online' | 'Recorded' | 'Hybrid' | 'TrainerCreated'
@@ -156,6 +157,10 @@ export default function AdminAssignmentsPage() {
 
   const uniqueBatches = Array.from(new Set(submissions.map(s => s.batchName).filter(Boolean)));
   const uniqueCourses = Array.from(new Set(submissions.filter(s => s.mode === 'Recorded').map(s => s.courseTitle).filter(Boolean)));
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading assignments..." />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">

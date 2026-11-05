@@ -6,6 +6,7 @@ import { exportToExcel } from '../../utils/excelExporter';
 import ConfirmModal from '../common/ConfirmModal';
 import MoneyInput from '../common/MoneyInput';
 import { useDialog } from '../../context/DialogContext';
+import PageLoader from '../common/PageLoader';
 
 export default function AdminFeesPage() {
   const { showSuccess, showError, showWarning } = useDialog();
@@ -115,6 +116,10 @@ export default function AdminFeesPage() {
   const totalStudentsCount = feeRecords.length;
   const pendingStudentsCount = feeRecords.filter(i => i.dueAmount > 0 && i.status === 'Pending').length;
   const overdueStudentsCount = feeRecords.filter(i => i.status === 'Overdue').length;
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading fees records..." />;
+  }
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen p-6 sm:p-8">

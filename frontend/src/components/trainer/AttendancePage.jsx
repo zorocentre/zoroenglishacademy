@@ -1,3 +1,4 @@
+import { formatIstTime } from '../../utils/dateFormatter';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { getAttendanceRecords } from '../../api/attendanceApi';
@@ -46,7 +47,7 @@ export default function TrainerAttendancePage({ setActiveScreen }) {
                   <td className="py-4 px-4 font-bold text-blue-900">{rec.course}</td>
                   <td className="py-4 px-4 text-slate-600">{rec.topic}</td>
                   <td className="py-4 px-4 text-slate-500">{rec.date}</td>
-                  <td className="py-4 px-4 font-bold text-slate-800">{rec.joinedAt}</td>
+                  <td className="py-4 px-4 font-bold text-slate-800">{formatIstTime(rec.joinedAt) || rec.joinedAt}</td>
                   <td className="py-4 px-4">
                     <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase border border-emerald-200">
                       {rec.status}

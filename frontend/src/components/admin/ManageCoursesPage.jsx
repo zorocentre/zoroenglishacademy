@@ -4,6 +4,7 @@ import { Plus, BookOpen, Edit, Layers, Trash2, User, Search } from 'lucide-react
 import { getCourses, deleteCourse, getCourseDeletionImpact } from '../../api/courseApi';
 import ConfirmModal from '../common/ConfirmModal';
 import SkeletonList from '../common/SkeletonList';
+import PageLoader from '../common/PageLoader';
 import { resolveFileUrl } from '../../api/fileApi';
 import { useDialog } from '../../context/DialogContext';
 
@@ -133,6 +134,10 @@ export default function ManageCoursesPage({ _setActiveScreen, setSelectedCourseI
       (course.price != null && String(course.price).includes(query))
     );
   });
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading courses..." />;
+  }
 
   return (
     <div className="p-[#16px] sm:p-8 space-y-6 bg-slate-50 min-h-screen">

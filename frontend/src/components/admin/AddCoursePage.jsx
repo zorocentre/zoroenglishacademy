@@ -4,11 +4,13 @@ import { createCourse } from '../../api/courseApi';
 import { getTrainers } from '../../api/userApi';
 import FileUploader from '../common/FileUploader';
 import MoneyInput from '../common/MoneyInput';
+import PageLoader from '../common/PageLoader';
 import { useDialog } from '../../context/DialogContext';
 import { normalizeGoogleMeetUrl, isValidGoogleMeetUrl } from '../../utils/scheduleSortUtil';
 
 export default function AddCoursePage({ setActiveScreen }) {
   const { showSuccess, showError } = useDialog();
+  const [loading, setLoading] = useState(true);
   const [trainersList, setTrainersList] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -35,10 +37,16 @@ export default function AddCoursePage({ setActiveScreen }) {
         setTrainersList(list);
       } catch (err) {
         console.error('Failed to load trainers:', err);
+      } finally {
+        setLoading(false);
       }
     }
     fetchTrainers();
   }, []);
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading course form..." />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();

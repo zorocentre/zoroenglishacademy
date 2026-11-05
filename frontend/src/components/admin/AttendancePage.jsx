@@ -1,3 +1,4 @@
+import { formatIstTime } from '../../utils/dateFormatter';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Users, UserCheck, Calendar, Download, BookOpen, Layers, Search, Clock, Check, AlertCircle } from 'lucide-react';
 import { getAttendanceRecords, getTrainerAttendanceRecords, updateStudentRemark, updateTrainerRemark } from '../../api/attendanceApi';
@@ -134,8 +135,7 @@ export default function AdminAttendancePage({ setActiveScreen }) {
       let timeLabel = '';
       if (record.joinedAt) {
         try {
-          const jDate = new Date(record.joinedAt);
-          timeLabel = jDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          timeLabel = formatIstTime(record.joinedAt);
         } catch {
           timeLabel = '';
         }
@@ -164,8 +164,7 @@ export default function AdminAttendancePage({ setActiveScreen }) {
       let timeLabel = '';
       if (record.joinedAt) {
         try {
-          const jDate = new Date(record.joinedAt);
-          timeLabel = jDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          timeLabel = formatIstTime(record.joinedAt);
         } catch {
           timeLabel = '';
         }
@@ -496,6 +495,10 @@ export default function AdminAttendancePage({ setActiveScreen }) {
 
     exportToExcel(`Trainers_Automatic_Attendance_${selectedDate || 'all'}.xlsx`, 'Trainer Attendance', headers, rows);
   };
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading attendance records..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">

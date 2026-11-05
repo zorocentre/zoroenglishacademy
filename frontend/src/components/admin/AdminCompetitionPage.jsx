@@ -12,6 +12,7 @@ import MoneyInput from '../common/MoneyInput';
 import { formatDate } from '../../utils/dateFormatter';
 import { useDialog } from '../../context/DialogContext';
 import AdminCompetitionPortalManagerModal from './AdminCompetitionPortalManagerModal';
+import PageLoader from '../common/PageLoader';
 
 const toIsoOrNull = (val) => {
   if (!val) return null;
@@ -71,6 +72,7 @@ export default function AdminCompetitionPage() {
   const navigate = useNavigate();
   const { showSuccess, showError, showWarning } = useDialog();
 
+  const [loading, setLoading] = useState(true);
   const [competitions, setCompetitions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
@@ -108,11 +110,14 @@ export default function AdminCompetitionPage() {
   });
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const compRes = await getCompetitions();
       setCompetitions(compRes.data || []);
     } catch (err) {
       console.error('Failed loading competition data:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -415,6 +420,10 @@ export default function AdminCompetitionPage() {
   const activeCount = competitions.filter(c => c.status === 'Active' || c.status === 'Registration Open').length;
   const upcomingCount = competitions.filter(c => c.status === 'Upcoming').length;
   const completedCount = competitions.filter(c => c.status === 'Completed' || c.status === 'Finished').length;
+
+  if (loading) {
+    return <PageLoader fullPage message="Loading competitions..." />;
+  }
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">
@@ -834,18 +843,6 @@ export default function AdminCompetitionPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1 border-t border-indigo-100/60">
-                  <input
-                    type="checkbox"
-                    id="answerReviewEnabled"
-                    checked={formData.answerReviewEnabled}
-                    onChange={(e) => setFormData({ ...formData, answerReviewEnabled: e.target.checked })}
-                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                  />
-                  <label htmlFor="answerReviewEnabled" className="text-xs font-bold text-slate-800 cursor-pointer">
-                    Enable Answer Review (Allow students to view question review & explanations after assessment)
-                  </label>
-                </div>
               </div>
 
               {/* File Upload Section */}
