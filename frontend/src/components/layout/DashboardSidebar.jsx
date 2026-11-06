@@ -1,3 +1,4 @@
+import { useCompetitionPortalSwitch } from '../../hooks/useCompetitionPortalSwitch';
 import React from 'react';
 import { 
   LayoutDashboard, Users, BookOpen, UserCheck, Calendar, 
@@ -9,6 +10,8 @@ import Logo from '../common/Logo';
 
 export default function DashboardSidebar({ role, activeScreen, setActiveScreen, isMobileOpen, onMobileClose }) {
   const { academyName } = useWebsiteSettings();
+  const { isStudent: isStudentFromHook, handleSwitchToCompetition } = useCompetitionPortalSwitch(role);
+  const isStudent = (role === 'STUDENT' || role === 'Student') || isStudentFromHook;
   let menuItems = [];
 
   if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'Admin') {
@@ -123,6 +126,19 @@ export default function DashboardSidebar({ role, activeScreen, setActiveScreen, 
       {/* Footer / Exit (Pushed permanently to Bottom) */}
       <div className="p-4 border-t border-slate-800 bg-slate-950/50 shrink-0">
         <div className="text-[10px] text-slate-400 font-bold mb-3 text-center">Small Steps Big Communication</div>
+        {isStudent && (
+          <button
+            onClick={async () => {
+              await handleSwitchToCompetition();
+              if (onMobileClose) onMobileClose();
+            }}
+            className="w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 transition cursor-pointer border border-slate-700/60 mb-2.5"
+            title="Switch to Competition Portal"
+          >
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <span>Switch to Competition Portal</span>
+          </button>
+        )}
         <button
           onClick={() => {
             setActiveScreen('public-home');

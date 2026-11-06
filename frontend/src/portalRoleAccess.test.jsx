@@ -77,7 +77,7 @@ describe('A1 & A2: Role-based Portal Selection & Route Guards', () => {
     expect(screen.queryByText(/Switch to Competition Portal/i)).toBeNull();
   });
 
-  it('Course-only student is redirected from /portal-select and /competition to /student and has no switch button', async () => {
+  it('Course-only student is redirected from /portal-select and /competition to /student and has switch button with no access dialog', async () => {
     const studentUser = {
       id: 'std_course_only',
       name: 'Course Student',
@@ -98,7 +98,8 @@ describe('A1 & A2: Role-based Portal Selection & Route Guards', () => {
       expect(window.location.pathname).toBe('/student');
     });
 
-    expect(screen.queryByText(/Switch to Competition Portal/i)).toBeNull();
+    const switchBtns = screen.getAllByText(/Switch to Competition Portal/i);
+    expect(switchBtns.length).toBeGreaterThan(0);
   });
 
   it('Competition-only student is redirected from /portal-select and /student to /competition and has no switch button', async () => {

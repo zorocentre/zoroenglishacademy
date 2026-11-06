@@ -339,9 +339,6 @@ export default function CompetitionLeaderboardPage() {
               <h2 className="text-xl sm:text-2xl font-black tracking-tight">
                 {myRank.studentName}
               </h2>
-              <div className="text-xs font-semibold text-slate-900/80">
-                Registration ID: <span className="font-mono">{myRank.registrationId}</span>
-              </div>
             </div>
 
             {/* Score & Rank Metrics */}
@@ -449,11 +446,6 @@ export default function CompetitionLeaderboardPage() {
                         </span>
                       )}
                     </h4>
-                    {!p.isProvisional && (
-                      <div className="text-[11px] text-slate-500 font-mono truncate">
-                        {p.registrationId}
-                      </div>
-                    )}
                   </div>
 
                   <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-black">
@@ -510,7 +502,7 @@ export default function CompetitionLeaderboardPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by student name or reg ID..."
+              placeholder="Search by student name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -602,11 +594,6 @@ export default function CompetitionLeaderboardPage() {
                               </span>
                             )}
                           </div>
-                          {!row.isProvisional && (
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              {row.registrationId}
-                            </div>
-                          )}
                         </td>
 
                         {/* Set Code */}

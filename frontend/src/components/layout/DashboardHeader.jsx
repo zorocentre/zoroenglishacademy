@@ -4,7 +4,7 @@ import { Bell, Calendar as CalendarIcon, Menu, X, AlertTriangle, Clock, CheckCir
 import { getMyNotifications } from '../../api/notificationApi';
 import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import { resolveFileUrl } from '../../api/fileApi';
-import { getMyPortals } from '../../api/competitionApi';
+import { useCompetitionPortalSwitch } from '../../hooks/useCompetitionPortalSwitch';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
 export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScreen }) {
@@ -12,7 +12,7 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
   const { academyName } = useWebsiteSettings();
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifList, setNotifList] = useState([]);
-  const [canSwitchToCompetition, setCanSwitchToCompetition] = useState(false);
+  const { isStudent, handleSwitchToCompetition } = useCompetitionPortalSwitch(user?.role);
 
   const currentDateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -23,30 +23,9 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
 
   useEffect(() => {
     loadNotifications();
-    checkPortals();
   }, [user]);
 
-  const checkPortals = async () => {
-    const roleUpper = String(user?.role || '').toUpperCase();
-    if (roleUpper === 'ADMIN' || roleUpper === 'SUPER_ADMIN' || roleUpper === 'TRAINER') {
-      setCanSwitchToCompetition(false);
-      return;
-    }
-    try {
-      const res = await getMyPortals();
-      if (res.success && res.data) {
-        const hasLearning = Boolean(res.data.learning ?? user?.hasCourseEnrollment);
-        const hasCompetition = Boolean(res.data.competition ?? user?.hasCompetitionRegistration);
-        setCanSwitchToCompetition(hasLearning && hasCompetition);
-      } else if (user) {
-        setCanSwitchToCompetition(Boolean(user.hasCourseEnrollment && user.hasCompetitionRegistration));
-      }
-    } catch (e) {
-      if (user) {
-        setCanSwitchToCompetition(Boolean(user.hasCourseEnrollment && user.hasCompetitionRegistration));
-      }
-    }
-  };
+
 
   const handleProfileClick = () => {
     if (!setActiveScreen) return;
@@ -112,10 +91,10 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
           <span>{currentDateStr}</span>
         </div>
 
-        {/* Switch to Competition Portal button (shown only to students registered in BOTH a course and a competition) */}
-        {canSwitchToCompetition && (
+        {/* Switch to Competition Portal button (shown to every logged-in student) */}
+        {isStudent && (
           <button
-            onClick={() => navigate('/competition')}
+            onClick={handleSwitchToCompetition}
             className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition cursor-pointer shadow-2xs"
             title="Switch to Competition Portal"
           >

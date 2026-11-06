@@ -67,7 +67,6 @@ export default function TrainerCompetitionsPage() {
 
   // Filters
   const [selectedCompId, setSelectedCompId] = useState('ALL');
-  const [selectedExamType, setSelectedExamType] = useState('ALL');
   const [selectedSetCode, setSelectedSetCode] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,7 +187,6 @@ export default function TrainerCompetitionsPage() {
     try {
       const res = await getTrainerFilteredSubmissions({
         competitionId: selectedCompId,
-        examType: selectedExamType,
         setCode: selectedSetCode,
         status: selectedStatus,
         search: searchQuery
@@ -209,7 +207,7 @@ export default function TrainerCompetitionsPage() {
       loadSubmissionsList();
       loadStudents();
     }
-  }, [selectedCompId, selectedExamType, selectedSetCode, selectedStatus, searchQuery, studentsPage]);
+  }, [selectedCompId, selectedSetCode, selectedStatus, searchQuery, studentsPage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -517,7 +515,7 @@ export default function TrainerCompetitionsPage() {
 
       {/* FILTER BAR */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Competition Selector */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
@@ -540,22 +538,6 @@ export default function TrainerCompetitionsPage() {
             </select>
           </div>
 
-          {/* Exam Type Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-              Exam Type
-            </label>
-            <select
-              value={selectedExamType}
-              onChange={(e) => setSelectedExamType(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="ALL">All Exam Types</option>
-              <option value="TEST_SERIES">Test Series</option>
-              <option value="MOCK_TEST">Mock Tests</option>
-              <option value="FINAL">Final Assessment</option>
-            </select>
-          </div>
 
           {/* Set Selector */}
           <div>
