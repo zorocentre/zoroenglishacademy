@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Layers, BookOpen, RefreshCw } from 'lucide-react';
+import { Layers, BookOpen, RefreshCw } from 'lucide-react';
 import { getCourses } from '../../api/courseApi';
 import { resolveFileUrl } from '../../api/fileApi';
 import SafeImage from '../common/SafeImage';
@@ -198,23 +198,15 @@ export default function CoursePage({ onOpenEnquire }) {
                     </button>
                   </div>
 
-                  {/* Video Preview Card */}
+                  {/* Course Banner */}
                   <div className="md:col-span-5">
-                    <div className="relative rounded-2xl overflow-hidden shadow-lg border-2 border-slate-200 group bg-slate-900">
+                    <div className="relative rounded-2xl overflow-hidden shadow-lg border-2 border-slate-200 group bg-slate-100">
                       <SafeImage
                         src={resolveFileUrl(selectedCourse.thumbnail || selectedCourse.videoUrl)}
                         alt={selectedCourse.title}
-                        className="w-full h-56 object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-56 object-cover group-hover:scale-105 transition-transform duration-500"
                         fallbackSrc="/assets/course-placeholder.svg"
                       />
-                      <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
-                        <button className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                          <Play className="w-7 h-7 fill-current ml-1" />
-                        </button>
-                      </div>
-                      <div className="absolute bottom-3 left-3 right-3 text-center text-xs font-bold text-white bg-slate-900/80 backdrop-blur-sm py-1.5 px-3 rounded-lg">
-                      
-                      </div>
                     </div>
                   </div>
 

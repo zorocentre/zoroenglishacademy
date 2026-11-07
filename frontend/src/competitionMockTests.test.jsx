@@ -82,7 +82,7 @@ describe('CompetitionMockTestsPage', () => {
     render(<CompetitionMockTestsPage />);
 
     // Check heading
-    expect(await screen.findByText(/Mock Tests \(4 Scheduled Windows\)/i)).toBeDefined();
+    expect(await screen.findByRole('heading', { level: 1, name: /^Mock Tests$/i })).toBeDefined();
 
     // Check Live Hero Banner
     expect(screen.getByText(/Championship Mock 1 is LIVE NOW!/i)).toBeDefined();

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Maximize2, CheckSquare, Square, AlertTriangle, Lock, Eye, Ban } from 'lucide-react';
+import ModalPortal from '../common/ModalPortal';
 
 export default function SecureExamConsentModal({
   isOpen,
@@ -12,17 +13,18 @@ export default function SecureExamConsentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 text-slate-800">
-        <div className="flex items-center space-x-3 border-b border-slate-100 pb-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-              Secure Lockdown Required
-            </span>
-            <h2 className="text-xl font-black text-slate-900 mt-1">
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 text-slate-800">
+          <div className="flex items-center space-x-3 border-b border-slate-100 pb-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                Secure Lockdown Required
+              </span>
+              <h2 className="text-xl font-black text-slate-900 mt-1">
               Proctored Exam Rules & Consent
             </h2>
           </div>
@@ -93,5 +95,6 @@ export default function SecureExamConsentModal({
         </div>
       </div>
     </div>
+  </ModalPortal>
   );
 }

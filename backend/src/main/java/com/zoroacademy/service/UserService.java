@@ -57,6 +57,9 @@ public class UserService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EmailService emailService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.repository.CompetitionRepository competitionRepository;
+
     @org.springframework.beans.factory.annotation.Autowired
     public UserService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
@@ -286,13 +289,95 @@ public class UserService {
             throw new IllegalArgumentException("Student email is required");
         }
         final String cleanEmail = dto.getEmail().trim().toLowerCase();
-        final String userId = (dto.getId() != null && !dto.getId().isBlank()) 
-                ? dto.getId() 
-                : "std_" + UUID.randomUUID().toString();
 
-        User existingUser = (dto.getId() != null && !dto.getId().isBlank()) 
-                ? userRepository.findById(dto.getId()).orElse(null)
+        // Server-side duplicate check evaluated in strict order (Task A3):
+        Optional<User> existingUserOpt = userRepository.findByEmailIgnoreCase(cleanEmail);
+        String resolvedUserId = (dto.getId() != null && !dto.getId().isBlank()) 
+                ? dto.getId() 
                 : null;
+        boolean isReusingExistingUser = false;
+
+        if (existingUserOpt.isPresent()) {
+            User existing = existingUserOpt.get();
+            String existingRole = existing.getRole() != null ? existing.getRole().toUpperCase() : "STUDENT";
+
+            // (a) e-mail belongs to an admin/trainer account -> keep existing rejection
+            if ("ADMIN".equals(existingRole) || "SUPER_ADMIN".equals(existingRole) || "TRAINER".equals(existingRole)) {
+                if (resolvedUserId == null || !existing.getId().equals(resolvedUserId)) {
+                    throw new com.zoroacademy.exception.ConflictException("A user with this email already exists");
+                }
+            }
+
+            // Check if existing user has an ACTIVE course student profile/enrollment
+            boolean hasActiveCourseEnrollment = false;
+            if (enrollmentRepository != null) {
+                hasActiveCourseEnrollment = enrollmentRepository.findByStudentId(existing.getId()).stream()
+                        .anyMatch(e -> !"Cancelled".equalsIgnoreCase(e.getStatus()) && !"Dropped".equalsIgnoreCase(e.getStatus()));
+            }
+            if (!hasActiveCourseEnrollment && studentCourseBatchRepository != null) {
+                hasActiveCourseEnrollment = !studentCourseBatchRepository.findByStudentId(existing.getId()).isEmpty();
+            }
+            if (!hasActiveCourseEnrollment && existing.getCourse() != null && !existing.getCourse().isBlank() && !"COMPETITION".equalsIgnoreCase(existing.getOrigin())) {
+                hasActiveCourseEnrollment = true;
+            }
+
+            // (b) e-mail belongs to a user that already has an ACTIVE course student profile/enrollment
+            if (hasActiveCourseEnrollment) {
+                if (resolvedUserId == null || !existing.getId().equals(resolvedUserId)) {
+                    throw new com.zoroacademy.exception.ConflictException("A student with this email already exists");
+                }
+            } else {
+                // (c) e-mail belongs to an existing competition participant account that has NO active course student profile
+                List<CompetitionRegistration> compRegs = new ArrayList<>();
+                if (competitionRegistrationRepository != null) {
+                    compRegs.addAll(competitionRegistrationRepository.findByStudentId(existing.getId()));
+                    if (existing.getEmail() != null) {
+                        for (CompetitionRegistration r : competitionRegistrationRepository.findByStudentEmailIgnoreCase(existing.getEmail())) {
+                            if (compRegs.stream().noneMatch(x -> x.getId().equals(r.getId()))) {
+                                compRegs.add(r);
+                            }
+                        }
+                    }
+                }
+                boolean isCompetitionAccount = "COMPETITION".equalsIgnoreCase(existing.getOrigin()) || !compRegs.isEmpty();
+                if (isCompetitionAccount) {
+                    if (!Boolean.TRUE.equals(dto.getConfirmExistingCompetitionAccount())) {
+                        // Return specific machine-readable confirmation payload
+                        List<String> compNames = compRegs.stream()
+                                .map(r -> {
+                                    if (r.getCompetition() != null && r.getCompetition().getTitle() != null) return r.getCompetition().getTitle();
+                                    if (r.getCompetitionId() != null && competitionRepository != null) {
+                                        return competitionRepository.findById(r.getCompetitionId()).map(Competition::getTitle).orElse(r.getCompetitionId());
+                                    }
+                                    return "Competition";
+                                })
+                                .filter(Objects::nonNull)
+                                .distinct()
+                                .collect(Collectors.toList());
+
+                        UserDto confDto = new UserDto();
+                        confDto.setExistingCompetitionAccount(true);
+                        confDto.setCandidateName(existing.getName() != null && !existing.getName().isBlank() ? existing.getName() : (compRegs.isEmpty() ? "Candidate" : compRegs.get(0).getStudentName()));
+                        confDto.setCompetitions(compNames);
+                        confDto.setEmail(cleanEmail);
+                        confDto.setId(existing.getId());
+                        return confDto;
+                    }
+
+                    // Re-verify case (c) itself (the flag alone is not trusted)
+                    resolvedUserId = existing.getId();
+                    isReusingExistingUser = true;
+                }
+            }
+        }
+
+        // (d) No account -> normal creation as today
+        if (resolvedUserId == null) {
+            resolvedUserId = "std_" + UUID.randomUUID().toString();
+        }
+        final String effectiveUserId = resolvedUserId;
+
+        User existingUser = userRepository.findById(effectiveUserId).orElse(null);
 
         final String cleanUsername = dto.getUsername() != null && !dto.getUsername().isBlank()
                 ? dto.getUsername().trim()
@@ -300,45 +385,59 @@ public class UserService {
                     ? existingUser.getUsername()
                     : cleanEmail);
 
-        // Prevent duplicate email with another account
-        userRepository.findByEmailIgnoreCase(cleanEmail).ifPresent(existing -> {
-            if (existing.getId() == null || !existing.getId().equals(userId)) {
-                throw new com.zoroacademy.exception.ConflictException("A student with this email already exists");
-            }
-        });
-
         // Prevent duplicate username with another account
         userRepository.findByUsernameIgnoreCase(cleanUsername).ifPresent(existing -> {
-            if (existing.getId() == null || !existing.getId().equals(userId)) {
+            if (existing.getId() == null || !existing.getId().equals(effectiveUserId)) {
                 throw new com.zoroacademy.exception.ConflictException("Username is already taken: " + cleanUsername);
             }
         });
 
-        User user = userRepository.findById(userId).orElseGet(() -> User.builder().id(userId).role("STUDENT").build());
+        User user = existingUser != null ? existingUser : User.builder().id(effectiveUserId).role("STUDENT").build();
         user.setEmail(cleanEmail);
-        user.setName(dto.getName() != null ? dto.getName().trim() : "Student");
+        user.setName(dto.getName() != null ? dto.getName().trim() : (user.getName() != null ? user.getName() : "Student"));
         user.setUsername(cleanUsername);
 
         if (dto.getPhone() != null && !dto.getPhone().isBlank()) {
             PhoneValidator.validate(dto.getPhone());
             user.setPhone(PhoneValidator.sanitize(dto.getPhone()));
-        } else {
+        } else if (user.getPhone() == null) {
             user.setPhone(null);
         }
 
-        user.setAddress(dto.getAddress());
-        user.setJoinedOn(dto.getJoinedOn());
+        if (dto.getAddress() != null) user.setAddress(dto.getAddress());
+        if (dto.getJoinedOn() != null) user.setJoinedOn(dto.getJoinedOn());
         user.setStatus(dto.getStatus() != null ? dto.getStatus() : "Active");
         user.setCourse(dto.getCourse());
+        user.setOrigin("LEARNING");
 
         final boolean isNewStudent = user.getPassword() == null || user.getPassword().isBlank();
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
             validatePasswordStrength(dto.getPassword().trim());
             user.setPassword(passwordEncoder.encode(dto.getPassword().trim()));
-            user.setAdminVisiblePassword(adminPasswordCryptoService.encrypt(dto.getPassword().trim()));
+            String encryptedPwd = adminPasswordCryptoService.encrypt(dto.getPassword().trim());
+            user.setAdminVisiblePassword(encryptedPwd);
             user.setMustChangePassword(false);
-            if (!isNewStudent && refreshTokenRepository != null) {
+            if (refreshTokenRepository != null) {
                 refreshTokenRepository.revokeAllByUserId(user.getId());
+            }
+
+            // If reusing existing competition account, update admin-visible encrypted copy on competition registrations
+            if (isReusingExistingUser && competitionRegistrationRepository != null) {
+                List<CompetitionRegistration> regs = new ArrayList<>(competitionRegistrationRepository.findByStudentId(user.getId()));
+                if (user.getEmail() != null) {
+                    for (CompetitionRegistration r : competitionRegistrationRepository.findByStudentEmailIgnoreCase(user.getEmail())) {
+                        if (regs.stream().noneMatch(x -> x.getId().equals(r.getId()))) {
+                            regs.add(r);
+                        }
+                    }
+                }
+                for (CompetitionRegistration r : regs) {
+                    r.setEncryptedPassword(encryptedPwd);
+                    if (r.getStudentId() == null || !r.getStudentId().equals(user.getId())) {
+                        r.setStudentId(user.getId());
+                    }
+                    competitionRegistrationRepository.save(r);
+                }
             }
         } else if (isNewStudent) {
             throw new IllegalArgumentException("Password is required for new student (min 8 characters, at least 1 letter and 1 digit)");
@@ -349,7 +448,7 @@ public class UserService {
 
         // Relational course-batch & enrollment synchronization via EnrollmentService
         if (dto.getCourseBatches() != null) {
-            Set<String> previousCourseIds = enrollmentRepository.findByStudentId(userId).stream()
+            Set<String> previousCourseIds = enrollmentRepository.findByStudentId(effectiveUserId).stream()
                     .filter(e -> "Active".equalsIgnoreCase(e.getStatus()))
                     .map(Enrollment::getCourseId)
                     .collect(Collectors.toSet());
@@ -406,7 +505,7 @@ public class UserService {
                     }
 
                     newCourseIds.add(resolvedCId);
-                    enrollmentService.enroll(userId, dto.getEmail(), resolvedCId, resolvedBId != null ? resolvedBId : resolvedBName);
+                    enrollmentService.enroll(effectiveUserId, dto.getEmail(), resolvedCId, resolvedBId != null ? resolvedBId : resolvedBName);
                     readableEntries.add(resolvedCName + (resolvedBName != null && !resolvedBName.isBlank() ? " (" + resolvedBName + ")" : ""));
                 }
             }
@@ -414,7 +513,7 @@ public class UserService {
             // Deactivate any courses from which the student was removed
             for (String oldCourseId : previousCourseIds) {
                 if (!newCourseIds.contains(oldCourseId)) {
-                    enrollmentService.deactivateEnrollment(userId, oldCourseId);
+                    enrollmentService.deactivateEnrollment(effectiveUserId, oldCourseId);
                 }
             }
 
@@ -424,7 +523,7 @@ public class UserService {
             }
         }
 
-        if (isNewStudent) {
+        if (isNewStudent || isReusingExistingUser) {
             try {
                 notificationService.createNotification(
                     user.getId(),
@@ -888,6 +987,20 @@ public class UserService {
             refreshTokenRepository.revokeAllByUserId(user.getId());
         }
 
+        boolean isStudent = "STUDENT".equalsIgnoreCase(user.getRole());
+        List<CompetitionRegistration> compRegs = new ArrayList<>();
+        if (competitionRegistrationRepository != null) {
+            compRegs.addAll(competitionRegistrationRepository.findByStudentId(user.getId()));
+            if (user.getEmail() != null) {
+                for (CompetitionRegistration r : competitionRegistrationRepository.findByStudentEmailIgnoreCase(user.getEmail())) {
+                    if (compRegs.stream().noneMatch(existing -> existing.getId().equals(r.getId()))) {
+                        compRegs.add(r);
+                    }
+                }
+            }
+        }
+        boolean hasCompetitionData = isStudent && !compRegs.isEmpty();
+
         // Cascaded removal of student's dependents in ONE transaction
         if (attendanceRecordRepository != null) {
             attendanceRecordRepository.deleteAll(attendanceRecordRepository.findByStudentId(user.getId()));
@@ -901,9 +1014,6 @@ public class UserService {
         if (doubtRepository != null) {
             doubtRepository.deleteAll(doubtRepository.findByStudentId(user.getId()));
         }
-        if (notificationRepository != null) {
-            notificationRepository.deleteAll(notificationRepository.findByRecipientId(user.getId()));
-        }
         if (studentProgressRepository != null) {
             studentProgressRepository.deleteAll(studentProgressRepository.findByStudentIdIgnoreCase(user.getId()));
         }
@@ -916,9 +1026,7 @@ public class UserService {
                 enrollmentRequestRepository.deleteAll(enrollmentRequestRepository.findByStudentEmailIgnoreCase(user.getEmail()));
             }
         }
-        if (competitionRegistrationRepository != null) {
-            competitionRegistrationRepository.deleteAll(competitionRegistrationRepository.findByStudentId(user.getId()));
-        }
+
         if (studentFeeRepository != null) {
             List<StudentFee> fees = studentFeeRepository.findByStudentId(user.getId());
             if (feePaymentRepository != null && fees != null) {
@@ -935,7 +1043,9 @@ public class UserService {
             salaryRecordRepository.deleteAll(salaryRecordRepository.findByTrainerId(user.getId()));
         }
 
-        studentCourseBatchRepository.deleteByStudentId(user.getId());
+        if (studentCourseBatchRepository != null) {
+            studentCourseBatchRepository.deleteByStudentId(user.getId());
+        }
         List<Enrollment> enrs = enrollmentRepository.findByStudentId(user.getId());
         if (enrs != null && !enrs.isEmpty()) {
             enrollmentRepository.deleteAll(enrs);
@@ -946,10 +1056,48 @@ public class UserService {
                 enrollmentRepository.deleteAll(enrsByEmail);
             }
         }
-        if (user.getAvatar() != null) {
-            cleanupStoredFilesFromText(user.getAvatar());
+
+        if (hasCompetitionData) {
+            // Task A2: Retain the user identity, login credentials, avatar, and ALL competition data!
+            // Clean only course-related notifications:
+            if (notificationRepository != null) {
+                List<Notification> userNotifs = notificationRepository.findByRecipientId(user.getId());
+                if (userNotifs != null && !userNotifs.isEmpty()) {
+                    List<Notification> courseNotifs = userNotifs.stream()
+                            .filter(this::isCourseNotification)
+                            .toList();
+                    notificationRepository.deleteAll(courseNotifs);
+                }
+            }
+            user.setCourse(null);
+            user.setOrigin("COMPETITION");
+            userRepository.save(user);
+        } else {
+            // Normal full deletion for users with no competition registrations
+            if (competitionRegistrationRepository != null) {
+                competitionRegistrationRepository.deleteAll(competitionRegistrationRepository.findByStudentId(user.getId()));
+            }
+            if (notificationRepository != null) {
+                notificationRepository.deleteAll(notificationRepository.findByRecipientId(user.getId()));
+            }
+            if (user.getAvatar() != null) {
+                cleanupStoredFilesFromText(user.getAvatar());
+            }
+            userRepository.delete(user);
         }
-        userRepository.delete(user);
+    }
+
+    private boolean isCourseNotification(Notification n) {
+        if (n == null) return false;
+        String title = n.getTitle() != null ? n.getTitle().toLowerCase() : "";
+        String msg = n.getMessage() != null ? n.getMessage().toLowerCase() : "";
+        if (title.contains("competition") || title.contains("test series") || title.contains("mock test") || title.contains("final assessment") || title.contains("result ready")) {
+            return false;
+        }
+        if (msg.contains("competition") || msg.contains("test series") || msg.contains("mock test") || msg.contains("final assessment")) {
+            return false;
+        }
+        return title.startsWith("enrolled in") || title.contains("fee payment") || title.contains("session") || title.contains("doubt") || title.contains("assignment");
     }
 
     private void cleanupStoredFilesFromText(String text) {

@@ -2038,6 +2038,7 @@ public class CompetitionService {
         List<CompetitionAssessment> asmts = assessmentRepository.findByCompetitionIdOrderBySequenceNoAsc(compId)
                 .stream()
                 .filter(a -> "TEST_SERIES".equalsIgnoreCase(a.getType()))
+                .filter(a -> !"STUDENT".equalsIgnoreCase(role) || "PUBLISHED".equalsIgnoreCase(a.getStatus()))
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> testList = new ArrayList<>();
@@ -2126,6 +2127,7 @@ public class CompetitionService {
         List<CompetitionAssessment> mocks = assessmentRepository.findByCompetitionIdOrderBySequenceNoAsc(compId)
                 .stream()
                 .filter(a -> "MOCK".equalsIgnoreCase(a.getType()))
+                .filter(a -> !"STUDENT".equalsIgnoreCase(role) || "PUBLISHED".equalsIgnoreCase(a.getStatus()))
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> mockList = new ArrayList<>();
@@ -2379,7 +2381,12 @@ public class CompetitionService {
     @Transactional
     public Map<String, Object> startOrResumeTestAttempt(String asmtId, User user) {
         CompetitionAssessment asmt = getAssessmentById(asmtId);
-        if (!"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+        String role = (user != null && user.getRole() != null ? user.getRole() : "").toUpperCase();
+        if ("STUDENT".equals(role)) {
+            if (!"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+                throw new ResourceNotFoundException("Assessment not found: " + asmtId);
+            }
+        } else if (!"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
             throw new BadRequestException("Assessment is not published yet");
         }
 
@@ -2408,7 +2415,6 @@ public class CompetitionService {
         }
 
         CompetitionRegistration reg = getStudentPaidRegistration(asmt.getCompetitionId(), user);
-        String role = (user.getRole() != null ? user.getRole() : "").toUpperCase();
         if ("STUDENT".equals(role) && reg == null) {
             throw new ForbiddenException("You must have a paid registration to attempt this test");
         }
@@ -2683,6 +2689,10 @@ public class CompetitionService {
     @Transactional
     public Map<String, Object> saveAttemptAnswer(String asmtId, Map<String, Object> payload, User user) {
         CompetitionAssessment asmt = getAssessmentById(asmtId);
+        String role = (user != null && user.getRole() != null ? user.getRole() : "").toUpperCase();
+        if ("STUDENT".equals(role) && !"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+            throw new ResourceNotFoundException("Assessment not found: " + asmtId);
+        }
         CompetitionRegistration reg = getStudentPaidRegistration(asmt.getCompetitionId(), user);
         String regId = reg != null ? reg.getId() : "reg_admin_" + user.getId();
         int currentVer = asmt.getPublishVersion() != null ? asmt.getPublishVersion() : 1;
@@ -2811,6 +2821,10 @@ public class CompetitionService {
     @Transactional
     public Map<String, Object> submitTestAttempt(String asmtId, User user) {
         CompetitionAssessment asmt = getAssessmentById(asmtId);
+        String role = (user != null && user.getRole() != null ? user.getRole() : "").toUpperCase();
+        if ("STUDENT".equals(role) && !"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+            throw new ResourceNotFoundException("Assessment not found: " + asmtId);
+        }
         CompetitionRegistration reg = getStudentPaidRegistration(asmt.getCompetitionId(), user);
         String regId = reg != null ? reg.getId() : "reg_admin_" + user.getId();
         int currentVer = asmt.getPublishVersion() != null ? asmt.getPublishVersion() : 1;
@@ -3074,6 +3088,9 @@ public class CompetitionService {
 
         AssessmentAttempt attempt = null;
         if ("STUDENT".equals(role)) {
+            if (!"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+                throw new ResourceNotFoundException("Assessment not found: " + asmtId);
+            }
             CompetitionRegistration reg = getStudentPaidRegistration(asmt.getCompetitionId(), user);
             if (reg == null) {
                 throw new ForbiddenException("You are not registered for this competition");

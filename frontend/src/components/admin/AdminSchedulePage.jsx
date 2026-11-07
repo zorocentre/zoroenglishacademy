@@ -12,6 +12,7 @@ import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import { useDialog } from '../../context/DialogContext';
 import { isValidGoogleMeetUrl, parseTimeToMinutes } from '../../utils/scheduleSortUtil';
 import PageLoader from '../common/PageLoader';
+import ModalPortal from '../common/ModalPortal';
 
 const ALLOWED_EXTENSIONS = [
   'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt',
@@ -1190,7 +1191,8 @@ export default function AdminSchedulePage() {
 
       {/* Add / Edit Schedule Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalPortal isOpen={showAddModal}>
+          <div className="fixed inset-0 z-[10000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-4 text-xs max-h-[90dvh] overflow-y-auto">
             <button
               onClick={() => {
@@ -1528,11 +1530,13 @@ export default function AdminSchedulePage() {
             </form>
           </div>
         </div>
+      </ModalPortal>
       )}
 
       {/* Reschedule Modal */}
       {rescheduleItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 text-xs">
+        <ModalPortal isOpen={Boolean(rescheduleItem)}>
+          <div className="fixed inset-0 z-[10000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 text-xs">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-4 max-h-[90dvh] overflow-y-auto">
             <button
               onClick={() => setRescheduleItem(null)}
@@ -1657,6 +1661,7 @@ export default function AdminSchedulePage() {
             </form>
           </div>
         </div>
+      </ModalPortal>
       )}
 
       {/* Delete Confirmation Modal */}

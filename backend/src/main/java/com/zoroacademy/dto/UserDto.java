@@ -28,6 +28,10 @@ public class UserDto {
     private String password;
     private Boolean mustChangePassword = false;
     private java.util.List<java.util.Map<String, Object>> courseBatches;
+    private Boolean existingCompetitionAccount;
+    private String candidateName;
+    private java.util.List<String> competitions;
+    private Boolean confirmExistingCompetitionAccount;
 
     public UserDto() {}
 
@@ -97,6 +101,14 @@ public class UserDto {
     public void setHasCompetitionRegistration(Boolean hasCompetitionRegistration) { this.hasCompetitionRegistration = hasCompetitionRegistration; }
     public java.util.List<java.util.Map<String, Object>> getCourseBatches() { return courseBatches; }
     public void setCourseBatches(java.util.List<java.util.Map<String, Object>> courseBatches) { this.courseBatches = courseBatches; }
+    public Boolean getExistingCompetitionAccount() { return existingCompetitionAccount; }
+    public void setExistingCompetitionAccount(Boolean existingCompetitionAccount) { this.existingCompetitionAccount = existingCompetitionAccount; }
+    public String getCandidateName() { return candidateName; }
+    public void setCandidateName(String candidateName) { this.candidateName = candidateName; }
+    public java.util.List<String> getCompetitions() { return competitions; }
+    public void setCompetitions(java.util.List<String> competitions) { this.competitions = competitions; }
+    public Boolean getConfirmExistingCompetitionAccount() { return confirmExistingCompetitionAccount; }
+    public void setConfirmExistingCompetitionAccount(Boolean confirmExistingCompetitionAccount) { this.confirmExistingCompetitionAccount = confirmExistingCompetitionAccount; }
 
     public static UserDto fromEntity(User user) {
         if (user == null) return null;

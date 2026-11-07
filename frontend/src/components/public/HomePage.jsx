@@ -247,8 +247,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
                       <p className="text-slate-500 text-xs mt-2 line-clamp-2">{course.description}</p>
                     </div>
                   </div>
-                  <div className="p-6 pt-0 flex items-center justify-between border-t border-slate-100 mt-4">
-                    <span className="text-xs font-extrabold text-slate-700">★ {course.rating || '4.9'} ({course.enrolled || 50}+ Students)</span>
+                  <div className="p-6 pt-0 flex items-center justify-end border-t border-slate-100 mt-4">
                     <button 
                       onClick={() => setActiveScreen('public-course')}
                       className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-1 cursor-pointer"

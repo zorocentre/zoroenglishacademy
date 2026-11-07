@@ -80,7 +80,7 @@ describe('CompetitionTestSeriesPage (Phase 1)', () => {
 
     render(<CompetitionTestSeriesPage />);
 
-    expect(await screen.findByText(/Competition Test Series \(35 Slots\)/i)).toBeDefined();
+    expect(await screen.findByRole('heading', { level: 1, name: /^Competition Test Series$/i })).toBeDefined();
     expect(screen.getByText('Test Series 1')).toBeDefined();
     expect(screen.getByText('Test Series 2')).toBeDefined();
     expect(screen.getByText('Coming soon')).toBeDefined();

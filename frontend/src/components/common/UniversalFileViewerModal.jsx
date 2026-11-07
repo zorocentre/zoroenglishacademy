@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
 import { X, Download, FileText, Film, Music, Image as ImageIcon, FileSpreadsheet, Archive, AlertCircle, Loader2 } from 'lucide-react';
 import { resolveFileUrl, getFileLink, openFileWithSignedLink } from '../../api/fileApi';
 import { useAuth } from '../../context/AuthContext';
 import SafeImage from './SafeImage';
 import CustomPdfViewer from './CustomPdfViewer';
+import ModalPortal from './ModalPortal';
 
 export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDownload = true }) {
   const auth = useAuth?.() || {};
@@ -135,7 +135,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
   const modalContent = (
     <div 
       onContextMenu={hideDownload ? (e) => e.preventDefault() : undefined}
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in"
+      className="fixed inset-0 z-[10000] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in"
     >
       <div className="bg-white rounded-none sm:rounded-3xl max-w-5xl w-full h-full sm:h-[92vh] sm:w-[94vw] max-h-none sm:max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden relative">
         
@@ -405,5 +405,5 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
     </div>
   );
 
-  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
+  return <ModalPortal isOpen={isOpen}>{modalContent}</ModalPortal>;
 }

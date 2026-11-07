@@ -25,6 +25,7 @@ import SecureExamConsentModal from './SecureExamConsentModal';
 import ProctorViolationWarningModal from './ProctorViolationWarningModal';
 import { useSecureExamProctor } from './useSecureExamProctor';
 import { getServerNow } from '../../utils/scheduleSortUtil';
+import ModalPortal from '../common/ModalPortal';
 
 export default function CompetitionMockTestsPage() {
   const { currentCompetition, isExamActive, setIsExamActive } = useOutletContext();
@@ -976,68 +977,70 @@ export default function CompetitionMockTestsPage() {
 
         {/* Confirm Submit Modal */}
         {showConfirmSubmit && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
-              <div className="flex items-center gap-3 text-amber-600">
-                <AlertCircle className="w-6 h-6" />
-                <h3 className="text-lg font-bold text-slate-900">Submit Mock Test?</h3>
-              </div>
-              <p className="text-sm text-slate-600">
-                Are you ready to submit your exam? Once submitted, your MCQ answers will be scored immediately and your solutions unlocked.
-              </p>
+          <ModalPortal isOpen={showConfirmSubmit}>
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <AlertCircle className="w-6 h-6" />
+                  <h3 className="text-lg font-bold text-slate-900">Submit Mock Test?</h3>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Are you ready to submit your exam? Once submitted, your MCQ answers will be scored immediately and your solutions unlocked.
+                </p>
 
-              {/* Status summary */}
-              <div className="bg-slate-50 rounded-xl p-3 text-xs space-y-1.5 text-slate-700">
-                <div className="flex justify-between">
-                  <span>Total Questions:</span>
-                  <span className="font-bold">{questions.length}</span>
+                {/* Status summary */}
+                <div className="bg-slate-50 rounded-xl p-3 text-xs space-y-1.5 text-slate-700">
+                  <div className="flex justify-between">
+                    <span>Total Questions:</span>
+                    <span className="font-bold">{questions.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Answered Questions:</span>
+                    <span className="font-bold text-emerald-600">
+                      {Object.values(studentAnswers).filter(a => a?.selectedOptionId || a?.voiceFileId || (a?.textAnswer && a.textAnswer.trim().length > 0)).length}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Flagged for Review:</span>
+                    <span className="font-bold text-amber-600">
+                      {Object.values(flaggedQuestions).filter(Boolean).length}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>Answered Questions:</span>
-                  <span className="font-bold text-emerald-600">
-                    {Object.values(studentAnswers).filter(a => a?.selectedOptionId || a?.voiceFileId || (a?.textAnswer && a.textAnswer.trim().length > 0)).length}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Flagged for Review:</span>
-                  <span className="font-bold text-amber-600">
-                    {Object.values(flaggedQuestions).filter(Boolean).length}
-                  </span>
-                </div>
-              </div>
 
-              {submitError && (
-                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
-                  {submitError}
-                </div>
-              )}
+                {submitError && (
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
+                    {submitError}
+                  </div>
+                )}
 
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => setShowConfirmSubmit(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Return to Test
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleManualSubmit}
-                  className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow transition-colors"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <InlineSpinner /> Submitting...
-                    </>
-                  ) : (
-                    'Confirm & Submit'
-                  )}
-                </button>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setShowConfirmSubmit(false)}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Return to Test
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleManualSubmit}
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow transition-colors"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <InlineSpinner /> Submitting...
+                      </>
+                    ) : (
+                      'Confirm & Submit'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </div>
     );
@@ -1055,7 +1058,7 @@ export default function CompetitionMockTestsPage() {
           Scheduled Full-Length Simulations
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Mock Tests (4 Scheduled Windows)
+          Mock Tests
         </h1>
         <p className="text-sm sm:text-base text-slate-600 mt-1 max-w-2xl">
           Complete high-stakes full-length mock exams within strict scheduled time windows to experience authentic competition test conditions.
@@ -1138,6 +1141,11 @@ export default function CompetitionMockTestsPage() {
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
+        </div>
+      ) : mockTests.length === 0 ? (
+        <div className="p-12 text-center bg-white border border-slate-200 rounded-3xl text-slate-500 space-y-2">
+          <Layers className="w-10 h-10 text-slate-300 mx-auto" />
+          <p className="font-bold text-sm">No test published for this till now</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -293,6 +293,16 @@ public class CompetitionController {
     // --- Questions Builder (Phase 7) ---
     @GetMapping("/assessments/{asmtId}/questions")
     public ApiResponse<List<Map<String, Object>>> getQuestions(@PathVariable String asmtId) {
+        User user = null;
+        try {
+            user = getCurrentUser();
+        } catch (Exception ignored) {}
+        if (user != null && "STUDENT".equalsIgnoreCase(user.getRole())) {
+            CompetitionAssessment asmt = competitionService.getAssessmentById(asmtId);
+            if (asmt == null || !"PUBLISHED".equalsIgnoreCase(asmt.getStatus())) {
+                throw new com.zoroacademy.exception.ResourceNotFoundException("Assessment not found: " + asmtId);
+            }
+        }
         return ApiResponse.ok(competitionService.getAssessmentQuestions(asmtId));
     }
 

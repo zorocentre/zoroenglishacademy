@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, Search, Edit, Trash2, Key, X, Calendar, 
   Download, CheckCircle2, AlertCircle, Users as UsersIcon,
-  Copy, Check, Eye, EyeOff, Video
+  Copy, Check, Eye, EyeOff, Video, UserCheck
 } from 'lucide-react';
 import { getStudents, createStudent, updateStudent, deleteStudent, updateUserStatus, getAdminVisiblePassword, setAdminUserPassword } from '../../api/userApi';
 import { getCourses, getCourseStudents } from '../../api/courseApi';
@@ -13,6 +13,8 @@ import { sanitizePhone, validatePhone, SUBMIT_PHONE_ERROR } from '../../utils/ph
 import PhoneInput from '../common/PhoneInput';
 import ConfirmModal from '../common/ConfirmModal';
 import PageLoader from '../common/PageLoader';
+import ModalPortal from '../common/ModalPortal';
+import InlineSpinner from '../common/InlineSpinner';
 import { useDialog } from '../../context/DialogContext';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
@@ -60,6 +62,13 @@ export default function ManageStudentsPage() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [passwordModalError, setPasswordModalError] = useState('');
   const [passwordModalLoading, setPasswordModalLoading] = useState(false);
+
+  // Existing Competition Account confirmation states (Task A3)
+  const [compAccountConfirmation, setCompAccountConfirmation] = useState(null);
+  const [compConfirmPassword, setCompConfirmPassword] = useState('');
+  const [showCompConfirmPassword, setShowCompConfirmPassword] = useState(false);
+  const [compConfirmError, setCompConfirmError] = useState('');
+  const [compConfirmLoading, setCompConfirmLoading] = useState(false);
 
   const handleToggleRevealPassword = async (studentId) => {
     if (showPasswords[studentId]) {
@@ -341,6 +350,20 @@ export default function ManageStudentsPage() {
       return;
     }
 
+    // Task A3: Existing Competition participant account found
+    if (res.data?.existingCompetitionAccount) {
+      setCompAccountConfirmation({
+        candidateName: res.data.candidateName || newStudentObj.name,
+        email: res.data.email || newStudentObj.email,
+        competitions: res.data.competitions || [],
+        studentPayload: newStudentObj
+      });
+      setCompConfirmPassword(newStudentObj.password || '');
+      setShowCompConfirmPassword(false);
+      setCompConfirmError('');
+      return;
+    }
+
     logActivity('Student Created', `Added student "${newStudentObj.name}" (${newStudentObj.email}) enrolled in ${courseString}`, 'Student');
 
     if (res.data?.id) {
@@ -359,6 +382,60 @@ export default function ManageStudentsPage() {
     resetForm();
     setShowAddModal(false);
     loadData();
+  };
+
+  const handleConfirmCompAccount = async () => {
+    if (!compAccountConfirmation) return;
+    const pwd = compConfirmPassword ? compConfirmPassword.trim() : '';
+    if (!pwd || pwd.length < 8) {
+      setCompConfirmError('Password is required and must be at least 8 characters long.');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(pwd) || !/\d/.test(pwd)) {
+      setCompConfirmError('Password must contain at least one letter and one number.');
+      return;
+    }
+
+    setCompConfirmLoading(true);
+    setCompConfirmError('');
+
+    try {
+      const payload = {
+        ...compAccountConfirmation.studentPayload,
+        confirmExistingCompetitionAccount: true,
+        password: pwd
+      };
+
+      const res = await createStudent(payload);
+      if (!res.success) {
+        setCompConfirmError(res.message || 'Failed to create and link student');
+        return;
+      }
+
+      logActivity('Student Created', `Added student "${payload.name}" (${payload.email}) linked from existing Competition account`, 'Student');
+
+      if (res.data?.id) {
+        setRevealedPasswords(prev => ({ ...prev, [res.data.id]: pwd }));
+        setShowPasswords(prev => ({ ...prev, [res.data.id]: true }));
+      }
+
+      setCreatedEmailModalData({
+        studentName: payload.name,
+        email: payload.email,
+        joiningDate: payload.joinedOn,
+        courseBatches: payload.courseBatches,
+        password: pwd
+      });
+
+      setCompAccountConfirmation(null);
+      resetForm();
+      setShowAddModal(false);
+      loadData();
+    } catch (err) {
+      setCompConfirmError(err?.message || 'Server error linking student account');
+    } finally {
+      setCompConfirmLoading(false);
+    }
   };
 
   const handleUpdate = async (e) => {
@@ -1245,8 +1322,9 @@ export default function ManageStudentsPage() {
 
       {/* Requirement #7: ADD / EDIT STUDENT MODAL WITH COURSE-SPECIFIC BATCH DROPDOWN */}
       {(showAddModal || editingStudent) && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto text-xs">
+        <ModalPortal isOpen={Boolean(showAddModal || editingStudent)}>
+          <div className="fixed inset-0 z-[10000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto text-xs">
             <button
               onClick={() => { setShowAddModal(false); setEditingStudent(null); }}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
@@ -1469,11 +1547,13 @@ export default function ManageStudentsPage() {
             </form>
           </div>
         </div>
+      </ModalPortal>
       )}
 
       {/* Welcome Email Sent Confirmation Modal */}
       {createdEmailModalData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalPortal isOpen={Boolean(createdEmailModalData)}>
+          <div className="fixed inset-0 z-[10000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-4 text-xs">
             <button
               onClick={() => setCreatedEmailModalData(null)}
@@ -1537,11 +1617,13 @@ export default function ManageStudentsPage() {
             </button>
           </div>
         </div>
+      </ModalPortal>
       )}
 
       {/* Set New Password Modal */}
       {passwordModalStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalPortal isOpen={Boolean(passwordModalStudent)}>
+          <div className="fixed inset-0 z-[10000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-xs">
             <button
               type="button"
@@ -1602,6 +1684,117 @@ export default function ManageStudentsPage() {
             </form>
           </div>
         </div>
+      </ModalPortal>
+      )}
+
+      {/* Existing Competition Account Confirmation Modal (Task A3) */}
+      {compAccountConfirmation && (
+        <ModalPortal isOpen={Boolean(compAccountConfirmation)}>
+          <div className="fixed inset-0 z-[10001] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative space-y-4 text-xs animate-in zoom-in-95">
+              <button
+                type="button"
+                onClick={() => setCompAccountConfirmation(null)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center space-x-3 text-indigo-600">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Existing Competition Account Found
+                  </h3>
+                  <p className="text-slate-500 text-[11px] font-medium">
+                    Unified Student & Competition Identity
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-2 text-[11px] text-slate-700">
+                <div>
+                  <span className="text-slate-500 font-bold block">Participant Name:</span>
+                  <span className="font-extrabold text-slate-900">{compAccountConfirmation.candidateName}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block">Email:</span>
+                  <span className="font-mono font-bold text-slate-900">{compAccountConfirmation.email}</span>
+                </div>
+                {compAccountConfirmation.competitions?.length > 0 && (
+                  <div>
+                    <span className="text-slate-500 font-bold block">Registered Competitions:</span>
+                    <ul className="list-disc pl-4 font-semibold text-indigo-900">
+                      {compAccountConfirmation.competitions.map((cName, idx) => (
+                        <li key={idx}>{cName}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                This participant already has a competition account. Confirming will link this student to the selected course and grant LMS portal access while completely preserving all their competition records, attempts, and scores.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700">
+                  Set Password for Unified Account *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCompConfirmPassword ? 'text' : 'password'}
+                    value={compConfirmPassword}
+                    onChange={(e) => setCompConfirmPassword(e.target.value)}
+                    placeholder="Enter password (min 8 chars, 1 letter, 1 number)"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 pr-10 focus:outline-blue-600 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCompConfirmPassword(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showCompConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  This password will be updated for both Student LMS and Competition portal login.
+                </p>
+                {compConfirmError && (
+                  <p className="text-rose-600 font-bold text-[11px] mt-1">{compConfirmError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCompAccountConfirmation(null)}
+                  disabled={compConfirmLoading}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCompAccount}
+                  disabled={compConfirmLoading}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-md transition-colors cursor-pointer text-xs inline-flex items-center space-x-1.5"
+                >
+                  {compConfirmLoading ? (
+                    <>
+                      <InlineSpinner size="w-3.5 h-3.5" />
+                      <span>Linking Account...</span>
+                    </>
+                  ) : (
+                    <span>Confirm & Create Student</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Delete Confirmation Modal */}

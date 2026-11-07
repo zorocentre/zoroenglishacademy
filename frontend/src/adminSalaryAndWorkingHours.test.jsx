@@ -112,7 +112,7 @@ describe('Trainer Working Hours & Salary Management System', () => {
       </DialogProvider>
     );
 
-    expect(screen.getByText('Trainer Salary')).toBeDefined();
+    expect(await screen.findByText('Trainer Salary')).toBeDefined();
     expect(screen.getByText('Add Salary')).toBeDefined();
 
     await waitFor(() => {
@@ -130,7 +130,7 @@ describe('Trainer Working Hours & Salary Management System', () => {
       </DialogProvider>
     );
 
-    const addBtn = screen.getByRole('button', { name: /Add Salary/i });
+    const addBtn = await screen.findByRole('button', { name: /Add Salary/i });
     fireEvent.click(addBtn);
 
     await waitFor(() => {
@@ -155,7 +155,7 @@ describe('Trainer Working Hours & Salary Management System', () => {
       </DialogProvider>
     );
 
-    expect(screen.getByText('Online Session History')).toBeDefined();
+    expect(await screen.findByText('Online Session History')).toBeDefined();
 
     await waitFor(() => {
       expect(screen.getAllByText('English Pro').length).toBeGreaterThan(0);

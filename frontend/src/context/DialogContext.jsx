@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
 import { CheckCircle2, AlertCircle, AlertTriangle, HelpCircle, X } from 'lucide-react';
+import ModalPortal from '../components/common/ModalPortal';
 
 const DialogContext = createContext(null);
 
@@ -209,7 +209,7 @@ export function DialogProvider({ children }) {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[9999] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
+      className="fixed inset-0 z-[10002] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
       onClick={() => closeDialog(false)}
     >
       <div
@@ -300,7 +300,9 @@ export function DialogProvider({ children }) {
   return (
     <DialogContext.Provider value={{ showError, showSuccess, showWarning, confirm }}>
       {children}
-      {typeof document !== 'undefined' && dialogElement ? ReactDOM.createPortal(dialogElement, document.body) : dialogElement}
+      <ModalPortal isOpen={dialogState.isOpen}>
+        {dialogElement}
+      </ModalPortal>
     </DialogContext.Provider>
   );
 }

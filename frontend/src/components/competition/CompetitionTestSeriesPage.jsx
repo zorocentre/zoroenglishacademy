@@ -21,6 +21,7 @@ import SafeImage from '../common/SafeImage';
 import AudioPromptPlayer from '../common/AudioPromptPlayer';
 import QuestionMedia from '../common/QuestionMedia';
 import VoiceAnswerRecorder from './VoiceAnswerRecorder';
+import ModalPortal from '../common/ModalPortal';
 
 export default function CompetitionTestSeriesPage() {
   const { currentCompetition } = useOutletContext();
@@ -829,68 +830,70 @@ export default function CompetitionTestSeriesPage() {
 
         {/* Submit Confirmation Modal */}
         {showConfirmSubmit && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
-                <Send className="w-6 h-6" />
-              </div>
-
-              <div className="text-center space-y-1">
-                <h3 className="text-lg font-black text-slate-900">Submit Your Test Answers?</h3>
-                <p className="text-xs text-slate-500">
-                  Once submitted, the server will evaluate your answers. You cannot change your answers after submission.
-                </p>
-              </div>
-
-              {submitError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-xs text-rose-700">
-                  <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                  <span>{submitError}</span>
+          <ModalPortal isOpen={showConfirmSubmit}>
+            <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <Send className="w-6 h-6" />
                 </div>
-              )}
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Total Questions:</span>
-                  <span className="font-bold text-slate-800">{totalQ}</span>
+                <div className="text-center space-y-1">
+                  <h3 className="text-lg font-black text-slate-900">Submit Your Test Answers?</h3>
+                  <p className="text-xs text-slate-500">
+                    Once submitted, the server will evaluate your answers. You cannot change your answers after submission.
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Answered Questions:</span>
-                  <span className="font-bold text-emerald-600">{answeredCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Unanswered Questions:</span>
-                  <span className="font-bold text-rose-600">{totalQ - answeredCount}</span>
-                </div>
-              </div>
 
-              <div className="flex items-center space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmSubmit(false)}
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
-                >
-                  Cancel & Review
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitAttempt}
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors inline-flex items-center justify-center space-x-1.5"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <InlineSpinner size="w-4 h-4" />
-                      <span>Evaluating...</span>
-                    </>
-                  ) : (
-                    <span>Yes, Submit Now</span>
-                  )}
-                </button>
+                {submitError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-xs text-rose-700">
+                    <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                    <span>{submitError}</span>
+                  </div>
+                )}
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total Questions:</span>
+                    <span className="font-bold text-slate-800">{totalQ}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Answered Questions:</span>
+                    <span className="font-bold text-emerald-600">{answeredCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Unanswered Questions:</span>
+                    <span className="font-bold text-rose-600">{totalQ - answeredCount}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmSubmit(false)}
+                    disabled={isSubmitting}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Cancel & Review
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitAttempt}
+                    disabled={isSubmitting}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors inline-flex items-center justify-center space-x-1.5"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <InlineSpinner size="w-4 h-4" />
+                        <span>Evaluating...</span>
+                      </>
+                    ) : (
+                      <span>Yes, Submit Now</span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </div>
     );
@@ -907,7 +910,7 @@ export default function CompetitionTestSeriesPage() {
             <span>Practice & Diagnostic Modules</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Competition Test Series (35 Slots)
+            Competition Test Series
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Always unlocked chapter-wise and module tests. Attempt at your own pace with instant automated scoring.
@@ -932,8 +935,7 @@ export default function CompetitionTestSeriesPage() {
       ) : tests.length === 0 ? (
         <div className="p-12 text-center bg-white border border-slate-200 rounded-3xl text-slate-500 space-y-2">
           <Layers className="w-10 h-10 text-slate-300 mx-auto" />
-          <p className="font-bold text-sm">No test series available yet.</p>
-          <p className="text-xs">Assessments will appear here once published by the academy administrator.</p>
+          <p className="font-bold text-sm">No test published for this till now</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
