@@ -7,6 +7,8 @@ import com.zoroacademy.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -133,6 +135,9 @@ public class CourseService {
         copy.setLevel(course.getLevel());
         copy.setAudience(course.getAudience());
         copy.setDuration(course.getDuration());
+        copy.setDurationValue(course.getDurationValue());
+        copy.setDurationUnit(course.getDurationUnit());
+        copy.setEnteredFee(course.getEnteredFee());
         copy.setPrice(course.getPrice());
         copy.setOriginalPrice(course.getOriginalPrice());
         copy.setThumbnail(course.getThumbnail());
@@ -281,6 +286,9 @@ public class CourseService {
         copy.setLevel(course.getLevel());
         copy.setAudience(course.getAudience());
         copy.setDuration(course.getDuration());
+        copy.setDurationValue(course.getDurationValue());
+        copy.setDurationUnit(course.getDurationUnit());
+        copy.setEnteredFee(course.getEnteredFee());
         copy.setPrice(course.getPrice());
         copy.setOriginalPrice(course.getOriginalPrice());
         copy.setThumbnail(course.getThumbnail());
@@ -449,11 +457,72 @@ public class CourseService {
         }
     }
 
+    public static BigDecimal calculateTotalFee(BigDecimal enteredFee, Integer durationValue, String durationUnit) {
+        if (enteredFee == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        int val = (durationValue != null && durationValue > 0) ? durationValue : 1;
+        String unit = (durationUnit != null ? durationUnit.trim() : "").toUpperCase();
+
+        BigDecimal total;
+        if (unit.startsWith("HOUR") || unit.startsWith("DAY")) {
+            total = enteredFee;
+        } else if (unit.startsWith("MONTH")) {
+            total = enteredFee.multiply(BigDecimal.valueOf(val));
+        } else if (unit.startsWith("YEAR")) {
+            total = enteredFee.multiply(BigDecimal.valueOf(val * 12L));
+        } else {
+            total = enteredFee;
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public static void populateDurationAndFee(Course course, BigDecimal incomingEnteredFee, Integer incomingDurationVal, String incomingDurationUnit, String incomingDurationStr) {
+        Integer durationVal = incomingDurationVal;
+        String durationUnit = incomingDurationUnit;
+
+        if ((durationVal == null || durationUnit == null) && incomingDurationStr != null && !incomingDurationStr.isBlank()) {
+            String[] parts = incomingDurationStr.trim().split("\\s+");
+            if (parts.length >= 2) {
+                try {
+                    if (durationVal == null) durationVal = Integer.parseInt(parts[0]);
+                } catch (Exception ignored) {}
+                if (durationUnit == null) durationUnit = parts[1];
+            }
+        }
+
+        if (durationUnit != null) {
+            String uUpper = durationUnit.trim().toUpperCase();
+            if (uUpper.startsWith("HOUR")) durationUnit = "Hours";
+            else if (uUpper.startsWith("DAY")) durationUnit = "Days";
+            else if (uUpper.startsWith("MONTH")) durationUnit = "Months";
+            else if (uUpper.startsWith("YEAR")) durationUnit = "Years";
+        }
+
+        if (durationVal == null || durationVal <= 0) durationVal = 1;
+        if (durationUnit == null || durationUnit.isBlank()) durationUnit = "Months";
+
+        BigDecimal enteredFee = incomingEnteredFee;
+        if (enteredFee == null) {
+            enteredFee = course.getEnteredFee() != null ? course.getEnteredFee() : course.getPrice();
+        }
+        if (enteredFee == null) enteredFee = BigDecimal.ZERO;
+
+        BigDecimal totalFee = calculateTotalFee(enteredFee, durationVal, durationUnit);
+
+        course.setEnteredFee(enteredFee.setScale(2, RoundingMode.HALF_UP));
+        course.setPrice(totalFee);
+        course.setDurationValue(durationVal);
+        course.setDurationUnit(durationUnit);
+        course.setDuration(durationVal + " " + durationUnit);
+    }
+
     @Transactional
     public Course createCourse(Course course) {
         if (course.getId() == null || course.getId().isBlank()) {
             course.setId("crs_" + java.util.UUID.randomUUID());
         }
+
+        populateDurationAndFee(course, course.getEnteredFee() != null ? course.getEnteredFee() : course.getPrice(),
+                course.getDurationValue(), course.getDurationUnit(), course.getDuration());
 
         if (course.getSlug() == null || course.getSlug().isBlank()) {
             course.setSlug(generateUniqueSlug(course.getTitle(), null));
@@ -545,11 +614,25 @@ public class CourseService {
         if (updated.getTitle() != null) targetCourse.setTitle(updated.getTitle());
         if (updated.getDescription() != null) targetCourse.setDescription(updated.getDescription());
         if (updated.getCategory() != null) targetCourse.setCategory(updated.getCategory());
-        if (updated.getMode() != null) targetCourse.setMode(updated.getMode());
+
+        // Mode locked after creation (Task F10)
+        if (updated.getMode() != null && !updated.getMode().equalsIgnoreCase(targetCourse.getMode())) {
+            throw new BadRequestException("Course mode cannot be changed after creation.");
+        }
+
         if (updated.getLevel() != null) targetCourse.setLevel(updated.getLevel());
         if (updated.getAudience() != null) targetCourse.setAudience(updated.getAudience());
-        if (updated.getDuration() != null) targetCourse.setDuration(updated.getDuration());
-        if (updated.getPrice() != null) targetCourse.setPrice(updated.getPrice());
+
+        // Fee and duration authoritative calculation (Task F6)
+        BigDecimal incomingEntered = updated.getEnteredFee() != null ? updated.getEnteredFee() : updated.getPrice();
+        Integer incomingVal = updated.getDurationValue() != null ? updated.getDurationValue() : targetCourse.getDurationValue();
+        String incomingUnit = updated.getDurationUnit() != null ? updated.getDurationUnit() : targetCourse.getDurationUnit();
+        String incomingDur = updated.getDuration() != null ? updated.getDuration() : targetCourse.getDuration();
+
+        if (incomingEntered != null || updated.getDuration() != null || updated.getDurationValue() != null || updated.getDurationUnit() != null) {
+            populateDurationAndFee(targetCourse, incomingEntered, incomingVal, incomingUnit, incomingDur);
+        }
+
         if (updated.getOriginalPrice() != null) targetCourse.setOriginalPrice(updated.getOriginalPrice());
         if (updated.getThumbnail() != null) targetCourse.setThumbnail(updated.getThumbnail());
         if (updated.getPreviewVideoUrl() != null) targetCourse.setPreviewVideoUrl(updated.getPreviewVideoUrl());

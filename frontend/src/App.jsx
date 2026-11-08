@@ -447,24 +447,28 @@ function DashboardLayout({ expectedRole }) {
 
 
   return (
-    <div className="h-screen w-full flex overflow-hidden bg-slate-50 font-sans antialiased text-slate-900">
-      <DashboardSidebar 
-        role={currentRole} 
-        activeScreen={activeScreen} 
-        setActiveScreen={handleSetActiveScreen} 
-        isMobileOpen={isMobileMenuOpen}
-        onMobileClose={() => setIsMobileMenuOpen(false)}
-      />
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-        <DashboardHeader 
-          user={user} 
-          onMobileMenuToggle={() => setIsMobileMenuOpen(true)}
-          setActiveScreen={handleSetActiveScreen}
+    <div className="h-screen w-full flex overflow-hidden bg-slate-50 font-sans antialiased text-slate-900 print:h-auto print:overflow-visible print:bg-white print:block">
+      <div className="print:hidden">
+        <DashboardSidebar 
+          role={currentRole} 
+          activeScreen={activeScreen} 
+          setActiveScreen={handleSetActiveScreen} 
+          isMobileOpen={isMobileMenuOpen}
+          onMobileClose={() => setIsMobileMenuOpen(false)}
         />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      </div>
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden print:h-auto print:overflow-visible print:block">
+        <div className="print:hidden">
+          <DashboardHeader 
+            user={user} 
+            onMobileMenuToggle={() => setIsMobileMenuOpen(true)}
+            setActiveScreen={handleSetActiveScreen}
+          />
+        </div>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print:p-0 print:overflow-visible print:h-auto print:block">
           <Suspense fallback={<PortalLoadingFallback />}>
             <ErrorBoundary key={location.key} resetKey={location.key}>
-              <div key={location.pathname} className="page-transition">
+              <div key={location.pathname} className="page-transition print:overflow-visible print:h-auto">
                 <Outlet context={{ 
                   setActiveScreen: handleSetActiveScreen, 
                   setSelectedCourseIdForEdit 

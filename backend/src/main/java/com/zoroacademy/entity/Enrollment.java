@@ -39,6 +39,9 @@ public class Enrollment {
     @Column(length = 50)
     private String status = "Active";
 
+    @Column(name = "course_total_fee", precision = 12, scale = 2)
+    private java.math.BigDecimal courseTotalFee;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -140,6 +143,14 @@ public class Enrollment {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public java.math.BigDecimal getCourseTotalFee() {
+        return courseTotalFee;
+    }
+
+    public void setCourseTotalFee(java.math.BigDecimal courseTotalFee) {
+        this.courseTotalFee = courseTotalFee;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -10,6 +10,7 @@ import SafeImage from '../common/SafeImage';
 import PageLoader from '../common/PageLoader';
 import HeroCarousel from './HeroCarousel';
 import CompetitionRegisterModal from './CompetitionRegisterModal';
+import { formatPublicCourseFee } from '../../utils/courseFeeUtil';
 
 export default function HomePage({ setActiveScreen, onOpenEnquire }) {
   const { settings: globalSettings } = useWebsiteSettings();
@@ -240,7 +241,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
                       <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider">
                         <span className="text-blue-600">{course.duration || '3 Months'} • {course.mode || 'Online'}</span>
                         <span className="text-emerald-600 font-black">
-                          {course.price != null && Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Free'}
+                          {formatPublicCourseFee(course, 'Free')}
                         </span>
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 mt-1">{course.title}</h3>

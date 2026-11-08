@@ -3,8 +3,7 @@ import {
   getSessionStartDateTime,
   getSessionEndDateTime,
   getScheduleJoinState,
-  parseTimeToMinutes,
-  sortSchedulesChronologically
+  parseTimeToMinutes
 } from './utils/scheduleSortUtil';
 
 describe('Phase 4: Trainer Schedule and Sessions Logic', () => {

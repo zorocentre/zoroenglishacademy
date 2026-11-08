@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { 
   Award, Layers, CheckCircle2, Clock, Play, AlertCircle, 
   HelpCircle, ChevronRight, ChevronLeft, Flag, Eye, 
@@ -58,6 +58,7 @@ const SET_STYLES = {
 };
 
 export default function CompetitionFinalAssessmentPage() {
+  const navigate = useNavigate();
   const { currentCompetition, isExamActive, setIsExamActive } = useOutletContext();
 
   const [assessmentData, setAssessmentData] = useState(null);
@@ -114,8 +115,6 @@ export default function CompetitionFinalAssessmentPage() {
       if (res && res.success && res.data) {
         setAttemptData(null);
         setIsTestActive(false);
-        const fullResults = await getFinalAssessmentResults(assessmentData.id);
-        setResultsData(fullResults?.data || res.data);
         loadFinalAssessment();
       }
     } catch (err) {
@@ -260,8 +259,6 @@ export default function CompetitionFinalAssessmentPage() {
       if (res && res.success && res.data) {
         setAttemptData(null);
         setIsTestActive(false);
-        const fullResults = await getFinalAssessmentResults(assessmentData.id);
-        setResultsData(fullResults?.data || res.data);
         loadFinalAssessment();
       }
     } catch (err) {
@@ -351,8 +348,6 @@ export default function CompetitionFinalAssessmentPage() {
         setShowConfirmSubmit(false);
         setAttemptData(null);
         setIsTestActive(false);
-        const fullResults = await getFinalAssessmentResults(assessmentData.id);
-        setResultsData(fullResults?.data || res.data);
         loadFinalAssessment();
       } else {
         setSubmitError(res?.message || 'Failed to submit examination.');
@@ -405,302 +400,48 @@ export default function CompetitionFinalAssessmentPage() {
   }
 
   // ==========================================
-  // VIEW 1: RESULTS & SCORECARD VIEW
+  // VIEW 1: RESULTS VIEW (Final Assessment Submitted Card)
+  // Under Task F4, candidate view never displays scorecards or answer reviews.
   // ==========================================
   if (resultsData) {
-    const hasSubjective = (resultsData.questions || []).some(q => {
-      const fmt = (q.answerFormat || q.type || q.questionFormat || '').toUpperCase();
-      return fmt === 'VOICE' || fmt === 'VOICE_RECORDING' || fmt === 'TEXT' || fmt === 'WRITTEN';
-    });
-    const isPendingVoice = resultsData.attempt?.status === 'EVALUATION_PENDING' || 
-      resultsData.attempt?.evaluationMode === 'MANUAL_PENDING' ||
-      (hasSubjective && resultsData.attempt?.status !== 'COMPLETED' && resultsData.attempt?.status !== 'EVALUATED');
-    const score = resultsData.attempt?.totalMarks ?? resultsData.attempt?.score ?? 0;
-    const totalMarks = resultsData.attempt?.maxMarks || resultsData.assessment?.totalMarks || 30;
-    const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
-    const assignedSetCode = assignedSet?.code || resultsData.attempt?.setCode || 'A';
-    const setStyle = SET_STYLES[assignedSetCode] || SET_STYLES.A;
-
     return (
-      <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-8 animate-fadeIn">
-        {/* Header Back button */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => {
-              setResultsData(null);
-              loadFinalAssessment();
-            }}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors text-sm font-semibold"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Final Assessment Dashboard
-          </button>
-          <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              isPendingVoice 
-                ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-            }`}>
-              {isPendingVoice ? 'Evaluation Pending' : 'Evaluation Completed'}
-            </span>
+      <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6 animate-fadeIn">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold uppercase tracking-wider">
+            <CheckCircle2 className="w-4 h-4" /> Assessment Status
           </div>
-        </div>
-
-        {/* Proctoring Violation Alert if auto-submitted */}
-        {(resultsData.attempt?.autoSubmitted || resultsData?.autoSubmitted) && (
-          <div className="p-4 bg-rose-50 border-2 border-rose-400 rounded-2xl flex items-center gap-3 text-rose-900 shadow-sm">
-            <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
-            <div>
-              <p className="font-bold text-sm">Exam Terminated: Excessive Proctoring Violations</p>
-              <p className="text-xs text-rose-700">
-                This assessment was automatically submitted because the proctoring integrity threshold was reached ({resultsData.attempt?.proctorViolationCount || resultsData?.proctorViolationCount || 3} infractions detected).
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Scorecard Hero Banner */}
-        <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-6 md:p-8 relative overflow-hidden shadow-xl text-white">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-            <div>
-              <div className="flex items-center gap-2 text-indigo-300 text-xs font-bold uppercase tracking-wider mb-2">
-                <Sparkles className="w-4 h-4" /> Official Examination Scorecard
-              </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                {resultsData.assessment?.title || 'Championship Final Assessment'}
-              </h1>
-              <p className="text-indigo-200 text-sm mt-1">
-                Completed on {new Date(resultsData.attempt?.submittedAt || Date.now()).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)
-              </p>
-            </div>
-
-            {isPendingVoice ? (
-              <div className="flex items-center gap-3 bg-amber-500/20 border border-amber-300/40 rounded-xl p-4 max-w-md">
-                <Clock className="w-6 h-6 text-amber-300 shrink-0" />
-                <div>
-                  <p className="text-xs text-amber-200 font-semibold uppercase tracking-wider">Evaluation Pending</p>
-                  <p className="text-sm font-bold text-white mt-0.5">
-                    Exam submitted. Results will be displayed after the trainer evaluation.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
-                <div className="text-right">
-                  <p className="text-xs text-indigo-200 font-medium">Marks Obtained</p>
-                  <div className="text-3xl font-black text-white">
-                    {score} <span className="text-indigo-300 text-lg font-normal">/ {totalMarks}</span>
-                  </div>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-bold text-white text-sm">
-                  {percentage}%
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Pending Voice Evaluation Alert */}
-          {isPendingVoice && (
-            <div className="mt-6 bg-amber-400/20 border border-amber-300/30 rounded-xl p-4 flex items-start gap-3">
-              <Mic className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-white font-bold text-sm">Responses Submitted — Awaiting Manual Evaluation</h4>
-                <p className="text-indigo-100 text-xs mt-1">
-                  Your objective responses have been automatically scored ({score} marks). Your subjective submissions have been securely saved and dispatched to our evaluation team for manual assessment. Final marks will update upon evaluation completion.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Detailed Question Review */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Eye className="w-5 h-5 text-indigo-600" />
-            Detailed Question Analysis & Answers
+          <h3 className="text-xl font-bold text-slate-900">
+            Final Assessment Submitted Successfully
           </h3>
-
-          <div className="space-y-4">
-            {(resultsData.questions || []).map((q, idx) => {
-              const qTypeStr = (q.answerFormat || q.type || q.questionFormat || '').toUpperCase();
-              const isVoice = qTypeStr === 'VOICE' || qTypeStr === 'VOICE_RECORDING';
-              const isWritten = qTypeStr === 'TEXT' || qTypeStr === 'WRITTEN';
-              const isMcq = !isVoice && !isWritten;
-
-              const studentAnswer = q.studentAnswer || resultsData.attempt?.answers?.[q.id] || {};
-              const isCorrect = studentAnswer.isCorrect;
-              const hasAnswered = isVoice 
-                ? !!studentAnswer.voiceFileId 
-                : isWritten 
-                  ? !!(studentAnswer.textAnswer && studentAnswer.textAnswer.trim().length > 0)
-                  : !!studentAnswer.selectedOptionId;
-
-              return (
-                <div 
-                  key={q.id}
-                  className={`bg-white border rounded-2xl p-5 sm:p-6 shadow-sm transition-all ${
-                    isVoice 
-                      ? 'border-indigo-200 bg-indigo-50/10' 
-                      : isWritten
-                        ? 'border-blue-200 bg-blue-50/10'
-                        : isCorrect 
-                          ? 'border-emerald-200 bg-emerald-50/10' 
-                          : hasAnswered 
-                            ? 'border-rose-200 bg-rose-50/10' 
-                            : 'border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-bold text-sm flex items-center justify-center">
-                        {idx + 1}
-                      </span>
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                        isVoice 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : isWritten 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {isVoice ? 'VOICE' : isWritten ? 'WRITTEN' : 'MCQ'}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-500">
-                        {q.marks || 1} {q.marks === 1 ? 'Mark' : 'Marks'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {(isVoice || isWritten) ? (
-                        <span className="text-xs px-3 py-1 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                          {studentAnswer.marksAwarded != null ? `${studentAnswer.marksAwarded} Marks Awarded` : 'Pending Review'}
-                        </span>
-                      ) : isCorrect ? (
-                        <span className="text-xs px-3 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" /> Correct (+{q.marks || 1})
-                        </span>
-                      ) : hasAnswered ? (
-                        <span className="text-xs px-3 py-1 rounded-full font-semibold bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
-                          <X className="w-3.5 h-3.5" /> Incorrect (0/{q.marks || 1})
-                        </span>
-                      ) : (
-                        <span className="text-xs px-3 py-1 rounded-full font-semibold bg-slate-100 text-slate-600">
-                          Not Attempted
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-slate-900 font-semibold text-base mt-3">{q.prompt || q.questionText}</p>
-
-                  {/* Audio / Video attachment if present */}
-                  {q.audioUrl && (
-                    <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-3">
-                      <Volume2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <audio controls src={resolveFileUrl(q.audioUrl)} className="w-full h-8" />
-                    </div>
-                  )}
-
-                  {/* Voice answer playback */}
-                  {isVoice && studentAnswer.voiceFileId && (
-                    <div className="mt-4 bg-purple-50/70 border border-purple-200 rounded-xl p-4">
-                      <div className="flex items-center gap-2 text-xs font-bold text-purple-900 uppercase tracking-wider mb-2">
-                        <Mic className="w-4 h-4 text-purple-700" /> Your Recorded Submission
-                      </div>
-                      <AudioPromptPlayer 
-                        src={studentAnswer.voiceFileId} 
-                        label="Your Recorded Submission" 
-                      />
-                      {studentAnswer.feedback && (
-                        <div className="mt-3 text-xs bg-white p-3 rounded-lg border border-purple-200 text-slate-700">
-                          <span className="font-bold text-purple-700">Evaluation Feedback: </span>
-                          {studentAnswer.feedback}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Text answer submission review */}
-                  {isWritten && studentAnswer.textAnswer && (
-                    <div className="mt-4 bg-blue-50/70 border border-blue-200 rounded-xl p-4">
-                      <div className="flex items-center gap-2 text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">
-                        <FileText className="w-4 h-4 text-blue-700" /> Your Written Submission
-                      </div>
-                      <div className="p-3 bg-white rounded-lg border border-blue-100 text-xs text-slate-800 whitespace-pre-wrap font-sans">
-                        {studentAnswer.textAnswer}
-                      </div>
-                      {studentAnswer.feedback && (
-                        <div className="mt-3 text-xs bg-white p-3 rounded-lg border border-blue-200 text-slate-700">
-                          <span className="font-bold text-blue-700">Evaluation Feedback: </span>
-                          {studentAnswer.feedback}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* MCQ Options */}
-                  {isMcq && q.options && (
-                    <div className="mt-4 space-y-2">
-                      {q.options.map(opt => {
-                        const isStudentChoice = studentAnswer.selectedOptionId === opt.id;
-                        const isOptionCorrect = opt.isCorrect;
-
-                        let borderClass = 'border-slate-200 bg-slate-50 text-slate-700';
-                        if (isOptionCorrect) {
-                          borderClass = 'border-emerald-400 bg-emerald-50 text-emerald-900 font-semibold';
-                        } else if (isStudentChoice && !isOptionCorrect) {
-                          borderClass = 'border-rose-400 bg-rose-50 text-rose-900';
-                        }
-
-                        return (
-                          <div
-                            key={opt.id}
-                            className={`flex items-center justify-between p-3.5 rounded-xl border text-sm ${borderClass}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
-                                isOptionCorrect 
-                                  ? 'bg-emerald-600 text-white' 
-                                  : isStudentChoice 
-                                    ? 'bg-rose-600 text-white' 
-                                    : 'bg-white border border-slate-300 text-slate-600'
-                              }`}>
-                                {isOptionCorrect ? <Check className="w-3.5 h-3.5" /> : isStudentChoice ? <X className="w-3.5 h-3.5" /> : '•'}
-                              </span>
-                              <span>{opt.text}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {isStudentChoice && (
-                                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-slate-200 text-slate-700">
-                                  Your Choice
-                                </span>
-                              )}
-                              {isOptionCorrect && (
-                                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-emerald-200 text-emerald-900">
-                                  Correct Answer
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Explanation if present */}
-                  {q.explanation && (
-                    <div className="mt-4 bg-indigo-50/70 border border-indigo-100 rounded-xl p-3.5 text-xs text-indigo-950">
-                      <span className="font-bold text-indigo-900">Explanation: </span>
-                      {q.explanation}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-2 text-sm text-slate-600">
+            <p>Thank you for completing the Final Assessment.</p>
+            <p>Your examination has been successfully submitted. The evaluation results and final rankings will be published on the Competition Leaderboard.</p>
+            <p>Please visit the Leaderboard to view your results once they are officially announced.</p>
+            <p className="font-semibold text-slate-800">Thank you for participating!</p>
+          </div>
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <button
+              onClick={() => {
+                setResultsData(null);
+                loadFinalAssessment();
+              }}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+            >
+              Back to Dashboard
+            </button>
+            <button
+              onClick={() => navigate('/competition/leaderboard')}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Award className="w-4 h-4" />
+              Go to Leaderboard
+            </button>
           </div>
         </div>
       </div>
     );
   }
+
 
   // ==========================================
   // VIEW 2: ACTIVE TEST TAKER (Immersive Exam Mode)
@@ -1214,16 +955,7 @@ export default function CompetitionFinalAssessmentPage() {
               </div>
             )}
 
-            {isAttemptCompleted ? (
-              <button
-                onClick={handleViewResults}
-                disabled={loadingResults}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
-              >
-                {loadingResults ? <InlineSpinner className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                View Scorecard & Results
-              </button>
-            ) : isLive ? (
+            {isAttemptCompleted ? null : isLive ? (
               <button
                 onClick={requestExamStart}
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 animate-bounce hover:animate-none"
@@ -1248,46 +980,72 @@ export default function CompetitionFinalAssessmentPage() {
         </div>
       </div>
 
-      {/* Examination Policies */}
+      {/* Examination Policies OR Submitted Card */}
       <div className="w-full">
-        {/* Card: Exam Policies & Strict Single-Attempt Rule */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-rose-600 text-xs font-bold uppercase tracking-wider mb-2">
-              <ShieldAlert className="w-4 h-4" /> Examination Rules & Instructions
+        {isAttemptCompleted ? (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold uppercase tracking-wider">
+              <CheckCircle2 className="w-4 h-4" /> Assessment Status
             </div>
-            <h3 className="text-lg font-bold text-slate-900">
-              Strict Single Attempt Policy
+            <h3 className="text-xl font-bold text-slate-900">
+              Final Assessment Submitted Successfully
             </h3>
-            
-            <ul className="mt-4 space-y-2.5 text-xs text-slate-600">
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span><strong className="text-slate-800">Single Attempt Only:</strong> The exam cannot be paused, reset, or retaken once submitted or timed out.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span><strong className="text-slate-800">Synchronized Timer:</strong> Exam automatically submits when the countdown reaches 00:00.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span><strong className="text-slate-800">Autosave Enabled:</strong> All answers and audio recordings are saved to the server continuously.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span><strong className="text-slate-800">Voice Tasks:</strong> Ensure microphone permissions are granted before starting.</span>
-              </li>
-            </ul>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>Thank you for completing the Final Assessment.</p>
+              <p>Your examination has been successfully submitted. The evaluation results and final rankings will be published on the Competition Leaderboard.</p>
+              <p>Please visit the Leaderboard to view your results once they are officially announced.</p>
+              <p className="font-semibold text-slate-800">Thank you for participating!</p>
+            </div>
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <button
+                onClick={() => navigate('/competition/leaderboard')}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Award className="w-4 h-4" />
+                Go to Leaderboard
+              </button>
+            </div>
           </div>
+        ) : (
+          /* Card: Exam Policies & Strict Single-Attempt Rule */
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-rose-600 text-xs font-bold uppercase tracking-wider mb-2">
+                <ShieldAlert className="w-4 h-4" /> Examination Rules & Instructions
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">
+                Strict Single Attempt Policy
+              </h3>
+              
+              <ul className="mt-4 space-y-2.5 text-xs text-slate-600">
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-800">Single Attempt Only:</strong> The exam cannot be paused, reset, or retaken once submitted or timed out.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-800">Synchronized Timer:</strong> Exam automatically submits when the countdown reaches 00:00.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-800">Autosave Enabled:</strong> All answers and audio recordings are saved to the server continuously.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-800">Voice Tasks:</strong> Ensure microphone permissions are granted before starting.</span>
+                </li>
+              </ul>
+            </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-            <span>Duration: <strong className="text-slate-800">{assessmentData?.durationMinutes || 60} Minutes</strong></span>
-            <span>Total Marks: <strong className="text-slate-800">{assessmentData?.totalMarks ?? 0} Marks</strong></span>
-            <span className="text-indigo-700 bg-indigo-50/70 px-2.5 py-1 rounded-xl">
-              Total Questions: <strong className="font-mono text-indigo-900">{assessmentData?.questionCount ?? 0}</strong>
-            </span>
+            <div className="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <span>Duration: <strong className="text-slate-800">{assessmentData?.durationMinutes || 60} Minutes</strong></span>
+              <span>Total Marks: <strong className="text-slate-800">{assessmentData?.totalMarks ?? 0} Marks</strong></span>
+              <span className="text-indigo-700 bg-indigo-50/70 px-2.5 py-1 rounded-xl">
+                Total Questions: <strong className="font-mono text-indigo-900">{assessmentData?.questionCount ?? 0}</strong>
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <SecureExamConsentModal

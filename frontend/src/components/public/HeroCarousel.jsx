@@ -238,7 +238,7 @@ export default function HeroCarousel({
         onClick={handlePrev}
         aria-label="Previous slide"
         data-testid="hero-prev-btn"
-        className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-purple-600/80 hover:bg-purple-600 active:scale-95 text-white flex items-center justify-center shadow-lg backdrop-blur-xs transition-all focus:outline-hidden focus:ring-2 focus:ring-purple-400 cursor-pointer"
+        className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center justify-center shadow-lg backdrop-blur-xs transition-all focus:outline-hidden focus:ring-2 focus:ring-blue-400 cursor-pointer"
       >
         <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
       </button>
@@ -249,7 +249,7 @@ export default function HeroCarousel({
         onClick={handleNext}
         aria-label="Next slide"
         data-testid="hero-next-btn"
-        className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-purple-600/80 hover:bg-purple-600 active:scale-95 text-white flex items-center justify-center shadow-lg backdrop-blur-xs transition-all focus:outline-hidden focus:ring-2 focus:ring-purple-400 cursor-pointer"
+        className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center justify-center shadow-lg backdrop-blur-xs transition-all focus:outline-hidden focus:ring-2 focus:ring-blue-400 cursor-pointer"
       >
         <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
       </button>

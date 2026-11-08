@@ -32,10 +32,37 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
         if (cRes.data) {
           const c = cRes.data;
           const matchedTrainer = trainers.find(t => t.id === c.trainerId || (c.assignedTrainer && t.name?.toLowerCase().trim() === c.assignedTrainer?.toLowerCase().trim()));
+          
+          let dVal = c.durationValue ? String(c.durationValue) : '';
+          let dUnit = c.durationUnit || '';
+          if (!dVal || !dUnit) {
+            const rawDur = c.duration || '';
+            const parts = rawDur.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              dVal = parts[0];
+              dUnit = parts[1];
+            } else if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+              dVal = parts[0];
+              dUnit = 'Months';
+            }
+          }
+          if (dUnit) {
+            const uUpper = dUnit.toUpperCase();
+            if (uUpper.startsWith('HOUR')) dUnit = 'Hours';
+            else if (uUpper.startsWith('DAY')) dUnit = 'Days';
+            else if (uUpper.startsWith('MONTH')) dUnit = 'Months';
+            else if (uUpper.startsWith('YEAR')) dUnit = 'Years';
+          }
+          const loadedEnteredFee = c.enteredFee != null && Number(c.enteredFee) > 0
+            ? String(c.enteredFee)
+            : (c.price != null && Number(c.price) > 0 ? String(c.price) : '');
+
           setFormData({
             title: '',
             description: '',
-            duration: '3 Months',
+            durationValue: dVal || '1',
+            durationUnit: dUnit || 'Months',
+            duration: dVal && dUnit ? `${dVal} ${dUnit}` : '3 Months',
             mode: 'Online',
             trainerId: c.trainerId || matchedTrainer?.id || '',
             assignedTrainer: c.assignedTrainer || matchedTrainer?.name || '',
@@ -44,7 +71,9 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
             overview: '',
             thumbnail: '',
             ...c,
-            price: c.price != null && Number(c.price) > 0 ? String(c.price) : ''
+            durationValue: dVal || '1',
+            durationUnit: dUnit || 'Months',
+            price: loadedEnteredFee
           });
         }
       }).catch(err => {
@@ -59,6 +88,21 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!formData.durationValue || Number(formData.durationValue) <= 0) {
+      await showError('Duration value must be greater than 0.', 'Validation Error');
+      return;
+    }
+    if (!formData.durationUnit || !['Hours', 'Days', 'Months', 'Years'].includes(formData.durationUnit)) {
+      await showError('Please select a valid duration unit (Hours, Days, Months, Years).', 'Validation Error');
+      return;
+    }
+    const numPrice = Number(formData.price);
+    if (formData.price === '' || isNaN(numPrice) || numPrice <= 0) {
+      await showError('Course fee must be a valid number greater than 0.', 'Validation Error');
+      return;
+    }
+
     let normalizedMeetUrl = null;
     let trainerId = null;
     let assignedTrainer = null;
@@ -94,10 +138,14 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
 
     setSaving(true);
     try {
-      const submitPrice = formData.price !== '' ? Number(formData.price) : 0;
+      const submitPrice = Number(formData.price);
       const res = await updateCourse(courseId, {
         ...formData,
         price: submitPrice,
+        enteredFee: submitPrice,
+        durationValue: Number(formData.durationValue) || 1,
+        durationUnit: formData.durationUnit,
+        duration: `${formData.durationValue || 1} ${formData.durationUnit}`,
         googleMeetUrl: normalizedMeetUrl,
         trainerId,
         assignedTrainer
@@ -118,6 +166,17 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
 
   const isOnlineOrHybrid = formData.mode === 'Online' || formData.mode === 'Hybrid';
   const isRecordedOrHybrid = formData.mode === 'Recorded' || formData.mode === 'Hybrid';
+
+  const isMonthlyUnit = formData.durationUnit === 'Months' || formData.durationUnit === 'Years';
+  const durationValNum = Number(formData.durationValue) || 1;
+  const numFee = Number(formData.price) || 0;
+  const calculatedTotalFee = (formData.durationUnit === 'Hours' || formData.durationUnit === 'Days')
+    ? numFee
+    : formData.durationUnit === 'Months'
+      ? numFee * durationValNum
+      : formData.durationUnit === 'Years'
+        ? numFee * durationValNum * 12
+        : numFee;
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">
@@ -171,11 +230,11 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
                 min="1"
                 required
                 placeholder="3"
-                value={formData.durationValue || (formData.duration ? formData.duration.split(' ')[0] : '3')}
+                value={formData.durationValue}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const unit = formData.durationUnit || (formData.duration ? formData.duration.split(' ')[1] : 'Months');
-                  setFormData({ ...formData, durationValue: val, durationUnit: unit, duration: `${val} ${unit}` });
+                  const unit = formData.durationUnit || '';
+                  setFormData({ ...formData, durationValue: val, duration: unit ? `${val} ${unit}` : '' });
                 }}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white"
               />
@@ -184,46 +243,58 @@ export default function EditCoursePage({ courseId: propCourseId, setActiveScreen
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Duration Unit *</label>
               <select
-                value={formData.durationUnit || (formData.duration && formData.duration.includes('Year') ? (formData.duration.includes('Years') ? 'Years' : 'Year') : (formData.duration && formData.duration.includes('Month') && !formData.duration.includes('Months') ? 'Month' : 'Months'))}
+                value={formData.durationUnit || ''}
                 onChange={(e) => {
                   const unit = e.target.value;
-                  const val = formData.durationValue || (formData.duration ? formData.duration.split(' ')[0] : '3');
-                  setFormData({ ...formData, durationUnit: unit, durationValue: val, duration: `${val} ${unit}` });
+                  const val = formData.durationValue || '1';
+                  setFormData({ ...formData, durationUnit: unit, duration: unit ? `${val} ${unit}` : '' });
                 }}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white cursor-pointer"
               >
+                <option value="">Select Unit</option>
+                <option value="Hours">Hours</option>
+                <option value="Days">Days</option>
                 <option value="Months">Months</option>
-                <option value="Month">Month</option>
                 <option value="Years">Years</option>
-                <option value="Year">Year</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Course Fee (₹) *</label>
-              <MoneyInput
-                placeholder="e.g. 2500"
-                value={formData.price || ''}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-blue-600"
-              />
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Course Fee (₹){isMonthlyUnit ? ' / Month' : ''} *
+              </label>
+              <div className="relative flex items-center">
+                <MoneyInput
+                  placeholder={!formData.durationUnit ? "Select duration unit first" : "e.g. 2500"}
+                  disabled={!formData.durationUnit}
+                  value={formData.price || ''}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-blue-600 ${
+                    !formData.durationUnit ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                  } ${isMonthlyUnit ? 'pr-16' : ''}`}
+                />
+                {isMonthlyUnit && (
+                  <span className="absolute right-3 text-xs font-bold text-slate-400 pointer-events-none select-none">
+                    /month
+                  </span>
+                )}
+              </div>
+              {Boolean(formData.durationUnit && numFee > 0) && (
+                <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                  Total course fee: ₹{calculatedTotalFee.toLocaleString('en-IN')}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Course Mode *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Course Mode <span className="text-[10px] text-slate-400 font-normal">(Locked)</span> *
+              </label>
               <select
+                disabled
                 value={formData.mode || 'Online'}
-                onChange={(e) => {
-                  const newMode = e.target.value;
-                  const isTrainer = formData.audience === 'trainer';
-                  setFormData({ 
-                    ...formData, 
-                    mode: newMode,
-                    trainerId: newMode === 'Recorded' ? (isTrainer ? 'admin' : '') : '',
-                    assignedTrainer: newMode === 'Recorded' ? (isTrainer ? 'Admin' : '') : ''
-                  });
-                }}
-                className="w-full px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs font-black text-blue-900 focus:bg-white focus:border-blue-600"
+                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 opacity-70 cursor-not-allowed"
+                title="Course mode cannot be changed after creation."
               >
                 <option value="Online">Online (Live Sessions)</option>
                 <option value="Recorded">Recorded (Modules & Videos)</option>

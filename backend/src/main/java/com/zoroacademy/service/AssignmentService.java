@@ -34,6 +34,10 @@ public class AssignmentService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.zoroacademy.repository.EnrollmentRepository enrollmentRepository;
 
+    public void setEnrollmentRepository(com.zoroacademy.repository.EnrollmentRepository enrollmentRepository) {
+        this.enrollmentRepository = enrollmentRepository;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.zoroacademy.repository.TrainerCourseRequestRepository trainerCourseRequestRepository;
 
@@ -124,14 +128,28 @@ public class AssignmentService {
         assignment.setCourseId(finalCourse.getId());
         assignment.setCourse(finalCourse.getTitle());
 
-        // 2. Mode enforcement: Strictly exclude Recorded courses
-        if ("Recorded".equalsIgnoreCase(finalCourse.getMode())) {
+        // 2. Mode enforcement: Strictly Online and Hybrid courses (Task F14)
+        if (finalCourse.getMode() == null || (!"Online".equalsIgnoreCase(finalCourse.getMode()) && !"Hybrid".equalsIgnoreCase(finalCourse.getMode()))) {
             throw new com.zoroacademy.exception.ForbiddenException(
                     "Extra assignments are only permitted for Online and Hybrid courses. Recorded courses are excluded."
             );
         }
 
-        // 3. User & Role validation (Trainer course/batch/student scoping)
+        // 3. Audience enforcement: Strictly student-audience courses (Task F14)
+        if ("trainer".equalsIgnoreCase(finalCourse.getAudience())) {
+            throw new com.zoroacademy.exception.BadRequestException(
+                    "Cannot create extra assignments for trainer-audience courses."
+            );
+        }
+
+        // 4. Status enforcement: Course must be Active (Task F14)
+        if (finalCourse.getStatus() != null && !"Active".equalsIgnoreCase(finalCourse.getStatus())) {
+            throw new com.zoroacademy.exception.BadRequestException(
+                    "Cannot create extra assignments for inactive courses."
+            );
+        }
+
+        // 5. User & Role validation (Trainer course/batch/student scoping)
         User currentUser = resolveAuthenticatedUser();
         String currentRole = (currentUser != null && currentUser.getRole() != null)
                 ? currentUser.getRole().toUpperCase() : null;
@@ -139,34 +157,32 @@ public class AssignmentService {
         if ("TRAINER".equals(currentRole)) {
             String tId = currentUser.getId();
             String tName = currentUser.getName() != null ? currentUser.getName().trim() : "";
-            String tEmail = currentUser.getEmail() != null ? currentUser.getEmail().trim() : "";
 
-            // Check if trainer is allocated to course
+            // Check if trainer is allocated to course (either direct instructor or batch instructor)
             boolean isDirect = (finalCourse.getTrainerId() != null && finalCourse.getTrainerId().equals(tId))
                     || (finalCourse.getAssignedTrainer() != null && !tName.isEmpty() && finalCourse.getAssignedTrainer().equalsIgnoreCase(tName));
-
-            boolean isRequested = false;
-            if (trainerCourseRequestRepository != null) {
-                List<com.zoroacademy.entity.TrainerCourseRequest> reqs = new ArrayList<>(trainerCourseRequestRepository.findByTrainerId(tId));
-                if (!tEmail.isEmpty()) {
-                    reqs.addAll(trainerCourseRequestRepository.findByTrainerEmailIgnoreCase(tEmail));
-                }
-                isRequested = reqs.stream().anyMatch(r ->
-                        ("Approved".equalsIgnoreCase(r.getStatus()) || "Accepted".equalsIgnoreCase(r.getStatus()))
-                                && (finalCourse.getId().equals(r.getCourseId()) || (r.getCourseTitle() != null && r.getCourseTitle().equalsIgnoreCase(finalCourse.getTitle())))
-                );
-            }
 
             boolean isBatchInstructor = false;
             if (batchRepository != null) {
                 List<Batch> trainerBatches = batchRepository.findByTrainerIdOrTrainerNameIgnoreCase(tId, tName);
-                isBatchInstructor = trainerBatches.stream().anyMatch(b ->
-                        finalCourse.getId().equals(b.getCourseId()) || (b.getCourseName() != null && b.getCourseName().equalsIgnoreCase(finalCourse.getTitle()))
-                );
+                if (trainerBatches != null) {
+                    isBatchInstructor = trainerBatches.stream().anyMatch(b ->
+                            finalCourse.getId().equals(b.getCourseId()) || (b.getCourseName() != null && b.getCourseName().equalsIgnoreCase(finalCourse.getTitle()))
+                    );
+                }
             }
 
-            if (!isDirect && !isRequested && !isBatchInstructor) {
+            if (!isDirect && !isBatchInstructor) {
                 throw new com.zoroacademy.exception.ForbiddenException("You are not allocated to teach course: " + finalCourse.getTitle());
+            }
+
+            // Enrollment check: must have at least one active student enrollment (Task F14)
+            if (enrollmentRepository != null) {
+                List<com.zoroacademy.entity.Enrollment> enrs = enrollmentRepository.findByCourseId(finalCourse.getId());
+                boolean hasActiveStudent = enrs != null && enrs.stream().anyMatch(e -> "Active".equalsIgnoreCase(e.getStatus()));
+                if (!hasActiveStudent) {
+                    throw new com.zoroacademy.exception.BadRequestException("Course has no active student enrollments: " + finalCourse.getTitle());
+                }
             }
 
             assignment.setTrainerId(currentUser.getId());

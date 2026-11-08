@@ -1258,7 +1258,6 @@ public class UserService {
         stats.put("totalAssignments", totalAssignments);
         stats.put("attendanceRate", attendanceRate);
         stats.put("performancePercent", performancePercent);
-        stats.put("studentSatisfaction", 4.9);
 
         return stats;
     }

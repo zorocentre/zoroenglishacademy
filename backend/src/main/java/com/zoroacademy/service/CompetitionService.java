@@ -3134,6 +3134,27 @@ public class CompetitionService {
         List<AttemptAnswer> answers = attemptAnswerRepository.findByAttemptId(attempt.getId());
 
         boolean isStudent = "STUDENT".equals(role);
+
+        // TASK F4: Candidates for FINAL assessment must NEVER receive evaluated answers,
+        // submitted answers, correct answers, question-wise marks, score or accuracy.
+        // Server-side filtering returns only submission status and submitted time.
+        if (isStudent && "FINAL".equalsIgnoreCase(asmt.getType())) {
+            Map<String, Object> summary = new HashMap<>();
+            summary.put("attemptId", attempt.getId());
+            summary.put("status", attempt.getStatus());
+            summary.put("evaluationMode", attempt.getEvaluationMode());
+            summary.put("startedAt", attempt.getStartedAt());
+            summary.put("submittedAt", attempt.getSubmittedAt());
+            summary.put("autoSubmitted", Boolean.TRUE.equals(attempt.getAutoSubmitted()));
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("assessment", asmt);
+            result.put("attempt", summary);
+            result.put("questions", Collections.emptyList());
+            result.put("serverNow", OffsetDateTime.now(ZoneId.of("Asia/Kolkata")));
+            return result;
+        }
+
         boolean isPendingEval = !"FINAL".equalsIgnoreCase(asmt.getType()) && 
                 ("EVALUATION_PENDING".equalsIgnoreCase(attempt.getStatus()) || "MANUAL_PENDING".equalsIgnoreCase(attempt.getEvaluationMode()));
 

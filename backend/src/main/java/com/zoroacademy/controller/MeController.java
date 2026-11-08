@@ -688,14 +688,14 @@ public class MeController {
         User user = getCurrentUser();
         String role = user.getRole() != null ? user.getRole().toUpperCase() : "STUDENT";
 
-        // Filter all courses: strictly Online and Hybrid modes, not Deleted
-        List<Course> allCourses = courseRepository.findAll().stream()
-                .filter(c -> c.getMode() != null && ("Online".equalsIgnoreCase(c.getMode()) || "Hybrid".equalsIgnoreCase(c.getMode())))
-                .filter(c -> c.getStatus() == null || !"Deleted".equalsIgnoreCase(c.getStatus()))
-                .toList();
-
+        // Task F14: Eligible courses must be Online/Hybrid, student-audience, active
         if ("ADMIN".equals(role) || "SUPER_ADMIN".equals(role)) {
-            return ApiResponse.ok(allCourses);
+            List<Course> eligible = courseRepository.findAll().stream()
+                    .filter(c -> c.getMode() != null && ("Online".equalsIgnoreCase(c.getMode()) || "Hybrid".equalsIgnoreCase(c.getMode())))
+                    .filter(c -> c.getAudience() == null || !"trainer".equalsIgnoreCase(c.getAudience()))
+                    .filter(c -> c.getStatus() == null || "Active".equalsIgnoreCase(c.getStatus()))
+                    .toList();
+            return ApiResponse.ok(eligible);
         }
 
         if (!"TRAINER".equals(role)) {
@@ -704,23 +704,8 @@ public class MeController {
 
         String tId = user.getId();
         String tName = user.getName() != null ? user.getName().trim() : "";
-        String tEmail = user.getEmail() != null ? user.getEmail().trim() : "";
 
-        // Approved requests
-        Set<String> approvedCourseIds = new HashSet<>();
-        if (trainerCourseRequestRepository != null) {
-            List<TrainerCourseRequest> reqs = new ArrayList<>(trainerCourseRequestRepository.findByTrainerId(tId));
-            if (!tEmail.isEmpty()) {
-                reqs.addAll(trainerCourseRequestRepository.findByTrainerEmailIgnoreCase(tEmail));
-            }
-            for (TrainerCourseRequest r : reqs) {
-                if ("Approved".equalsIgnoreCase(r.getStatus()) || "Accepted".equalsIgnoreCase(r.getStatus())) {
-                    if (r.getCourseId() != null) approvedCourseIds.add(r.getCourseId());
-                }
-            }
-        }
-
-        // Batches handled by trainer
+        // Batches handled by trainer as batch trainer
         List<Batch> trainerBatches = batchRepository.findByTrainerIdOrTrainerNameIgnoreCase(tId, tName);
         Set<String> batchCourseIdsOrTitles = new HashSet<>();
         for (Batch b : trainerBatches) {
@@ -728,13 +713,22 @@ public class MeController {
             if (b.getCourseName() != null) batchCourseIdsOrTitles.add(b.getCourseName().toLowerCase());
         }
 
-        List<Course> allocated = allCourses.stream().filter(c -> {
-            boolean isDirect = (c.getTrainerId() != null && c.getTrainerId().equals(tId))
-                    || (c.getAssignedTrainer() != null && !tName.isEmpty() && c.getAssignedTrainer().equalsIgnoreCase(tName));
-            boolean isRequested = approvedCourseIds.contains(c.getId());
-            boolean isBatchMatch = batchCourseIdsOrTitles.contains(c.getId()) || (c.getTitle() != null && batchCourseIdsOrTitles.contains(c.getTitle().toLowerCase()));
-            return isDirect || isRequested || isBatchMatch;
-        }).toList();
+        List<Course> allocated = courseRepository.findAll().stream()
+                // 1. Student audience only (exclude trainer-audience courses)
+                .filter(c -> c.getAudience() == null || !"trainer".equalsIgnoreCase(c.getAudience()))
+                // 2. Mode Online or Hybrid
+                .filter(c -> c.getMode() != null && ("Online".equalsIgnoreCase(c.getMode()) || "Hybrid".equalsIgnoreCase(c.getMode())))
+                // 3. Active only
+                .filter(c -> c.getStatus() == null || "Active".equalsIgnoreCase(c.getStatus()))
+                // 4. Assigned to logged-in trainer as batch trainer
+                .filter(c -> batchCourseIdsOrTitles.contains(c.getId()) || (c.getTitle() != null && batchCourseIdsOrTitles.contains(c.getTitle().toLowerCase())))
+                // 5. Having at least one active student enrollment
+                .filter(c -> {
+                    if (enrollmentRepository == null) return true;
+                    List<Enrollment> enrs = enrollmentRepository.findByCourseId(c.getId());
+                    return enrs != null && enrs.stream().anyMatch(e -> "Active".equalsIgnoreCase(e.getStatus()));
+                })
+                .toList();
 
         return ApiResponse.ok(allocated);
     }

@@ -9,6 +9,60 @@ import { getAttendanceRecords } from '../../api/attendanceApi';
 import { getTrainerDashboardStats } from '../../api/userApi';
 import { sortSchedulesChronologically } from '../../utils/scheduleSortUtil';
 
+function isTodayUnfinishedSchedule(schedule) {
+  if (!schedule || !schedule.date) return false;
+  // Scheduled date must be today in IST (Asia/Kolkata)
+  const todayKolkata = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  if (schedule.date.trim() !== todayKolkata) return false;
+
+  // If session is already completed or ended
+  if (schedule.status && schedule.status.toLowerCase() === 'completed') {
+    return false;
+  }
+
+  if (schedule.endAt) {
+    const endMs = new Date(schedule.endAt).getTime();
+    if (!isNaN(endMs) && endMs <= Date.now()) {
+      return false;
+    }
+  }
+
+  // Parse time "HH:mm - HH:mm" or "hh:mm AM - hh:mm PM" in Asia/Kolkata
+  if (schedule.time && schedule.time.includes('-')) {
+    const endPart = schedule.time.split('-')[1]?.trim();
+    if (endPart) {
+      const nowKolkataTimeStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+      }).format(new Date());
+      const nowParts = nowKolkataTimeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      const endMatch = endPart.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
+      if (nowParts && endMatch) {
+        let nowH = parseInt(nowParts[1], 10);
+        const nowM = parseInt(nowParts[2], 10);
+        if (nowParts[3].toUpperCase() === 'PM' && nowH < 12) nowH += 12;
+        if (nowParts[3].toUpperCase() === 'AM' && nowH === 12) nowH = 0;
+        const nowMinutes = nowH * 60 + nowM;
+
+        let endH = parseInt(endMatch[1], 10);
+        const endM = parseInt(endMatch[2], 10);
+        const endAmpm = endMatch[3] ? endMatch[3].toUpperCase() : null;
+        if (endAmpm === 'PM' && endH < 12) endH += 12;
+        if (endAmpm === 'AM' && endH === 12) endH = 0;
+        const endMinutes = endH * 60 + endM;
+
+        if (nowMinutes >= endMinutes) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 export default function TrainerDashboard({ setActiveScreen }) {
   const { user } = useAuth();
   const trainerName = user?.name || '';
@@ -51,6 +105,7 @@ export default function TrainerDashboard({ setActiveScreen }) {
   }, [trainerName, user?.id]);
 
   const sortedDashboardSchedules = sortSchedulesChronologically(schedules);
+  const todaySchedules = sortSchedulesChronologically(schedules.filter(isTodayUnfinishedSchedule));
 
   const conductedCount = schedules.filter(s => 
     s.status === 'Completed' || (s.endAt && new Date(s.endAt) < new Date())
@@ -127,12 +182,12 @@ export default function TrainerDashboard({ setActiveScreen }) {
           </div>
 
           <div className="space-y-3">
-            {sortedDashboardSchedules.length === 0 ? (
+            {todaySchedules.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs font-semibold">
-                No schedules found for today.
+                No sessions scheduled for today.
               </div>
             ) : (
-              sortedDashboardSchedules.map((item) => (
+              todaySchedules.map((item) => (
                 <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-4">
                   <div>
                     <span className="text-xs font-black text-blue-900">{item.time}</span>
@@ -202,7 +257,7 @@ export default function TrainerDashboard({ setActiveScreen }) {
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
                   <span>Student Satisfaction</span>
                 </div>
-                <span className="font-extrabold text-slate-900">{stats?.studentSatisfaction ? Number(stats.studentSatisfaction).toFixed(1) : '4.9'} / 5.0</span>
+                <span className="font-semibold text-slate-400">Coming soon</span>
               </div>
             </div>
           </div>

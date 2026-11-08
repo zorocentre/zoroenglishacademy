@@ -158,9 +158,29 @@ select:disabled {
   cursor: not-allowed;
 }
 
-/* Security deterrent: hide content on print */
+/* Print styles for reports and documents */
 @media print {
-  body {
-    display: none !important;
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 12mm 12mm;
+  }
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Prevent table rows and card sections from breaking awkwardly across pages */
+  tr, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  table {
+    page-break-inside: auto !important;
+  }
+  thead {
+    display: table-header-group !important;
   }
 }

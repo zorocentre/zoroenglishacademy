@@ -331,7 +331,6 @@ export default function TrainerStudentsPage() {
                       <td className="py-4 px-4 font-mono text-slate-400">{idx + 1}</td>
                       <td className="py-4 px-4">
                         <div className="font-black text-slate-900">{s.name}</div>
-                        {s.email && <div className="text-[11px] text-slate-400 font-medium">{s.email}</div>}
                       </td>
                       <td className="py-4 px-4 font-bold text-slate-800 space-y-1">
                         {s.displayItems.map((cb, i) => (

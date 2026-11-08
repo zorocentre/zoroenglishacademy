@@ -4,6 +4,7 @@ import { getCourses } from '../../api/courseApi';
 import { resolveFileUrl } from '../../api/fileApi';
 import SafeImage from '../common/SafeImage';
 import PageLoader from '../common/PageLoader';
+import { formatPublicCourseFee } from '../../utils/courseFeeUtil';
 
 function formatModulesDuration(modules) {
   if (!modules || modules.length === 0) return '';
@@ -168,9 +169,7 @@ export default function CoursePage({ onOpenEnquire }) {
                       <div>
                         <div className="text-slate-400 font-semibold">Course Fee</div>
                         <div className="font-black text-emerald-600 text-sm mt-0.5">
-                          {selectedCourse.price != null && Number(selectedCourse.price) > 0 
-                            ? `₹${Number(selectedCourse.price).toLocaleString('en-IN')}` 
-                            : 'Contact us'}
+                          {formatPublicCourseFee(selectedCourse, 'Contact us')}
                         </div>
                       </div>
                       <div>
@@ -228,8 +227,8 @@ export default function CoursePage({ onOpenEnquire }) {
               </div>
             )}
 
-            {/* Course Syllabus & Modules */}
-            {selectedCourse.id && selectedCourse.modules && selectedCourse.modules.length > 0 && (
+            {/* Course Syllabus & Modules (Task F11: Online courses only) */}
+            {selectedCourse.id && String(selectedCourse.mode || '').toLowerCase() === 'online' && selectedCourse.modules && selectedCourse.modules.length > 0 && (
               <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

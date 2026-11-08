@@ -395,4 +395,58 @@ public class CompetitionFinalAssessmentEngineTest {
         assertTrue(restartResp.isSuccess());
         assertEquals("IN_PROGRESS", ((AssessmentAttempt) restartResp.getData().get("attempt")).getStatus());
     }
+
+    @Test
+    @DisplayName("Task F4: Candidate final assessment results filter out marks and answers, while Admin gets full detail")
+    void testCandidateFinalAssessmentResultsFiltering() {
+        authenticateAs(testStudentA);
+
+        // 1. Start and submit Final Assessment
+        var startResp = competitionController.startFinalAssessment(finalAsmt.getId());
+        assertTrue(startResp.isSuccess());
+
+        Map<String, Object> ansPayload = new HashMap<>();
+        ansPayload.put("questionId", q1.getId());
+        ansPayload.put("selectedOptionId", opt1A.getId().toString());
+        competitionController.saveFinalAssessmentAnswer(finalAsmt.getId(), ansPayload);
+
+        var submitResp = competitionController.submitFinalAssessment(finalAsmt.getId());
+        assertTrue(submitResp.isSuccess());
+
+        // 2. Candidate fetches results
+        var candResp = competitionController.getFinalAssessmentResults(finalAsmt.getId());
+        assertTrue(candResp.isSuccess());
+        Map<String, Object> candData = candResp.getData();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> candAttempt = (Map<String, Object>) candData.get("attempt");
+        assertNotNull(candAttempt.get("attemptId"));
+        assertNotNull(candAttempt.get("status"));
+        assertNotNull(candAttempt.get("submittedAt"));
+
+        // Candidate must NOT receive marks, scores, or question answers
+        assertNull(candAttempt.get("mcqMarks"), "Candidate attempt must not expose mcqMarks");
+        assertNull(candAttempt.get("totalMarks"), "Candidate attempt must not expose totalMarks");
+        assertNull(candAttempt.get("voiceMarks"), "Candidate attempt must not expose voiceMarks");
+        assertNull(candAttempt.get("correctCount"), "Candidate attempt must not expose correctCount");
+
+        @SuppressWarnings("unchecked")
+        List<?> candQuestions = (List<?>) candData.get("questions");
+        assertTrue(candQuestions.isEmpty(), "Candidate questions list must be empty");
+
+        // 3. Admin fetches results for the same assessment
+        authenticateAs(testAdmin);
+        var adminResp = competitionController.getFinalAssessmentResults(finalAsmt.getId());
+        assertTrue(adminResp.isSuccess());
+        Map<String, Object> adminData = adminResp.getData();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> adminAttempt = (Map<String, Object>) adminData.get("attempt");
+        assertNotNull(adminAttempt.get("totalMarks"), "Admin must receive totalMarks");
+        assertNotNull(adminAttempt.get("mcqMarks"), "Admin must receive mcqMarks");
+
+        @SuppressWarnings("unchecked")
+        List<?> adminQuestions = (List<?>) adminData.get("questions");
+        assertFalse(adminQuestions.isEmpty(), "Admin must receive full review questions");
+    }
 }

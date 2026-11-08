@@ -57,8 +57,8 @@ export default function CompetitionPortalLayout() {
     { label: 'Overview', path: '/competition', icon: Trophy },
     { label: 'Syllabus & Guidance Videos', path: '/competition/syllabus', icon: BookOpen },
     { label: 'Study Materials', path: '/competition/materials', icon: FileText },
-    { label: 'Test Series', path: '/competition/test-series', icon: Layers, badge: '35 slots' },
-    { label: 'Mock Tests', path: '/competition/mock-tests', icon: Target, badge: '4 slots' },
+    { label: 'Test Series', path: '/competition/test-series', icon: Layers },
+    { label: 'Mock Tests', path: '/competition/mock-tests', icon: Target },
     { label: 'Final Assessment', path: '/competition/final-assessment', icon: Award, badge: 'Main Exam' },
     { label: 'Leaderboard', path: '/competition/leaderboard', icon: BarChart2 }
   ];

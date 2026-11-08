@@ -15,9 +15,39 @@ import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import Logo from '../common/Logo';
 import PageLoader from '../common/PageLoader';
 
+// Date helper in IST (Asia/Kolkata)
+function getKolkataDateString(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
+}
+
+function getYesterdayKolkataDateString() {
+  const todayStr = getKolkataDateString();
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return dt.toISOString().split('T')[0];
+}
+
+function getMondayKolkataDateString() {
+  const todayStr = getKolkataDateString();
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const day = dt.getUTCDay();
+  const diffToMonday = (day + 6) % 7; // Monday = 0, Tuesday = 1 ... Sunday = 6
+  dt.setUTCDate(dt.getUTCDate() - diffToMonday);
+  return dt.toISOString().split('T')[0];
+}
+
 export default function AdminDailyReportPage() {
   const { academyName, tagline } = useWebsiteSettings();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getKolkataDateString();
+  const yesterdayStr = getYesterdayKolkataDateString();
+  const mondayStr = getMondayKolkataDateString();
   
   // Custom Date Range: From Date & To Date
   const [fromDate, setFromDate] = useState(todayStr);
@@ -78,26 +108,22 @@ export default function AdminDailyReportPage() {
   };
 
   const setYesterdayRange = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().split('T')[0];
-    setFromDate(yStr);
-    setToDate(yStr);
+    setFromDate(yesterdayStr);
+    setToDate(yesterdayStr);
   };
 
   const setThisWeekRange = () => {
-    const today = new Date();
-    const firstDay = new Date(today.setDate(today.getDate() - today.getDay()));
-    setFromDate(firstDay.toISOString().split('T')[0]);
+    setFromDate(mondayStr);
     setToDate(todayStr);
   };
 
   // Date helper
   const formatReadableDate = (dateStr) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return dateStr;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
   const isBetweenRange = (dateStr) => {
@@ -298,7 +324,7 @@ export default function AdminDailyReportPage() {
             <button
               onClick={setTodayRange}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                isSingleDay && fromDate === todayStr ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                fromDate === todayStr && toDate === todayStr ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
               Today
@@ -306,14 +332,18 @@ export default function AdminDailyReportPage() {
 
             <button
               onClick={setYesterdayRange}
-              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 cursor-pointer"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                fromDate === yesterdayStr && toDate === yesterdayStr ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
             >
               Yesterday
             </button>
 
             <button
               onClick={setThisWeekRange}
-              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 cursor-pointer"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                fromDate === mondayStr && toDate === todayStr ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
             >
               This Week
             </button>

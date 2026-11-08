@@ -5,6 +5,7 @@ import CompetitionFinalAssessmentPage from './components/competition/Competition
 import * as competitionApi from './api/competitionApi';
 
 vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
   useOutletContext: () => ({
     currentCompetition: {
       id: 'comp_test_123',
@@ -60,7 +61,7 @@ describe('CompetitionFinalAssessmentPage', () => {
     });
   });
 
-  it('renders completed attempt button when exam has already been submitted', async () => {
+  it('renders submitted message card without scorecard button when exam has already been submitted', async () => {
     const mockData = {
       competitionId: 'comp_test_123',
       competitionTitle: 'National English Olympiad 2026',
@@ -90,7 +91,10 @@ describe('CompetitionFinalAssessmentPage', () => {
     render(<CompetitionFinalAssessmentPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/View Scorecard & Results/i)).toBeTruthy();
+      expect(screen.getByText(/Final Assessment Submitted Successfully/i)).toBeTruthy();
+      expect(screen.getByText(/Thank you for completing the Final Assessment/i)).toBeTruthy();
+      expect(screen.getByText(/Your examination has been successfully submitted/i)).toBeTruthy();
+      expect(screen.queryByText(/View Scorecard & Results/i)).toBeNull();
     });
   });
 });

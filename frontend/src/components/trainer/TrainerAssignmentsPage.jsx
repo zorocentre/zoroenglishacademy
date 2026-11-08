@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getTrainerAllocatedCourses as getTrainerAllocatedCoursesHelper, getTrainerAllocatedBatches, filterStudentsByCourseAndBatch } from '../../utils/trainerFilterHelper';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import UnifiedUploader from '../common/UnifiedUploader';
+import ModalPortal from '../common/ModalPortal';
 import { useDialog } from '../../context/DialogContext';
 
 export default function TrainerAssignmentsPage() {
@@ -94,7 +95,11 @@ export default function TrainerAssignmentsPage() {
             getBatches(),
             getTrainerCourseRequests()
           ]);
-          const allCourses = (cRes?.data || []).filter(c => (c.mode || '').toLowerCase() !== 'recorded');
+          const allCourses = (cRes?.data || []).filter(c => 
+            (c.mode || '').toLowerCase() !== 'recorded' &&
+            (c.audience || 'student').toLowerCase() !== 'trainer' &&
+            (c.status || 'Active').toLowerCase() === 'active'
+          );
           const allBatches = bRes?.data || [];
           const approvedReqs = reqsRes?.data || [];
           allocatedCrs = getTrainerAllocatedCoursesHelper(user, allCourses, allBatches, approvedReqs);
@@ -624,10 +629,10 @@ export default function TrainerAssignmentsPage() {
         </div>
       </div>
 
-      {/* CREATE EXTRA ASSIGNMENT MODAL */}
-      {showCreateModal && !showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90dvh] overflow-y-auto">
+      {/* CREATE EXTRA ASSIGNMENT MODAL (Task F14: ModalPortal with full viewport backdrop & center alignment) */}
+      <ModalPortal isOpen={showCreateModal && !showPreviewModal}>
+        <div className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90vh] my-auto overflow-y-auto">
             <button
               onClick={() => setShowCreateModal(false)}
               className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
@@ -667,8 +672,10 @@ export default function TrainerAssignmentsPage() {
 
               {/* Course dropdown showing ONLY courses allocated to current trainer */}
               <div>
-                <label className="block mb-1">Select Course *</label>
+                <label htmlFor="modal-course-select" className="block mb-1">Select Course *</label>
                 <select
+                  id="modal-course-select"
+                  name="course"
                   value={formData.course}
                   onChange={(e) => handleModalCourseChange(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 cursor-pointer"
@@ -841,7 +848,7 @@ export default function TrainerAssignmentsPage() {
             </form>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* STUDENT SELECTOR MODAL (Requirement 7: Batch filter inside dialog uses ONLY selected Course) */}
       {showStudentSelector && (

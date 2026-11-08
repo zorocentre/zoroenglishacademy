@@ -15,7 +15,9 @@ export default function AddCoursePage({ setActiveScreen }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    duration: '3 Months',
+    durationValue: '3',
+    durationUnit: '',
+    duration: '',
     price: '',
     mode: 'Online', // 'Online' | 'Recorded' | 'Hybrid'
     audience: 'student', // 'student' | 'trainer'
@@ -54,6 +56,21 @@ export default function AddCoursePage({ setActiveScreen }) {
       setErrorMsg('Course For selection is required. Please select Student or Trainer.');
       return;
     }
+
+    if (!formData.durationValue || Number(formData.durationValue) <= 0) {
+      setErrorMsg('Duration value must be greater than 0.');
+      return;
+    }
+    if (!formData.durationUnit || !['Hours', 'Days', 'Months', 'Years'].includes(formData.durationUnit)) {
+      setErrorMsg('Please select a valid duration unit (Hours, Days, Months, Years).');
+      return;
+    }
+    const numPrice = Number(formData.price);
+    if (formData.price === '' || isNaN(numPrice) || numPrice <= 0) {
+      setErrorMsg('Course fee must be a valid number greater than 0.');
+      return;
+    }
+
     let normalizedMeetUrl = null;
     let trainerId = null;
     let assignedTrainer = null;
@@ -90,10 +107,14 @@ export default function AddCoursePage({ setActiveScreen }) {
     setErrorMsg('');
     setSaving(true);
     try {
-      const submitPrice = formData.price !== '' ? Number(formData.price) : 0;
+      const submitPrice = Number(formData.price);
       const res = await createCourse({
         ...formData,
         price: submitPrice,
+        enteredFee: submitPrice,
+        durationValue: Number(formData.durationValue) || 1,
+        durationUnit: formData.durationUnit,
+        duration: `${formData.durationValue || 1} ${formData.durationUnit}`,
         googleMeetUrl: normalizedMeetUrl,
         trainerId,
         assignedTrainer,
@@ -114,6 +135,17 @@ export default function AddCoursePage({ setActiveScreen }) {
 
   const isOnlineOrHybrid = formData.mode === 'Online' || formData.mode === 'Hybrid';
   const isRecordedOrHybrid = formData.mode === 'Recorded' || formData.mode === 'Hybrid';
+
+  const isMonthlyUnit = formData.durationUnit === 'Months' || formData.durationUnit === 'Years';
+  const durationValNum = Number(formData.durationValue) || 1;
+  const numFee = Number(formData.price) || 0;
+  const calculatedTotalFee = (formData.durationUnit === 'Hours' || formData.durationUnit === 'Days')
+    ? numFee
+    : formData.durationUnit === 'Months'
+      ? numFee * durationValNum
+      : formData.durationUnit === 'Years'
+        ? numFee * durationValNum * 12
+        : numFee;
 
   return (
     <div className="p-6 sm:p-8 space-y-6 bg-slate-50 min-h-screen">
@@ -174,11 +206,11 @@ export default function AddCoursePage({ setActiveScreen }) {
                 min="1"
                 required
                 placeholder="3"
-                value={formData.durationValue || '3'}
+                value={formData.durationValue}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const unit = formData.durationUnit || 'Months';
-                  setFormData({ ...formData, durationValue: val, duration: `${val} ${unit}` });
+                  const unit = formData.durationUnit || '';
+                  setFormData({ ...formData, durationValue: val, duration: unit ? `${val} ${unit}` : '' });
                 }}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white"
               />
@@ -187,29 +219,47 @@ export default function AddCoursePage({ setActiveScreen }) {
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Duration Unit *</label>
               <select
-                value={formData.durationUnit || 'Months'}
+                value={formData.durationUnit || ''}
                 onChange={(e) => {
                   const unit = e.target.value;
-                  const val = formData.durationValue || '3';
-                  setFormData({ ...formData, durationUnit: unit, duration: `${val} ${unit}` });
+                  const val = formData.durationValue || '1';
+                  setFormData({ ...formData, durationUnit: unit, duration: unit ? `${val} ${unit}` : '' });
                 }}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white cursor-pointer"
               >
+                <option value="">Select Unit</option>
+                <option value="Hours">Hours</option>
+                <option value="Days">Days</option>
                 <option value="Months">Months</option>
-                <option value="Month">Month</option>
                 <option value="Years">Years</option>
-                <option value="Year">Year</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Course Fee (₹) *</label>
-              <MoneyInput
-                placeholder="e.g. 2500"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white"
-              />
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Course Fee (₹){isMonthlyUnit ? ' / Month' : ''} *
+              </label>
+              <div className="relative flex items-center">
+                <MoneyInput
+                  placeholder={!formData.durationUnit ? "Select duration unit first" : "e.g. 2500"}
+                  disabled={!formData.durationUnit}
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white ${
+                    !formData.durationUnit ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                  } ${isMonthlyUnit ? 'pr-16' : ''}`}
+                />
+                {isMonthlyUnit && (
+                  <span className="absolute right-3 text-xs font-bold text-slate-400 pointer-events-none select-none">
+                    /month
+                  </span>
+                )}
+              </div>
+              {Boolean(formData.durationUnit && numFee > 0) && (
+                <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                  Total course fee: ₹{calculatedTotalFee.toLocaleString('en-IN')}
+                </p>
+              )}
             </div>
 
             {/* REQUIREMENT #1: COURSE MODE SELECTION */}

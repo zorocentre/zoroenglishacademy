@@ -42,6 +42,15 @@ public class Course {
     @Column(length = 100)
     private String duration;
 
+    @Column(name = "entered_fee", precision = 12, scale = 2)
+    private BigDecimal enteredFee;
+
+    @Column(name = "duration_value")
+    private Integer durationValue;
+
+    @Column(name = "duration_unit", length = 20)
+    private String durationUnit;
+
     @Column(precision = 10, scale = 2)
     private BigDecimal price = BigDecimal.ZERO;
 
@@ -189,6 +198,30 @@ public class Course {
 
     public void setDuration(String duration) {
         this.duration = duration;
+    }
+
+    public BigDecimal getEnteredFee() {
+        return enteredFee;
+    }
+
+    public void setEnteredFee(BigDecimal enteredFee) {
+        this.enteredFee = enteredFee;
+    }
+
+    public Integer getDurationValue() {
+        return durationValue;
+    }
+
+    public void setDurationValue(Integer durationValue) {
+        this.durationValue = durationValue;
+    }
+
+    public String getDurationUnit() {
+        return durationUnit;
+    }
+
+    public void setDurationUnit(String durationUnit) {
+        this.durationUnit = durationUnit;
     }
 
     public BigDecimal getPrice() {

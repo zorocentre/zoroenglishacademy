@@ -192,6 +192,9 @@ public class EnrollmentService {
         enrollment.setBatchId(resolvedBatchId);
         enrollment.setBatchName(resolvedBatchName);
         enrollment.setStatus("Active");
+        if (enrollment.getCourseTotalFee() == null) {
+            enrollment.setCourseTotalFee(course.getPrice() != null ? course.getPrice() : java.math.BigDecimal.ZERO);
+        }
         enrollment = enrollmentRepository.save(enrollment);
 
         // 2. Create or Update StudentCourseBatch
