@@ -12,7 +12,7 @@ import SecureVideoPlayer from '../common/SecureVideoPlayer';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import PageLoader from '../common/PageLoader';
 import { useDialog } from '../../context/DialogContext';
-import { evaluateScheduleLocks, getScheduleJoinState, syncServerTime } from '../../utils/scheduleSortUtil';
+import { evaluateScheduleLocks, getScheduleJoinState, syncServerTime, normalizeGoogleMeetUrl } from '../../utils/scheduleSortUtil';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
 import { usePolling } from '../../hooks/usePolling';
 
@@ -863,7 +863,7 @@ export default function CourseLearningPage({ courseId: initialCourseId, initialC
                                     try {
                                       const res = await joinSchedule(session.id);
                                       if (res && res.success && (res.data?.meetUrl || res.meetUrl)) {
-                                        const finalUrl = res.data?.meetUrl || res.meetUrl;
+                                        const finalUrl = normalizeGoogleMeetUrl(res.data?.meetUrl || res.meetUrl);
                                         window.open(finalUrl, '_blank');
                                       } else {
                                         setMsg(res?.message || 'Could not join session');

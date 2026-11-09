@@ -510,7 +510,6 @@ export default function AdminSchedulePage() {
 
         if (res?.success) {
           logActivity('Schedule Created', `Scheduled session "${formData.title}" for ${targetDesc} on ${formData.date} (${formattedTime})`, 'Schedule');
-          await notifyScheduleCreated(res.data || payload);
           await showSuccess(`Session "${formData.title}" created for ${targetDesc}. Automatic notifications dispatched.`, 'Schedule Created');
         } else {
           await showError(res?.message || 'Failed to create schedule', 'Creation Failed');
@@ -604,15 +603,6 @@ export default function AdminSchedulePage() {
     try {
       const res = await updateSchedule(rescheduleItem.id, updatedPayload);
       if (res && res.success) {
-        await notifyScheduleChange(
-          rescheduleItem, 
-          'Rescheduled', 
-          originalDate, 
-          originalTime, 
-          rescheduleFormData.newDate, 
-          formattedRescheduleTime
-        );
-
         logActivity('Schedule Rescheduled', `Rescheduled "${rescheduleItem.title}" (${rescheduleItem.batch}) from ${originalDate} ${originalTime} to ${rescheduleFormData.newDate} ${formattedRescheduleTime}`, 'Schedule');
 
         await showSuccess(`${rescheduleItem.batch} (${rescheduleItem.course}) updated to ${rescheduleFormData.newDate} at ${formattedRescheduleTime}. Affected trainer and students notified.`, 'Session Rescheduled');

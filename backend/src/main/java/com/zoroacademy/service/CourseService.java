@@ -399,47 +399,132 @@ public class CourseService {
     }
 
     public static String normalizeMeetUrl(String url) {
-        if (url == null || url.isBlank()) return null;
+        if (url == null || url.isBlank()) return url;
         String trimmed = url.trim();
         if (!trimmed.toLowerCase().startsWith("http://") && !trimmed.toLowerCase().startsWith("https://")) {
             trimmed = "https://" + trimmed;
         } else if (trimmed.toLowerCase().startsWith("http://")) {
             trimmed = "https://" + trimmed.substring(7);
         }
-        try {
-            java.net.URI uri = java.net.URI.create(trimmed);
-            String host = uri.getHost();
-            if (host == null || !"meet.google.com".equalsIgnoreCase(host)) {
-                return null;
-            }
-            String path = uri.getPath();
-            if (path == null) path = "";
-            String lower = path.toLowerCase();
-            if (lower.contains("/new") || lower.contains("/zoro-live-class")) {
-                return null;
-            }
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(?:[a-z]+/)?([a-z]{3}-[a-z]{4}-[a-z]{3})").matcher(path);
-            if (m.find()) {
-                return "https://meet.google.com/" + m.group(1).toLowerCase();
-            }
-            java.util.regex.Matcher lookupM = java.util.regex.Pattern.compile("(?i)/lookup/([a-z0-9_-]+)").matcher(path);
-            if (lookupM.find()) {
-                return "https://meet.google.com/lookup/" + lookupM.group(1).toLowerCase();
-            }
-            java.util.regex.Matcher genM = java.util.regex.Pattern.compile("(?i)^/([a-z0-9_-]+)$").matcher(path);
-            if (genM.find() && genM.group(1).length() >= 3) {
-                return "https://meet.google.com/" + genM.group(1).toLowerCase();
-            }
-            return null;
-        } catch (Exception e) {
-            return null;
+        // Turn https://meet.google.com/meet/<code> into https://meet.google.com/<code>
+        // only when the extra /meet/ segment directly precedes a meeting code in xxx-xxxx-xxx format (with optional query)
+        // leave every other path, query string, other host and non-Meet link completely untouched.
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)^(https://meet\\.google\\.com)/meet/([a-z]{3}-[a-z]{4}-[a-z]{3}(?:\\?.*)?)$").matcher(trimmed);
+        if (m.matches()) {
+            return m.group(1) + "/" + m.group(2);
         }
+        return trimmed;
     }
 
     public static boolean isValidGoogleMeetUrl(String url) {
         if (url == null || url.isBlank()) return false;
         String normalized = normalizeMeetUrl(url);
-        return normalized != null && normalized.startsWith("https://meet.google.com/");
+        if (normalized == null || !normalized.toLowerCase().startsWith("https://meet.google.com/")) {
+            return false;
+        }
+        String pathAndQuery = normalized.substring("https://meet.google.com/".length());
+        if (pathAndQuery.isBlank() || pathAndQuery.toLowerCase().startsWith("new") || pathAndQuery.toLowerCase().startsWith("zoro-live-class")) {
+            return false;
+        }
+        return java.util.regex.Pattern.compile("(?i)^[a-z]{3}-[a-z]{4}-[a-z]{3}(?:\\?.*)?$").matcher(pathAndQuery).matches()
+                || java.util.regex.Pattern.compile("(?i)^(?:lookup/)?[a-z0-9_-]{3,}(?:\\?.*)?$").matcher(pathAndQuery).matches();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Course> getTrainerEligibleStudentCourses(String trainerId, java.util.Set<String> allowedModes) {
+        if (trainerId == null || trainerId.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+
+        User trainer = userRepository.findById(trainerId)
+                .or(() -> userRepository.findByEmailIgnoreCase(trainerId))
+                .orElse(null);
+        String trainerName = trainer != null && trainer.getName() != null ? trainer.getName().trim() : "";
+        String trainerEmail = trainer != null && trainer.getEmail() != null ? trainer.getEmail().trim() : "";
+
+        List<Course> allCourses = courseRepository.findAll();
+        List<Batch> trainerBatches = batchRepository.findByTrainerId(trainerId);
+        java.util.Set<String> batchCourseIds = new java.util.HashSet<>();
+        java.util.Set<String> batchCourseNames = new java.util.HashSet<>();
+        if (trainerBatches != null) {
+            for (Batch b : trainerBatches) {
+                if (b.getCourseId() != null && !b.getCourseId().isBlank()) {
+                    batchCourseIds.add(b.getCourseId());
+                }
+                if (b.getCourseName() != null && !b.getCourseName().isBlank()) {
+                    batchCourseNames.add(b.getCourseName().toLowerCase().trim());
+                }
+            }
+        }
+
+        java.util.Set<String> approvedReqCourseIds = new java.util.HashSet<>();
+        if (trainerCourseRequestRepository != null) {
+            List<TrainerCourseRequest> approvedReqs = trainerCourseRequestRepository.findByTrainerIdAndStatusIgnoreCase(trainerId, "Approved");
+            if (approvedReqs != null) {
+                for (TrainerCourseRequest r : approvedReqs) {
+                    if (r.getCourseId() != null) approvedReqCourseIds.add(r.getCourseId().toLowerCase().trim());
+                }
+            }
+            if (!trainerEmail.isBlank()) {
+                List<TrainerCourseRequest> emailReqs = trainerCourseRequestRepository.findByTrainerEmailIgnoreCase(trainerEmail);
+                if (emailReqs != null) {
+                    for (TrainerCourseRequest r : emailReqs) {
+                        if ("Approved".equalsIgnoreCase(r.getStatus()) && r.getCourseId() != null) {
+                            approvedReqCourseIds.add(r.getCourseId().toLowerCase().trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        java.util.List<Course> eligible = new java.util.ArrayList<>();
+        for (Course c : allCourses) {
+            String aud = c.getAudience();
+            if (aud != null && "trainer".equalsIgnoreCase(aud.trim())) {
+                continue;
+            }
+            String status = c.getStatus();
+            if (status != null && !"Active".equalsIgnoreCase(status.trim())) {
+                continue;
+            }
+            String mode = c.getMode() != null ? c.getMode().trim() : "Online";
+            if (allowedModes != null && !allowedModes.isEmpty()) {
+                boolean modeMatches = false;
+                for (String am : allowedModes) {
+                    if (am.equalsIgnoreCase(mode)) {
+                        modeMatches = true;
+                        break;
+                    }
+                }
+                if (!modeMatches) {
+                    continue;
+                }
+            }
+
+            boolean isDirect = (c.getTrainerId() != null && trainerId.equalsIgnoreCase(c.getTrainerId()))
+                    || (c.getAssignedTrainerId() != null && trainerId.equalsIgnoreCase(c.getAssignedTrainerId()))
+                    || (!trainerName.isEmpty() && c.getAssignedTrainer() != null && (c.getAssignedTrainer().equalsIgnoreCase(trainerName) || c.getAssignedTrainer().toLowerCase().contains(trainerName.toLowerCase())))
+                    || (!trainerEmail.isEmpty() && c.getAssignedTrainer() != null && c.getAssignedTrainer().equalsIgnoreCase(trainerEmail));
+
+            boolean inBatch = batchCourseIds.contains(c.getId())
+                    || (c.getTitle() != null && batchCourseNames.contains(c.getTitle().toLowerCase().trim()));
+
+            boolean isApprovedReq = c.getId() != null && approvedReqCourseIds.contains(c.getId().toLowerCase().trim());
+
+            if (isDirect || inBatch || isApprovedReq) {
+                eligible.add(c);
+            }
+        }
+
+        eligible.sort(java.util.Comparator.comparing(c -> c.getTitle() != null ? c.getTitle() : ""));
+        return eligible;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTrainerEligibleForStudentCourse(String trainerId, String courseId, java.util.Set<String> allowedModes) {
+        if (trainerId == null || courseId == null) return false;
+        List<Course> eligible = getTrainerEligibleStudentCourses(trainerId, allowedModes);
+        return eligible.stream().anyMatch(c -> courseId.equalsIgnoreCase(c.getId()));
     }
 
     private void updateFutureSchedulesMeetLink(String courseId, String meetUrl) {

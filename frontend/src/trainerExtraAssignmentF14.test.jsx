@@ -88,4 +88,53 @@ describe('TrainerAssignmentsPage Task F14: Extra Assignment course dropdowns & M
     expect(options).toContain('Business English Hybrid');
     expect(options).not.toContain('Train the Trainer');
   });
+
+  it('Task G1: Select Target Students modal stacks on top of Create Assignment modal and Escape closes only child', async () => {
+    render(<TrainerAssignmentsPage />);
+
+    // Open create assignment modal
+    const createBtn = screen.getByRole('button', { name: /create extra assignment/i });
+    fireEvent.click(createBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Assign tasks to an entire batch, all students in a course, or specific individual students.')).toBeTruthy();
+    });
+
+    // Select "Specific Student" button
+    const studentBtn = within(document.body).getByText('Specific Student');
+    fireEvent.click(studentBtn);
+
+    // Click "Choose Students"
+    const chooseStudentsBtn = await waitFor(() => {
+      const btn = within(document.body).getByRole('button', { name: /choose students/i });
+      expect(btn).toBeTruthy();
+      return btn;
+    });
+    fireEvent.click(chooseStudentsBtn);
+
+    // Target Students modal should now be open
+    await waitFor(() => {
+      expect(within(document.body).getByText('Select Target Students')).toBeTruthy();
+    });
+
+    // Verify portals and stacking:
+    const portalRoots = document.querySelectorAll('[data-modal-portal-root="true"]');
+    expect(portalRoots.length).toBeGreaterThanOrEqual(2);
+
+    const layer0Backdrop = document.querySelector('[data-modal-layer="0"]');
+    const layer1Backdrop = document.querySelector('[data-modal-layer="1"]');
+    expect(layer0Backdrop).toBeTruthy();
+    expect(layer1Backdrop).toBeTruthy();
+    expect(layer0Backdrop.style.zIndex).toBe('10000');
+    expect(layer1Backdrop.style.zIndex).toBe('10010');
+
+    // Pressing Escape should close ONLY the child (Select Target Students)
+    fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() => {
+      expect(within(document.body).queryByText('Select Target Students')).toBeNull();
+      // Parent modal must remain open and interactive
+      expect(within(document.body).getByText('Assign tasks to an entire batch, all students in a course, or specific individual students.')).toBeTruthy();
+    });
+  });
 });

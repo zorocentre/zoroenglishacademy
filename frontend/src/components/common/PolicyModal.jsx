@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
 import { X, ShieldCheck, FileText } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 /**
  * Accessible Policy & Terms Modal Dialog
@@ -11,40 +11,17 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
   const modalRef = useRef(null);
   const okButtonRef = useRef(null);
 
-  // Lock body scroll while modal is open (Task 3)
-  useEffect(() => {
-    if (isOpen) {
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prevOverflow;
-      };
-    }
-  }, [isOpen]);
-
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
     // Auto-focus OK button on open
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (okButtonRef.current) {
         okButtonRef.current.focus();
       }
     }, 50);
 
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -54,7 +31,7 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
       aria-modal="true"
       aria-labelledby="policy-dialog-title"
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
     >
       <div
         ref={modalRef}
@@ -115,5 +92,5 @@ export default function PolicyModal({ isOpen, onClose, title, content, type = 'p
     </div>
   );
 
-  return typeof document !== 'undefined' ? ReactDOM.createPortal(modalContent, document.body) : modalContent;
+  return <ModalPortal isOpen={isOpen} onClose={onClose}>{modalContent}</ModalPortal>;
 }

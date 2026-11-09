@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Video, Eye, Lock, Clock, ExternalLink, CheckCircle, Sparkles, Layers, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getSchedules, startSchedule, joinSchedule } from '../../api/scheduleApi';
-import { sortSchedulesChronologically, getScheduleJoinState, syncServerTime, getNowInKolkata } from '../../utils/scheduleSortUtil';
+import { sortSchedulesChronologically, getScheduleJoinState, syncServerTime, getNowInKolkata, normalizeGoogleMeetUrl } from '../../utils/scheduleSortUtil';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
 import PageLoader from '../common/PageLoader';
 import { usePolling } from '../../hooks/usePolling';
@@ -37,6 +37,23 @@ export default function TrainerSchedulePage({ setActiveScreen }) {
     syncServerTime();
     loadSchedules();
   }, [user]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetScheduleId = params.get('scheduleId');
+    if (targetScheduleId && schedules.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById('schedule-card-' + targetScheduleId) || document.querySelector(`[data-schedule-id="${targetScheduleId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-blue-600', 'ring-offset-2');
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-blue-600', 'ring-offset-2');
+          }, 4000);
+        }
+      }, 200);
+    }
+  }, [schedules]);
 
   // Re-evaluate lock and join states periodically based on Asia/Kolkata server time
   usePolling(() => {
@@ -95,7 +112,8 @@ export default function TrainerSchedulePage({ setActiveScreen }) {
     try {
       const res = await startSchedule(item.id);
       if (res && res.success) {
-        const finalUrl = res.data?.meetUrl || res.meetUrl || item.meetLink || item.googleMeetUrl;
+        const rawUrl = res.data?.meetUrl || res.meetUrl || item.meetLink || item.googleMeetUrl;
+        const finalUrl = normalizeGoogleMeetUrl(rawUrl);
         setActionMsg(`Session launched! Attendance automatically recorded as PRESENT.`);
         setTimeout(() => setActionMsg(''), 5000);
         if (finalUrl) {
@@ -194,7 +212,12 @@ export default function TrainerSchedulePage({ setActiveScreen }) {
               const joinState = getScheduleJoinState(item);
 
               return (
-                <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col space-y-4">
+                <div 
+                  key={item.id} 
+                  id={'schedule-card-' + item.id}
+                  data-schedule-id={item.id}
+                  className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col space-y-4 transition-all"
+                >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">

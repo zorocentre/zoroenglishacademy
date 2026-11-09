@@ -7,7 +7,7 @@ import { getStudentEnrolledCourses } from '../../api/enrollmentApi';
 import { getSchedules, joinSchedule } from '../../api/scheduleApi';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
-import { getScheduleJoinState, syncServerTime } from '../../utils/scheduleSortUtil';
+import { getScheduleJoinState, syncServerTime, normalizeGoogleMeetUrl } from '../../utils/scheduleSortUtil';
 
 export default function JoinSessionPage({ setActiveScreen }) {
   const { user } = useAuth();
@@ -67,7 +67,8 @@ export default function JoinSessionPage({ setActiveScreen }) {
       const res = await joinSchedule(session.id);
       if (res && res.success) {
         setIsJoined(true);
-        const url = res.data?.meetUrl || res.meetUrl || session.meetUrl;
+        const rawUrl = res.data?.meetUrl || res.meetUrl || session.meetUrl;
+        const url = normalizeGoogleMeetUrl(rawUrl);
         if (url) {
           window.open(url, '_blank');
         }

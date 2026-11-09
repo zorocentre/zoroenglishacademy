@@ -70,6 +70,24 @@ public class CourseController {
         return ApiResponse.ok(courses);
     }
 
+    @GetMapping("/trainer/eligible")
+    public ApiResponse<List<Course>> getTrainerEligibleCourses(
+            @RequestParam(required = false) String modes,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.zoroacademy.security.UserPrincipal principal) {
+        if (principal == null || !"TRAINER".equalsIgnoreCase(principal.getRole())) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: Only trainers can access eligible courses.");
+        }
+        java.util.Set<String> modeSet = null;
+        if (modes != null && !modes.isBlank()) {
+            modeSet = java.util.Arrays.stream(modes.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        List<Course> list = courseService.getTrainerEligibleStudentCourses(principal.getId(), modeSet);
+        return ApiResponse.ok(list);
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<Course> getCourseById(@PathVariable String id,
                                              @org.springframework.security.core.annotation.AuthenticationPrincipal com.zoroacademy.security.UserPrincipal principal) {
@@ -94,6 +112,17 @@ public class CourseController {
             }
             Course trainerCourse = courseService.getCourseForStudent(course.getId(), trainerId, trainerEmail);
             return ApiResponse.ok(trainerCourse);
+        }
+
+        if (principal != null && "TRAINER".equalsIgnoreCase(principal.getRole())) {
+            boolean isEligible = courseService.isTrainerEligibleForStudentCourse(principal.getId(), course.getId(), null);
+            if (!isEligible) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not assigned to this student course.");
+            }
+            if (course.getModules() != null) {
+                course.getModules().forEach(m -> m.setLocked(false));
+            }
+            return ApiResponse.ok(course);
         }
 
         boolean isStaff = isStaffUser();

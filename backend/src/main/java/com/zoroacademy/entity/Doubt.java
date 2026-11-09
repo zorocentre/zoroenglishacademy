@@ -28,6 +28,9 @@ public class Doubt {
     @Column(name = "batch_id", length = 128)
     private String batchId;
 
+    @Transient
+    private String batchName;
+
     @Column(name = "module_id", length = 128)
     private String moduleId;
 
@@ -138,6 +141,14 @@ public class Doubt {
 
     public void setBatchId(String batchId) {
         this.batchId = batchId;
+    }
+
+    public String getBatchName() {
+        return batchName;
+    }
+
+    public void setBatchName(String batchName) {
+        this.batchName = batchName;
     }
 
     public String getModuleId() {

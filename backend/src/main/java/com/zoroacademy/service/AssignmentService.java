@@ -491,9 +491,15 @@ public class AssignmentService {
 
     @Transactional(readOnly = true)
     public List<AssignmentSubmission> getSubmissionsByTrainer(String trainerIdOrName) {
+        return getSubmissionsByTrainer(trainerIdOrName, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssignmentSubmission> getSubmissionsByTrainer(String trainerIdOrName, String courseId) {
         // Submissions to be reviewed by this trainer (only student submissions)
         return submissionRepository.findByTrainerIdOrAssignedTrainerIgnoreCase(trainerIdOrName, trainerIdOrName).stream()
                 .filter(s -> s.getSubmitterRole() == null || "STUDENT".equalsIgnoreCase(s.getSubmitterRole()))
+                .filter(s -> courseId == null || courseId.isBlank() || courseId.equalsIgnoreCase(s.getCourseId()))
                 .collect(java.util.stream.Collectors.toList());
     }
 

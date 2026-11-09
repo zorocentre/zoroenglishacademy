@@ -7,6 +7,7 @@ import { getAttendanceRecords } from '../../api/attendanceApi';
 import {
   sortSchedulesChronologically,
   isValidGoogleMeetUrl,
+  normalizeGoogleMeetUrl,
   getScheduleJoinState,
   syncServerTime,
   getNowInKolkata,
@@ -150,13 +151,15 @@ export default function TrainerSessionsPage() {
     if (!sch) return;
     try {
       const res = await startSchedule(sch.id);
-      const url = res?.data?.meetUrl || res?.meetUrl || sch.meetUrl || sch.googleMeetUrl || sch.meetLink;
+      const rawUrl = res?.data?.meetUrl || res?.meetUrl || sch.meetUrl || sch.googleMeetUrl || sch.meetLink;
+      const url = normalizeGoogleMeetUrl(rawUrl);
       if (url) {
         window.open(url, '_blank');
       }
       await loadData();
     } catch {
-      const url = sch.meetUrl || sch.googleMeetUrl || sch.meetLink;
+      const rawUrl = sch.meetUrl || sch.googleMeetUrl || sch.meetLink;
+      const url = normalizeGoogleMeetUrl(rawUrl);
       if (url) {
         window.open(url, '_blank');
       }
@@ -164,7 +167,7 @@ export default function TrainerSessionsPage() {
   };
 
   const handleCopyLink = (sch) => {
-    const rawMeetUrl = sch?.googleMeetUrl || sch?.meetingUrl || sch?.meetLink || sch?.meetUrl || '';
+    const rawMeetUrl = normalizeGoogleMeetUrl(sch?.googleMeetUrl || sch?.meetingUrl || sch?.meetLink || sch?.meetUrl || '');
     if (!rawMeetUrl) return;
     navigator.clipboard.writeText(rawMeetUrl);
     setCopiedId(sch.id);

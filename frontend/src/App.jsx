@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DialogProvider } from './context/DialogContext';
+import { ModalStackProvider } from './context/ModalStackContext';
 import { WebsiteSettingsProvider, useWebsiteSettings } from './context/WebsiteSettingsContext';
 import PublicNavbar from './components/layout/PublicNavbar';
 import DashboardSidebar from './components/layout/DashboardSidebar';
@@ -749,11 +750,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <DialogProvider>
-          <WebsiteSettingsProvider>
-            <AppRoutes />
-          </WebsiteSettingsProvider>
-        </DialogProvider>
+        <ModalStackProvider>
+          <DialogProvider>
+            <WebsiteSettingsProvider>
+              <AppRoutes />
+            </WebsiteSettingsProvider>
+          </DialogProvider>
+        </ModalStackProvider>
       </AuthProvider>
     </BrowserRouter>
   );

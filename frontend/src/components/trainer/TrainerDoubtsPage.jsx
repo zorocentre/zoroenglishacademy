@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Layers, Search } from 'lucide-react';
 import { getDoubts, resolveDoubt } from '../../api/doubtApi';
-import { getCourses, getTrainerCourseRequests } from '../../api/courseApi';
+import { getCourses, getTrainerCourseRequests, getTrainerEligibleCourses } from '../../api/courseApi';
 import { getBatches } from '../../api/batchApi';
 import { useAuth } from '../../context/AuthContext';
 import { getTrainerAllocatedCourses, getTrainerAllocatedBatches } from '../../utils/trainerFilterHelper';
@@ -32,30 +32,34 @@ export default function TrainerDoubtsPage() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [dRes, cRes, bRes, reqsRes] = await Promise.all([
+      const [dRes, eligibleCrsRes, cRes, bRes, reqsRes] = await Promise.all([
         getDoubts(),
-        getCourses(),
-        getBatches(),
-        getTrainerCourseRequests()
+        getTrainerEligibleCourses().catch(() => ({ success: false, data: [] })),
+        getCourses().catch(() => ({ success: false, data: [] })),
+        getBatches().catch(() => ({ success: false, data: [] })),
+        getTrainerCourseRequests().catch(() => ({ success: false, data: [] }))
       ]);
 
-      if (dRes.data) {
-        const myDoubts = dRes.data.filter(d =>
-          (d.trainerId && user?.id && d.trainerId === user.id) ||
-          (d.trainerName && user?.name && d.trainerName.toLowerCase() === user.name.toLowerCase())
-        );
-        setDoubts(myDoubts.length > 0 ? myDoubts : dRes.data);
-      }
+      const allBatches = bRes?.data || [];
+      const studentCourses = (eligibleCrsRes?.success && Array.isArray(eligibleCrsRes.data) && eligibleCrsRes.data.length > 0)
+        ? eligibleCrsRes.data.filter(c => (c.audience || '').toLowerCase() !== 'trainer')
+        : getTrainerAllocatedCourses(user, cRes?.data || [], allBatches, reqsRes?.data || []).filter(c => (c.audience || '').toLowerCase() !== 'trainer');
 
-      const allCourses = cRes.data || [];
-      const allBatches = bRes.data || [];
-      const approvedReqs = reqsRes.data || [];
+      setCourses(studentCourses);
 
-      const allocatedCrs = getTrainerAllocatedCourses(user, allCourses, allBatches, approvedReqs);
-      setCourses(allocatedCrs);
-
-      const allocatedBtcs = getTrainerAllocatedBatches(user, 'All', allocatedCrs, allBatches);
+      const allocatedBtcs = getTrainerAllocatedBatches(user, 'All', studentCourses, allBatches);
       setBatches(allocatedBtcs);
+
+      if (dRes?.data) {
+        const myDoubts = dRes.data.filter(d => {
+          const matchesTrainer = (d.trainerId && user?.id && d.trainerId === user.id) ||
+            (d.trainerName && user?.name && d.trainerName.toLowerCase() === user.name.toLowerCase()) ||
+            studentCourses.some(c => c.title === d.course || c.id === d.courseId);
+          const matchesEligibleStudentCourse = studentCourses.some(c => c.title === d.course || c.id === d.courseId);
+          return matchesTrainer && (studentCourses.length === 0 || matchesEligibleStudentCourse);
+        });
+        setDoubts(myDoubts);
+      }
     } catch (err) {
       console.error('Failed to load trainer doubts page data:', err);
     } finally {
@@ -218,7 +222,11 @@ export default function TrainerDoubtsPage() {
                       <h3 className="font-black text-slate-900 text-sm">{doubt.studentName}</h3>
                       <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{getFriendlyDoubtId(doubt, index, doubts)}</span>
                     </div>
-                    <p className="text-xs text-slate-500 font-semibold">{doubt.course} • Batch: {doubt.batchName || 'Unassigned'} • Topic: {doubt.topic}</p>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      {(doubt.courseMode?.toLowerCase() === 'recorded' || doubt.mode?.toLowerCase() === 'recorded')
+                        ? `${doubt.course} • Topic: ${doubt.topic}`
+                        : `${doubt.course} • Batch: ${doubt.batchName || 'Unassigned'} • Topic: ${doubt.topic}`}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

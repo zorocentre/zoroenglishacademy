@@ -64,6 +64,15 @@ export const getCourses = async (audience = null) => {
   return apiResponse([], false, res?.message || 'Failed to fetch courses');
 };
 
+export const getTrainerEligibleCourses = async (modes = null) => {
+  const url = modes ? `/courses/trainer/eligible?modes=${encodeURIComponent(modes)}` : '/courses/trainer/eligible';
+  const res = await apiGet(url);
+  if (res.success && Array.isArray(res.data)) {
+    return apiResponse(res.data.map(normalizeCourse));
+  }
+  return apiResponse([], false, res?.message || 'Failed to fetch trainer eligible courses');
+};
+
 export const getMyCourses = async () => {
   const res = await apiGet('/me/courses');
   if (res.success && Array.isArray(res.data)) {

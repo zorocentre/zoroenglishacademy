@@ -209,7 +209,7 @@ export function DialogProvider({ children }) {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[10002] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
+      className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-transition"
       onClick={() => closeDialog(false)}
     >
       <div
@@ -300,7 +300,7 @@ export function DialogProvider({ children }) {
   return (
     <DialogContext.Provider value={{ showError, showSuccess, showWarning, confirm }}>
       {children}
-      <ModalPortal isOpen={dialogState.isOpen}>
+      <ModalPortal isOpen={dialogState.isOpen} onClose={() => closeDialog(false)}>
         {dialogElement}
       </ModalPortal>
     </DialogContext.Provider>

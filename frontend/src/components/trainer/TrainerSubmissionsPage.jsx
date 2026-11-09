@@ -4,7 +4,7 @@ import {
   Play, BookOpen, Layers, FileText, UserCheck, X, Award
 } from 'lucide-react';
 import { getSubmissions, updateCorrection } from '../../api/assignmentApi';
-import { getCourses, getTrainerCourseRequests } from '../../api/courseApi';
+import { getCourses, getTrainerCourseRequests, getTrainerEligibleCourses } from '../../api/courseApi';
 import { getBatches } from '../../api/batchApi';
 import { getTrainerStudents } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
@@ -85,44 +85,48 @@ export default function TrainerSubmissionsPage() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [subRes, crsRes, btcRes, stdRes, reqsRes] = await Promise.all([
+      const [subRes, eligibleCrsRes, crsRes, btcRes, stdRes, reqsRes] = await Promise.all([
         getSubmissions(),
-        getCourses(),
-        getBatches(),
-        getTrainerStudents(),
-        getTrainerCourseRequests()
+        getTrainerEligibleCourses().catch(() => ({ success: false, data: [] })),
+        getCourses().catch(() => ({ success: false, data: [] })),
+        getBatches().catch(() => ({ success: false, data: [] })),
+        getTrainerStudents().catch(() => ({ success: false, data: [] })),
+        getTrainerCourseRequests().catch(() => ({ success: false, data: [] }))
       ]);
 
-      const allSubmissions = subRes.data || [];
-      const allCourses = crsRes.data || [];
-      const allBatches = btcRes.data || [];
-      const approvedReqs = reqsRes.data || [];
-      const allStudents = (stdRes.data || []).filter(s => (s.status || '').toLowerCase() !== 'inactive' && !s.isDeleted);
+      const allSubmissions = subRes?.data || [];
+      const allBatches = btcRes?.data || [];
+      const allStudents = (stdRes?.data || []).filter(s => (s.status || '').toLowerCase() !== 'inactive' && !s.isDeleted);
 
       setStudents(allStudents);
 
-      const allocatedCrs = getTrainerAllocatedCourses(user, allCourses, allBatches, approvedReqs);
-      setCourses(allocatedCrs);
+      const studentCourses = (eligibleCrsRes?.success && Array.isArray(eligibleCrsRes.data) && eligibleCrsRes.data.length > 0)
+        ? eligibleCrsRes.data.filter(c => (c.audience || '').toLowerCase() !== 'trainer')
+        : getTrainerAllocatedCourses(user, crsRes?.data || [], allBatches, reqsRes?.data || []).filter(c => (c.audience || '').toLowerCase() !== 'trainer');
 
-      const allocatedBtcs = getTrainerAllocatedBatches(user, 'All', allocatedCrs, allBatches);
+      const onlineHybridCourses = studentCourses.filter(c => 
+        ['online', 'hybrid'].includes((c.mode || '').toLowerCase().trim())
+      );
+      setCourses(onlineHybridCourses);
+
+      const allocatedBtcs = getTrainerAllocatedBatches(user, 'All', onlineHybridCourses, allBatches);
       setBatches(allocatedBtcs);
 
-      const trnSubmissions = allSubmissions.filter(s => 
-        matchesTrainerName(s.assignedTrainer, trainerName, trainerEmail) ||
-        s.assignedTrainer === trainerName ||
-        allocatedCrs.some(c => c.title === s.courseTitle)
-      );
+      const trnSubmissions = allSubmissions.filter(s => {
+        const matchesTrainer = matchesTrainerName(s.assignedTrainer, trainerName, trainerEmail) ||
+          s.assignedTrainer === trainerName ||
+          onlineHybridCourses.some(c => c.title === s.courseTitle || c.id === s.courseId);
+        const matchesEligibleStudentCourse = onlineHybridCourses.some(c => c.title === s.courseTitle || c.id === s.courseId);
+        return matchesTrainer && (onlineHybridCourses.length === 0 || matchesEligibleStudentCourse);
+      });
       setSubmissions(trnSubmissions);
 
-      const recCourses = allCourses.filter(c => 
-        (c.mode || '').toLowerCase().trim() === 'recorded' &&
-        (matchesTrainerName(c.assignedTrainer, trainerName, trainerEmail) ||
-         (c.trainerId && user?.id && c.trainerId === user.id) ||
-         (Array.isArray(c.allocatedTrainers) && (c.allocatedTrainers.includes(trainerName) || c.allocatedTrainers.includes(trainerEmail))))
+      const recCourses = studentCourses.filter(c => 
+        (c.mode || '').toLowerCase().trim() === 'recorded'
       );
       setAssignedRecordedCourses(recCourses);
       if (recCourses.length > 0) {
-        setExpandedRecordedCourseId(recCourses[0].id);
+        setExpandedRecordedCourseId(prev => recCourses.some(c => c.id === prev) ? prev : recCourses[0].id);
       } else {
         setExpandedRecordedCourseId(null);
       }
@@ -137,6 +141,13 @@ export default function TrainerSubmissionsPage() {
     loadAllData();
   }, [user, trainerName, trainerEmail]);
 
+  const handleViewChange = (newView) => {
+    setMainView(newView);
+    setSelectedCourse('All');
+    setSelectedBatch('All');
+  };
+
+  const displayedCourses = mainView === 'submissions' ? courses : assignedRecordedCourses;
   const availableBatches = getTrainerAllocatedBatches(user, selectedCourse, courses, batches);
 
   const handleCourseChange = (courseTitle) => {
@@ -241,7 +252,7 @@ export default function TrainerSubmissionsPage() {
         {/* Top-Level View Switching Toggle (Requirement 5.2) */}
         <div className="flex items-center space-x-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs">
           <button
-            onClick={() => setMainView('submissions')}
+            onClick={() => handleViewChange('submissions')}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-2 ${
               mainView === 'submissions'
                 ? 'bg-[#0F52BA] text-white shadow-md'
@@ -253,7 +264,7 @@ export default function TrainerSubmissionsPage() {
           </button>
           
           <button
-            onClick={() => setMainView('recorded')}
+            onClick={() => handleViewChange('recorded')}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-2 ${
               mainView === 'recorded'
                 ? 'bg-purple-700 text-white shadow-md'
@@ -288,26 +299,28 @@ export default function TrainerSubmissionsPage() {
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
           >
             <option value="All">All Courses</option>
-            {courses.map((c) => (
+            {displayedCourses.map((c) => (
               <option key={c.id || c.title} value={c.title}>{c.title}</option>
             ))}
           </select>
         </div>
 
         {/* Batch Filter Dropdown */}
-        <div className="flex items-center space-x-1.5">
-          <Layers className="w-4 h-4 text-purple-600" />
-          <select 
-            value={selectedBatch} 
-            onChange={(e) => setSelectedBatch(e.target.value)}
-            className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">All Batches</option>
-            {availableBatches.map((b) => (
-              <option key={b.id || b.name} value={b.name}>{b.name}</option>
-            ))}
-          </select>
-        </div>
+        {mainView === 'submissions' && (
+          <div className="flex items-center space-x-1.5">
+            <Layers className="w-4 h-4 text-purple-600" />
+            <select 
+              value={selectedBatch} 
+              onChange={(e) => setSelectedBatch(e.target.value)}
+              className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Batches</option>
+              {availableBatches.map((b) => (
+                <option key={b.id || b.name} value={b.name}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* VIEW 1: ASSIGNMENT SUBMISSIONS MANAGEMENT */}

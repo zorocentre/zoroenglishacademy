@@ -1,5 +1,6 @@
 package com.zoroacademy.service;
 
+import com.zoroacademy.entity.Notification;
 import com.zoroacademy.entity.Schedule;
 import com.zoroacademy.entity.User;
 import com.zoroacademy.repository.ScheduleRepository;
@@ -23,6 +24,9 @@ public class ScheduleService {
     private final com.zoroacademy.repository.EnrollmentRepository enrollmentRepository;
     private final NotificationService notificationService;
     private final com.zoroacademy.repository.TrainerCourseRequestRepository trainerCourseRequestRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.repository.NotificationRepository notificationRepository;
 
     @org.springframework.beans.factory.annotation.Value("${schedule.resources-unlock-minutes:30}")
     private int resourcesUnlockMinutes = 30;
@@ -253,8 +257,12 @@ public class ScheduleService {
             schedule.setCourse(resolvedCourse.getTitle());
             schedule.setCourseId(resolvedCourse.getId());
             if (schedule.getMeetLink() == null || schedule.getMeetLink().isBlank()) {
-                schedule.setMeetLink(resolvedCourse.getGoogleMeetUrl());
+                schedule.setMeetLink(CourseService.normalizeMeetUrl(resolvedCourse.getGoogleMeetUrl()));
+            } else {
+                schedule.setMeetLink(CourseService.normalizeMeetUrl(schedule.getMeetLink()));
             }
+        } else if (schedule.getMeetLink() != null) {
+            schedule.setMeetLink(CourseService.normalizeMeetUrl(schedule.getMeetLink()));
         }
 
         boolean isTrainerAudience = (resolvedCourse != null && "trainer".equalsIgnoreCase(resolvedCourse.getAudience()))
@@ -264,7 +272,7 @@ public class ScheduleService {
             schedule.setAudience("TRAINER");
             // Batch and batch trainer are not required for trainer-audience courses
             if ((schedule.getMeetLink() == null || schedule.getMeetLink().isBlank()) && resolvedCourse != null) {
-                schedule.setMeetLink(resolvedCourse.getGoogleMeetUrl());
+                schedule.setMeetLink(CourseService.normalizeMeetUrl(resolvedCourse.getGoogleMeetUrl()));
             }
             if (schedule.getTrainer() == null || schedule.getTrainer().isBlank()) {
                 schedule.setTrainer("Admin");
@@ -322,6 +330,7 @@ public class ScheduleService {
             notifyEnrolledTrainers(saved);
         } else if (notificationService != null) {
             notifyBatchStudents(saved, false);
+            notifyAssignedTrainer(saved, false);
         }
 
         return saved;
@@ -344,7 +353,11 @@ public class ScheduleService {
         if (updated.getTrainerId() != null) existing.setTrainerId(updated.getTrainerId());
         if (updated.getStartTime() != null) existing.setStartTime(updated.getStartTime());
         if (updated.getEndTime() != null) existing.setEndTime(updated.getEndTime());
-        if (updated.getTime() != null) existing.setTime(updated.getTime());
+        if (updated.getTime() != null) {
+            existing.setTime(updated.getTime());
+            if (updated.getStartTime() == null) existing.setStartTime(null);
+            if (updated.getEndTime() == null) existing.setEndTime(null);
+        }
         if (updated.getDate() != null) existing.setDate(updated.getDate());
         if (updated.getMeetLink() != null) existing.setMeetLink(updated.getMeetLink());
         if (updated.getStudentsCount() != null) existing.setStudentsCount(updated.getStudentsCount());
@@ -436,6 +449,9 @@ public class ScheduleService {
                 || (prevTime != null && !prevTime.equals(saved.getTime()));
         if (isRescheduled && notificationService != null) {
             notifyBatchStudents(saved, true);
+            if (!isTrainerAudience) {
+                notifyAssignedTrainer(saved, true);
+            }
         }
 
         if (activityLogService != null) {
@@ -518,6 +534,50 @@ public class ScheduleService {
                 .readStatus(false)
                 .build());
         }
+    }
+
+    private void notifyAssignedTrainer(Schedule schedule, boolean isReschedule) {
+        if (notificationService == null || schedule == null) return;
+        String tId = schedule.getTrainerId();
+        if ((tId == null || tId.isBlank()) && schedule.getTrainer() != null && userRepository != null) {
+            tId = userRepository.findByNameIgnoreCase(schedule.getTrainer()).stream()
+                    .filter(u -> "TRAINER".equalsIgnoreCase(u.getRole()))
+                    .map(User::getId)
+                    .findFirst().orElse(null);
+        }
+        if (tId == null || tId.isBlank()) return;
+
+        String action = isReschedule ? "Rescheduled" : "Scheduled";
+        String title = "Session " + action + ": " + (schedule.getTitle() != null ? schedule.getTitle() : schedule.getCourse());
+        String batchInfo = (schedule.getBatch() != null && !schedule.getBatch().isBlank()) ? " (Batch: " + schedule.getBatch() + ")" : "";
+        String scheduleId = schedule.getId() != null ? schedule.getId() : "";
+        String timeStr = schedule.getTime() != null ? schedule.getTime().trim() : "";
+        if (!timeStr.toUpperCase().contains("IST")) {
+            timeStr = timeStr + " IST";
+        }
+        String message = "Your session for " + schedule.getCourse() + batchInfo + " is " + action.toLowerCase()
+                + " for " + schedule.getDate() + " at " + timeStr + ". [scheduleId:" + scheduleId + "]";
+
+        if (notificationRepository != null) {
+            List<Notification> existing = notificationRepository.findByRecipientIdIgnoreCase(tId);
+            boolean alreadyNotified = existing.stream().anyMatch(n ->
+                    n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)
+                    && n.getMessage() != null && n.getMessage().contains(scheduleId)
+            );
+            if (alreadyNotified) {
+                return;
+            }
+        }
+
+        Notification notif = Notification.builder()
+                .id("notif_" + java.util.UUID.randomUUID())
+                .recipientId(tId)
+                .recipientRole("TRAINER")
+                .title(title)
+                .message(message)
+                .readStatus(false)
+                .build();
+        notificationService.createNotification(notif);
     }
 
     private void cleanupStoredFilesFromText(String text) {
@@ -749,7 +809,7 @@ public class ScheduleService {
 
         java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("success", true);
-        response.put("meetUrl", meetUrl);
+        response.put("meetUrl", CourseService.normalizeMeetUrl(meetUrl));
         response.put("scheduleId", schedule.getId());
         response.put("status", "Present");
         response.put("trainerJoined", schedule.getTrainerJoined());

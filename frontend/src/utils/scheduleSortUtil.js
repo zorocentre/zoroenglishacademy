@@ -202,42 +202,32 @@ export function normalizeGoogleMeetUrl(url) {
   if (!trimmed) return '';
   if (!/^https?:\/\//i.test(trimmed)) {
     trimmed = 'https://' + trimmed;
+  } else if (/^http:\/\//i.test(trimmed)) {
+    trimmed = 'https://' + trimmed.substring(7);
   }
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.hostname.toLowerCase() !== 'meet.google.com') {
-      return '';
-    }
-    const path = parsed.pathname || '';
-    const lower = path.toLowerCase();
-    if (lower.includes('/new') || lower.includes('/zoro-live-class')) {
-      return '';
-    }
-    // Match code xxx-xxxx-xxx with optional /meet/ or other prefix
-    const codeMatch = path.match(/(?:[a-zA-Z]+\/)?([a-zA-Z]{3}-[a-zA-Z]{4}-[a-zA-Z]{3})/i);
-    if (codeMatch) {
-      return 'https://meet.google.com/' + codeMatch[1].toLowerCase();
-    }
-    // Match lookup/<id>
-    const lookupMatch = path.match(/\/lookup\/([a-zA-Z0-9_-]+)/i);
-    if (lookupMatch) {
-      return 'https://meet.google.com/lookup/' + lookupMatch[1].toLowerCase();
-    }
-    // Match general code
-    const generalMatch = path.match(/^\/([a-zA-Z0-9_-]+)$/i);
-    if (generalMatch && generalMatch[1].length >= 3) {
-      return 'https://meet.google.com/' + generalMatch[1].toLowerCase();
-    }
-    return '';
-  } catch (e) {
-    return '';
+  // Turn https://meet.google.com/meet/<code> into https://meet.google.com/<code>
+  // only when the extra /meet/ segment directly precedes a meeting code in xxx-xxxx-xxx format
+  // leave every other path, query string, other host and non-Meet link completely untouched.
+  const faultyRegex = /^(https:\/\/meet\.google\.com)\/meet\/([a-zA-Z]{3}-[a-zA-Z]{4}-[a-zA-Z]{3}(?:\?.*)?)$/i;
+  const match = trimmed.match(faultyRegex);
+  if (match) {
+    return `${match[1]}/${match[2]}`;
   }
+  return trimmed;
 }
 
 export function isValidGoogleMeetUrl(url) {
   if (!url || typeof url !== 'string') return false;
   const normalized = normalizeGoogleMeetUrl(url);
-  return Boolean(normalized && normalized.startsWith('https://meet.google.com/'));
+  if (!normalized || !/^https:\/\/meet\.google\.com\//i.test(normalized)) {
+    return false;
+  }
+  const pathAndQuery = normalized.substring('https://meet.google.com/'.length);
+  if (!pathAndQuery || /^(new|zoro-live-class)/i.test(pathAndQuery)) {
+    return false;
+  }
+  return /^[a-zA-Z]{3}-[a-zA-Z]{4}-[a-zA-Z]{3}(?:\?.*)?$/i.test(pathAndQuery) ||
+         /^(?:lookup\/)?[a-zA-Z0-9_-]{3,}(?:\?.*)?$/i.test(pathAndQuery);
 }
 
 export function getScheduleJoinState(sch, nowInKolkata = getNowInKolkata()) {

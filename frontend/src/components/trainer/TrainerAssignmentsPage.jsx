@@ -629,10 +629,10 @@ export default function TrainerAssignmentsPage() {
         </div>
       </div>
 
-      {/* CREATE EXTRA ASSIGNMENT MODAL (Task F14: ModalPortal with full viewport backdrop & center alignment) */}
-      <ModalPortal isOpen={showCreateModal && !showPreviewModal}>
-        <div className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90vh] my-auto overflow-y-auto">
+      {/* CREATE EXTRA ASSIGNMENT MODAL (Task G1: Global Modal Stacking) */}
+      <ModalPortal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)}>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90vh] my-auto overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowCreateModal(false)}
               className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
@@ -850,10 +850,10 @@ export default function TrainerAssignmentsPage() {
         </div>
       </ModalPortal>
 
-      {/* STUDENT SELECTOR MODAL (Requirement 7: Batch filter inside dialog uses ONLY selected Course) */}
-      {showStudentSelector && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 relative max-h-[85vh] flex flex-col">
+      {/* STUDENT SELECTOR MODAL (Task G1: Wrapped in ModalPortal for nested stacking) */}
+      <ModalPortal isOpen={showStudentSelector} onClose={() => setShowStudentSelector(false)}>
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 relative max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h4 className="text-base font-black text-slate-900">Select Target Students</h4>
@@ -957,12 +957,12 @@ export default function TrainerAssignmentsPage() {
             </div>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* ASSIGNMENT PREVIEW & CONFIRMATION MODAL */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90dvh] overflow-y-auto">
+      <ModalPortal isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)}>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 relative max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-slate-100 pb-3">
               <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Preview & Confirm</span>
               <h3 className="text-xl font-black text-slate-900">Assignment Summary</h3>
@@ -1032,7 +1032,7 @@ export default function TrainerAssignmentsPage() {
             </div>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* UNIVERSAL FILE VIEWER MODAL */}
       <UniversalFileViewerModal

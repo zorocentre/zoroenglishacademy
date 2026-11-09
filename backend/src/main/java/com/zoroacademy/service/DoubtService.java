@@ -19,6 +19,13 @@ public class DoubtService {
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CourseService courseService;
+
+    public void setCourseService(CourseService courseService) {
+        this.courseService = courseService;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public DoubtService(DoubtRepository doubtRepository,
                         com.zoroacademy.repository.UserRepository userRepository,
@@ -56,15 +63,111 @@ public class DoubtService {
 
     @Transactional(readOnly = true)
     public List<Doubt> getDoubtsByTrainer(String trainerIdOrName) {
-        return getDoubtsByTrainer(trainerIdOrName, trainerIdOrName);
+        return getDoubtsByTrainer(trainerIdOrName, trainerIdOrName, null);
     }
 
     @Transactional(readOnly = true)
     public List<Doubt> getDoubtsByTrainer(String trainerId, String trainerName) {
+        return getDoubtsByTrainer(trainerId, trainerName, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Doubt> getDoubtsByTrainer(String trainerId, String trainerName, String courseId) {
+        List<Doubt> rawList;
         if (trainerName != null && !trainerName.isBlank()) {
-            return doubtRepository.findByTrainerIdOrTrainerNameIgnoreCase(trainerId, trainerName);
+            rawList = doubtRepository.findByTrainerIdOrTrainerNameIgnoreCase(trainerId, trainerName);
+        } else {
+            rawList = doubtRepository.findByTrainerIdOrTrainerNameIgnoreCase(trainerId, trainerId);
         }
-        return doubtRepository.findByTrainerIdOrTrainerNameIgnoreCase(trainerId, trainerId);
+
+        // Apply shared definition of Trainer's eligible student courses
+        List<com.zoroacademy.entity.Course> eligibleCourses = (courseService != null && trainerId != null)
+                ? courseService.getTrainerEligibleStudentCourses(trainerId, null)
+                : null;
+
+        java.util.Set<String> eligibleCourseIds = new java.util.HashSet<>();
+        java.util.Set<String> eligibleCourseTitles = new java.util.HashSet<>();
+        java.util.Map<String, com.zoroacademy.entity.Course> courseMapById = new java.util.HashMap<>();
+        if (eligibleCourses != null) {
+            for (com.zoroacademy.entity.Course c : eligibleCourses) {
+                if (c.getId() != null) {
+                    eligibleCourseIds.add(c.getId());
+                    courseMapById.put(c.getId(), c);
+                }
+                if (c.getTitle() != null) {
+                    eligibleCourseTitles.add(c.getTitle().toLowerCase().trim());
+                }
+            }
+        }
+
+        List<Doubt> result = new java.util.ArrayList<>();
+        for (Doubt d : rawList) {
+            String cId = d.getCourseId();
+            String cTitle = d.getCourseTitle();
+
+            if (eligibleCourses != null) {
+                boolean isEligible = (cId != null && eligibleCourseIds.contains(cId))
+                        || (cTitle != null && eligibleCourseTitles.contains(cTitle.toLowerCase().trim()));
+                if (!isEligible) {
+                    continue; // Exclude trainer-audience or ineligible course doubts
+                }
+            }
+
+            if (courseId != null && !courseId.isBlank()) {
+                if (!courseId.equalsIgnoreCase(cId)) {
+                    continue;
+                }
+            }
+
+            com.zoroacademy.entity.Course course = (cId != null) ? courseMapById.get(cId) : null;
+            if (course == null && cTitle != null && eligibleCourses != null) {
+                course = eligibleCourses.stream().filter(c -> cTitle.equalsIgnoreCase(c.getTitle())).findFirst().orElse(null);
+            }
+
+            String mode = course != null && course.getMode() != null ? course.getMode() : (d.getCourseMode() != null ? d.getCourseMode() : "Online");
+
+            if ("Recorded".equalsIgnoreCase(mode)) {
+                // Task G4: For Recorded courses do not render batch (no batch label)
+                d.setBatchId(null);
+                d.setBatchName(null);
+            } else {
+                // Online or Hybrid courses: resolve the correct batch name
+                String bName = null;
+                // 1. Prefer batch stored on the doubt
+                if (d.getBatchId() != null && !d.getBatchId().isBlank() && batchRepository != null) {
+                    bName = batchRepository.findById(d.getBatchId()).map(com.zoroacademy.entity.Batch::getName).orElse(null);
+                }
+                // 2. If empty, resolve from student's active enrollment/batch for that course whose trainer is this trainer
+                if ((bName == null || bName.isBlank()) && d.getStudentId() != null && d.getCourseId() != null && studentCourseBatchRepository != null) {
+                    List<com.zoroacademy.entity.StudentCourseBatch> scbs = studentCourseBatchRepository.findByStudentId(d.getStudentId());
+                    for (com.zoroacademy.entity.StudentCourseBatch scb : scbs) {
+                        if (d.getCourseId().equalsIgnoreCase(scb.getCourseId())) {
+                            String scbBatchId = scb.getBatchId();
+                            if (scbBatchId != null && batchRepository != null) {
+                                com.zoroacademy.entity.Batch b = batchRepository.findById(scbBatchId).orElse(null);
+                                if (b != null) {
+                                    boolean isTrainerForBatch = (b.getTrainerId() != null && b.getTrainerId().equals(trainerId))
+                                            || (b.getTrainerIds() != null && b.getTrainerIds().contains(trainerId));
+                                    if (isTrainerForBatch) {
+                                        bName = b.getName();
+                                        d.setBatchId(b.getId());
+                                        break;
+                                    }
+                                }
+                            }
+                            if (bName == null && scb.getBatchName() != null && !scb.getBatchName().isBlank()) {
+                                bName = scb.getBatchName();
+                                if (d.getBatchId() == null) d.setBatchId(scb.getBatchId());
+                            }
+                        }
+                    }
+                }
+                d.setBatchName(bName);
+            }
+
+            result.add(d);
+        }
+        return result;
     }
 
     @Transactional(readOnly = true)

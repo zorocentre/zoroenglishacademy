@@ -1,32 +1,50 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Calendar, BookOpen, HelpCircle, AlertTriangle, Info, Wallet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getTrainerNotifications } from '../../api/notificationApi';
+import { getTrainerNotifications, markNotificationRead } from '../../api/notificationApi';
 import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import PageLoader from '../common/PageLoader';
 
 export default function TrainerNotificationsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const trainerIdentifier = user?.name || user?.email || '';
 
-  useEffect(() => {
-    async function loadNotifications() {
-      setLoading(true);
-      try {
-        const res = await getTrainerNotifications(trainerIdentifier);
-        setNotifications(res.data || []);
-      } catch (err) {
-        console.error('Failed to load notifications:', err);
-      } finally {
-        setLoading(false);
-      }
+  const loadNotifications = async () => {
+    setLoading(true);
+    try {
+      const res = await getTrainerNotifications(trainerIdentifier);
+      setNotifications(res.data || []);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadNotifications();
   }, [trainerIdentifier]);
+
+  const handleNotificationClick = async (item) => {
+    if (!item.readStatus) {
+      try {
+        await markNotificationRead(item.id);
+        setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, readStatus: true } : n));
+      } catch (err) {
+        console.warn('Failed to mark notification read:', err);
+      }
+    }
+    if (item.type === 'schedule' || item.scheduleId) {
+      const targetUrl = item.scheduleId ? `/trainer/schedules?scheduleId=${encodeURIComponent(item.scheduleId)}` : '/trainer/schedules';
+      navigate(targetUrl);
+    }
+  };
 
   const filteredNotifications = notifications.filter(n => {
     if (activeTab === 'all') return true;
@@ -80,13 +98,21 @@ export default function TrainerNotificationsPage() {
             const IconComponent = getIcon(item.type);
             const timeInfo = formatNotificationTime(item.createdAt || item.date || item.time);
             return (
-              <div key={item.id} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start gap-4">
-                <div className="p-2.5 rounded-full border bg-blue-50 text-[#0F52BA] border-blue-200 shrink-0">
+              <div 
+                key={item.id} 
+                onClick={() => handleNotificationClick(item)}
+                className={`p-4 hover:bg-slate-50/80 transition-colors flex items-start gap-4 cursor-pointer ${
+                  !item.readStatus ? 'bg-blue-50/30' : ''
+                }`}
+              >
+                <div className={`p-2.5 rounded-full border shrink-0 ${
+                  !item.readStatus ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-blue-50 text-[#0F52BA] border-blue-200'
+                }`}>
                   <IconComponent className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-slate-900 text-base">{item.title}</h3>
+                    <h3 className={`text-slate-900 text-base ${!item.readStatus ? 'font-black' : 'font-bold'}`}>{item.title}</h3>
                     <span
                       className="text-xs text-slate-400 shrink-0 font-medium cursor-help"
                       title={timeInfo.exact}

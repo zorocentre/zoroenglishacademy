@@ -15,15 +15,33 @@ import java.util.Map;
 public class DoubtController {
 
     private final DoubtService doubtService;
+    private final com.zoroacademy.service.CourseService courseService;
 
     public DoubtController(DoubtService doubtService) {
+        this(doubtService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DoubtController(DoubtService doubtService,
+                           @org.springframework.beans.factory.annotation.Autowired(required = false) com.zoroacademy.service.CourseService courseService) {
         this.doubtService = doubtService;
+        this.courseService = courseService;
+    }
+
+    public ApiResponse<List<Doubt>> getDoubts(UserPrincipal principal) {
+        return getDoubts(null, principal);
     }
 
     @GetMapping
-    public ApiResponse<List<Doubt>> getDoubts(@AuthenticationPrincipal UserPrincipal principal) {
+    public ApiResponse<List<Doubt>> getDoubts(@RequestParam(required = false) String courseId,
+                                              @AuthenticationPrincipal UserPrincipal principal) {
         if (principal != null && "TRAINER".equalsIgnoreCase(principal.getRole())) {
-            return ApiResponse.ok(doubtService.getDoubtsByTrainer(principal.getId(), principal.getName()));
+            if (courseId != null && !courseId.isBlank() && courseService != null) {
+                if (!courseService.isTrainerEligibleForStudentCourse(principal.getId(), courseId, null)) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not assigned to this course.");
+                }
+            }
+            return ApiResponse.ok(doubtService.getDoubtsByTrainer(principal.getId(), principal.getName(), courseId));
         }
         if (principal != null && "STUDENT".equalsIgnoreCase(principal.getRole())) {
             return ApiResponse.ok(doubtService.getDoubtsByStudent(principal.getId(), principal.getEmail()));

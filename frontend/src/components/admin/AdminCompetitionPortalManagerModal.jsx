@@ -21,6 +21,7 @@ import UnifiedUploader from '../common/UnifiedUploader';
 import SafeVideo from '../common/SafeVideo';
 import GuidanceVideoManager from './GuidanceVideoManager';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
+import ModalPortal from '../common/ModalPortal';
 import QuestionPreview from '../common/QuestionPreview';
 import { useDialog } from '../../context/DialogContext';
 
@@ -392,8 +393,9 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
@@ -771,9 +773,9 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
       </div>
 
       {/* SUB-MODAL: Add / Edit Question Form */}
-      {showQuestionModal && (
-        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+      <ModalPortal isOpen={showQuestionModal} onClose={() => setShowQuestionModal(false)}>
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-black text-slate-900">Add Question to Assessment</h3>
               <button
@@ -995,7 +997,7 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
             </form>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* Universal File Viewer Modal (Tasks K1 & K2) */}
       <UniversalFileViewerModal
@@ -1005,5 +1007,6 @@ export default function AdminCompetitionPortalManagerModal({ competition, isOpen
         hideDownload={false}
       />
     </div>
+  </ModalPortal>
   );
 }

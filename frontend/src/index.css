@@ -3,10 +3,18 @@
 
 :root {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  /* Centralized z-index scale */
+  --z-page-content: 1;
+  --z-sticky-bar: 30;
+  --z-sidebar: 40;
+  --z-navbar: 40;
+  --z-dropdown: 50;
+  --z-toast: 9000;
+  --z-modal-base: 10000;
+  --z-modal-step: 10;
   --z-modal-backdrop: 10000;
   --z-modal: 10001;
   --z-modal-alert: 10002;
-  --z-toast: 10003;
 }
 
 body {

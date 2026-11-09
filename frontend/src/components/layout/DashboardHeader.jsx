@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Calendar as CalendarIcon, Menu, X, AlertTriangle, Clock, CheckCircle2, Info, User, Trophy, ArrowLeftRight } from 'lucide-react';
-import { getMyNotifications } from '../../api/notificationApi';
+import { getMyNotifications, markNotificationRead } from '../../api/notificationApi';
 import { formatNotificationTime } from '../../utils/notificationDateUtil';
 import { resolveFileUrl } from '../../api/fileApi';
 import { useCompetitionPortalSwitch } from '../../hooks/useCompetitionPortalSwitch';
@@ -43,14 +43,17 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
     try {
       const items = [];
       const notifRes = await getMyNotifications();
-      (notifRes.data || []).slice(0, 10).forEach(n => {
+      (notifRes.data || []).slice(0, 15).forEach(n => {
         const timeInfo = formatNotificationTime(n.createdAt || n.time || n.date);
         items.push({
-          id: `notif_${n.id}`,
+          id: n.id,
           title: n.title || 'Notification',
           desc: n.desc || n.message || '',
           time: timeInfo.relative,
           exactTime: timeInfo.exact,
+          category: n.type,
+          scheduleId: n.scheduleId,
+          readStatus: n.readStatus === true,
           type: n.type === 'danger' ? 'danger' : n.type === 'warning' ? 'warning' : 'info'
         });
       });
@@ -60,9 +63,37 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
     }
   };
 
-  const handleDismissNotif = (id) => {
+  const handleDismissNotif = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await markNotificationRead(id);
+    } catch (err) {
+      console.warn('Failed to mark read on dismiss:', err);
+    }
     setNotifList(prev => prev.filter(item => item.id !== id));
   };
+
+  const handleNotificationClick = async (item) => {
+    if (!item.readStatus) {
+      try {
+        await markNotificationRead(item.id);
+        setNotifList(prev => prev.map(n => n.id === item.id ? { ...n, readStatus: true } : n));
+      } catch (err) {
+        console.warn('Failed to mark read on click:', err);
+      }
+    }
+    setShowNotifPanel(false);
+    if (item.category === 'schedule' || item.scheduleId) {
+      const roleStr = String(user?.role || '').toUpperCase();
+      if (roleStr.includes('TRAINER')) {
+        const targetUrl = item.scheduleId ? `/trainer/schedules?scheduleId=${encodeURIComponent(item.scheduleId)}` : '/trainer/schedules';
+        navigate(targetUrl);
+        if (setActiveScreen) setActiveScreen('trainer-schedule');
+      }
+    }
+  };
+
+  const unreadCount = notifList.filter(n => !n.readStatus).length;
 
   return (
     <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-xs relative">
@@ -111,9 +142,9 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
             title="Notifications"
           >
             <Bell className="w-5 h-5" />
-            {notifList.length > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-600 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center ring-2 ring-white">
-                {notifList.length}
+                {unreadCount}
               </span>
             )}
           </button>
@@ -126,7 +157,7 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
                   <Bell className="w-4 h-4 text-blue-600" />
                   <h4 className="text-sm font-black text-slate-900 tracking-tight">Notifications</h4>
                   <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                    {notifList.length}
+                    {unreadCount} unread
                   </span>
                 </div>
                 <button
@@ -146,12 +177,15 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
                   notifList.map(item => (
                     <div 
                       key={item.id} 
-                      className={`p-3 rounded-2xl border flex items-start justify-between space-x-3 transition-colors ${
+                      onClick={() => handleNotificationClick(item)}
+                      className={`p-3 rounded-2xl border flex items-start justify-between space-x-3 transition-colors cursor-pointer hover:shadow-xs ${
+                        !item.readStatus ? 'ring-1 ring-blue-400 bg-blue-50/50' : 'bg-slate-50/70'
+                      } ${
                         item.type === 'danger'
-                          ? 'bg-rose-50/70 border-rose-200 text-rose-900'
+                          ? 'border-rose-200 text-rose-900'
                           : item.type === 'warning'
-                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
-                          : 'bg-blue-50/70 border-blue-200 text-blue-900'
+                          ? 'border-amber-200 text-amber-900'
+                          : 'border-blue-200 text-blue-900'
                       }`}
                     >
                       <div className="flex items-start space-x-2.5 min-w-0">
@@ -163,14 +197,14 @@ export default function DashboardHeader({ user, onMobileMenuToggle, setActiveScr
                           <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                         )}
                         <div className="min-w-0">
-                          <div className="font-black text-xs leading-tight">{item.title}</div>
+                          <div className={`text-xs leading-tight ${!item.readStatus ? 'font-black' : 'font-bold'}`}>{item.title}</div>
                           <p className="text-[11px] font-medium opacity-90 mt-0.5 leading-snug">{item.desc}</p>
                           <span className="text-[10px] font-bold opacity-75 mt-1 block cursor-help" title={item.exactTime}>{item.time}</span>
                         </div>
                       </div>
 
                       <button
-                        onClick={() => handleDismissNotif(item.id)}
+                        onClick={(e) => handleDismissNotif(e, item.id)}
                         className="text-slate-400 hover:text-slate-600 p-1 shrink-0 cursor-pointer"
                         title="Dismiss"
                       >

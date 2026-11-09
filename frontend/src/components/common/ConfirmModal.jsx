@@ -18,17 +18,6 @@ export default function ConfirmModal({
 }) {
   const isConfirmDisabled = confirmDisabled || disabled;
 
-  // Lock body scroll while modal is open (Task 3)
-  useEffect(() => {
-    if (isOpen) {
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prevOverflow;
-      };
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
   const handleDismiss = () => {
@@ -38,7 +27,7 @@ export default function ConfirmModal({
 
   const modalContent = (
     <div 
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={handleDismiss}
     >
       <div 
@@ -95,5 +84,5 @@ export default function ConfirmModal({
     </div>
   );
 
-  return <ModalPortal isOpen={isOpen}>{modalContent}</ModalPortal>;
+  return <ModalPortal isOpen={isOpen} onClose={handleDismiss}>{modalContent}</ModalPortal>;
 }
