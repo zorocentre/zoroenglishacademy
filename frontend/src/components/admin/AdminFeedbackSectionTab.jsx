@@ -18,7 +18,8 @@ import {
   uploadFeedbackMedia,
   updateFeedbackMediaOrder,
   deleteFeedbackMedia,
-  getFeedbackMediaStatus
+  getFeedbackMediaStatus,
+  getFeedbackVideoPlayback
 } from '../../api/feedbackMediaApi';
 import { resolveFileUrl } from '../../api/fileApi';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
@@ -35,6 +36,7 @@ export default function AdminFeedbackSectionTab({ onUnsavedChange }) {
   const [uploadProgress, setUploadProgress] = useState('');
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -247,6 +249,51 @@ export default function AdminFeedbackSectionTab({ onUnsavedChange }) {
       await loadMedia();
     } finally {
       setIsSavingOrder(false);
+    }
+  };
+
+  const handlePreview = async (item) => {
+    const isVideo = item.mediaType === 'VIDEO';
+    if (isVideo) {
+      if (item.status !== 'READY') {
+        await showError(
+          'This video is still being processed by Bunny Stream or failed. Preview is available once processing is complete.',
+          'Video Not Ready'
+        );
+        return;
+      }
+      setLoadingPreviewId(item.id);
+      try {
+        const res = await getFeedbackVideoPlayback(item.id);
+        if (res && res.success && res.data) {
+          setPreviewItem({
+            name: item.originalFileName || 'Feedback Video',
+            contentType: 'video/mp4',
+            mediaType: 'VIDEO',
+            embedUrl: res.data.embedUrl,
+            fileUrl: res.data.streamUrl,
+            url: res.data.embedUrl,
+            id: item.id,
+            bunnyVideoId: item.bunnyVideoId
+          });
+        } else {
+          await showError(res?.message || 'Failed to load video preview.', 'Preview Failed');
+        }
+      } catch (err) {
+        console.error('Failed to load video playback for preview:', err);
+        await showError(err?.message || 'Failed to authorize video playback.', 'Preview Error');
+      } finally {
+        setLoadingPreviewId(null);
+      }
+    } else {
+      setPreviewItem({
+        name: item.originalFileName || 'Feedback Image',
+        url: item.url,
+        fileUrl: item.url,
+        contentType: item.contentType || 'image/jpeg',
+        mediaType: 'IMAGE',
+        id: item.storedFileId || item.id
+      });
     }
   };
 
@@ -586,21 +633,16 @@ export default function AdminFeedbackSectionTab({ onUnsavedChange }) {
                     {/* Preview Large in Shared Modal */}
                     <button
                       type="button"
-                      onClick={() =>
-                        setPreviewItem({
-                          name: item.originalFileName || (isVideo ? 'Feedback Video' : 'Feedback Image'),
-                          url: item.url || item.thumbnailUrl,
-                          fileUrl: item.url,
-                          contentType: item.contentType || (isVideo ? 'video/mp4' : 'image/jpeg'),
-                          mediaType: item.mediaType,
-                          id: item.storedFileId || item.id,
-                          bunnyVideoId: item.bunnyVideoId
-                        })
-                      }
+                      onClick={() => handlePreview(item)}
+                      disabled={loadingPreviewId === item.id}
                       title="Preview Large"
-                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
+                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      {loadingPreviewId === item.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
                       <span className="hidden md:inline">Preview</span>
                     </button>
 

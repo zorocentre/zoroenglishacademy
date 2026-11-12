@@ -22,7 +22,8 @@ vi.mock('./api/feedbackMediaApi', () => ({
   uploadFeedbackMedia: vi.fn(),
   updateFeedbackMediaOrder: vi.fn(),
   deleteFeedbackMedia: vi.fn(),
-  getFeedbackMediaStatus: vi.fn()
+  getFeedbackMediaStatus: vi.fn(),
+  getFeedbackVideoPlayback: vi.fn()
 }));
 
 describe('AdminFeedbackSectionTab Component Tests (Task H3.7)', () => {
@@ -105,6 +106,52 @@ describe('AdminFeedbackSectionTab Component Tests (Task H3.7)', () => {
         'Audio File Rejected'
       );
       expect(feedbackApi.uploadFeedbackMedia).not.toHaveBeenCalled();
+    });
+  });
+
+  it('3. Video preview fetches playback token and opens modal with embedUrl', async () => {
+    const mockItems = [
+      {
+        id: 'fbm_video_1',
+        originalFileName: 'testimonial.mp4',
+        mediaType: 'VIDEO',
+        status: 'READY',
+        sizeBytes: 15000000,
+        sortOrder: 0,
+        bunnyVideoId: 'bunny-vid-123',
+        thumbnailUrl: 'https://vz-cdn.net/bunny-vid-123/thumbnail.jpg'
+      }
+    ];
+
+    feedbackApi.getAllFeedbackMedia.mockResolvedValue({ success: true, data: mockItems });
+    feedbackApi.getFeedbackVideoPlayback.mockResolvedValue({
+      success: true,
+      data: {
+        videoId: 'bunny-vid-123',
+        embedUrl: 'https://iframe.mediadelivery.net/embed/784226/bunny-vid-123?token=mocktoken&expires=1999999999',
+        streamUrl: 'https://video.bunnycdn.com/play/bunny-vid-123',
+        authorized: true
+      }
+    });
+
+    render(<AdminFeedbackSectionTab />);
+
+    await waitFor(() => {
+      expect(screen.getByText('testimonial.mp4')).toBeDefined();
+    });
+
+    const previewBtn = screen.getByTitle('Preview Large');
+    fireEvent.click(previewBtn);
+
+    await waitFor(() => {
+      expect(feedbackApi.getFeedbackVideoPlayback).toHaveBeenCalledWith('fbm_video_1');
+    });
+
+    // Check modal displays iframe
+    await waitFor(() => {
+      const iframe = document.querySelector('iframe');
+      expect(iframe).toBeDefined();
+      expect(iframe.getAttribute('src')).toContain('iframe.mediadelivery.net/embed/784226/bunny-vid-123');
     });
   });
 });

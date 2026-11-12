@@ -93,4 +93,28 @@ describe('UniversalFileViewerModal and Preview Button Tests', () => {
     const previewButtons = screen.getAllByRole('button', { name: /Preview/i });
     expect(previewButtons.length).toBeGreaterThanOrEqual(3);
   });
+
+  it('4. Renders Bunny Stream iframe player when file.embedUrl is provided', () => {
+    const videoFile = {
+      name: 'testimonial.mp4',
+      contentType: 'video/mp4',
+      mediaType: 'VIDEO',
+      embedUrl: 'https://iframe.mediadelivery.net/embed/784226/bunny-vid-123?token=mock&expires=9999999999',
+      size: '12 MB'
+    };
+
+    render(
+      <UniversalFileViewerModal
+        isOpen={true}
+        onClose={vi.fn()}
+        file={videoFile}
+        hideDownload={true}
+      />
+    );
+
+    expect(screen.getByText('testimonial.mp4')).toBeDefined();
+    const iframe = document.querySelector('iframe');
+    expect(iframe).toBeTruthy();
+    expect(iframe.getAttribute('src')).toContain('iframe.mediadelivery.net/embed/784226/bunny-vid-123');
+  });
 });

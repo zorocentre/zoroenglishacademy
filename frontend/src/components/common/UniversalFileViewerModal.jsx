@@ -36,6 +36,10 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
       return;
     }
     setErrorMsg('');
+    if (file?.embedUrl) {
+      setResolvedUrl(file.embedUrl);
+      return;
+    }
     const raw = file.url || file.fileUrl || file.path || file.id || '';
     if (!raw) {
       setResolvedUrl('#');
@@ -83,7 +87,7 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
   const mimeType = (resolvedInfo?.contentType || file?.contentType || file?.mimeType || file?.type || '').toLowerCase();
 
   const isImage = mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
-  const isVideo = mimeType.startsWith('video/') || ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext);
+  const isVideo = mimeType.startsWith('video/') || ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext) || file?.mediaType === 'VIDEO';
   const isAudio = mimeType.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(ext);
   const isPdf = mimeType === 'application/pdf' || ext === 'pdf' || fileUrl.includes('.pdf') || (resolvedInfo?.url && resolvedInfo.url.includes('.pdf'));
   const isTxt = ext === 'txt' || mimeType.startsWith('text/plain');
@@ -214,16 +218,28 @@ export default function UniversalFileViewerModal({ isOpen, onClose, file, hideDo
                   className="w-full max-w-3xl flex flex-col items-center select-none"
                   onContextMenu={(e) => e.preventDefault()}
                 >
-                  <video
-                    src={fileUrl}
-                    controls
-                    controlsList="nodownload"
-                    disablePictureInPicture
-                    onContextMenu={(e) => e.preventDefault()}
-                    className="w-full max-h-[70vh] rounded-2xl shadow-xl bg-black border border-slate-800"
-                  >
-                    Your browser does not support HTML5 video playback.
-                  </video>
+                  {file?.embedUrl ? (
+                    <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-xl bg-black border border-slate-800">
+                      <iframe
+                        src={`${file.embedUrl}&autoplay=false&preload=true&responsive=true`}
+                        title={fileName}
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                        allowFullScreen
+                        className="w-full h-full border-0"
+                      />
+                    </div>
+                  ) : (
+                    <video
+                      src={fileUrl}
+                      controls
+                      controlsList="nodownload"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="w-full max-h-[70vh] rounded-2xl shadow-xl bg-black border border-slate-800"
+                    >
+                      Your browser does not support HTML5 video playback.
+                    </video>
+                  )}
                 </div>
               )}
 
