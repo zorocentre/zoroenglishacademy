@@ -124,6 +124,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/files/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/files/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/website-settings/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/feedback-media/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/competitions/{id}/registrations").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/competitions", "/api/competitions/", "/api/competitions/{id}", "/api/competitions/{id}/modules").permitAll()
                         .requestMatchers("/api/payments/razorpay/**").permitAll()

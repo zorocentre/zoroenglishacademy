@@ -9,6 +9,7 @@ import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import SafeImage from '../common/SafeImage';
 import PageLoader from '../common/PageLoader';
 import HeroCarousel from './HeroCarousel';
+import FeedbackSection from './FeedbackSection';
 import CompetitionRegisterModal from './CompetitionRegisterModal';
 import { formatPublicCourseFee } from '../../utils/courseFeeUtil';
 
@@ -200,6 +201,9 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
           })}
         </div>
       </section>
+
+      {/* FEEDBACK SECTION */}
+      <FeedbackSection />
 
       {/* COURSES SECTION - Dynamic Course Thumbnail Handling (Requirement #2 & #3) */}
       {showCourses && (
@@ -502,21 +506,21 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
               <div className="p-6 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
-                <span className="text-xs font-extrabold text-blue-800 uppercase tracking-wider">Our Mission</span>
+                <span className="text-base sm:text-lg font-extrabold text-blue-800 uppercase tracking-wider leading-snug block">Our Mission</span>
                 <p className="text-sm text-slate-700 font-medium">
                   {currentSettings?.aboutPageContent?.missionStatement || 'To make world-class skill development accessible, engaging, and transformative for every child.'}
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-2">
-                <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wider">Our Vision</span>
+                <span className="text-base sm:text-lg font-extrabold text-emerald-800 uppercase tracking-wider leading-snug block">Our Vision</span>
                 <p className="text-sm text-slate-700 font-medium">
                   {currentSettings?.aboutPageContent?.visionStatement || 'Creating a global generation of articulate, confident, and empathetic leaders of tomorrow.'}
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-2">
-                <span className="text-xs font-extrabold text-purple-800 uppercase tracking-wider">Core Values</span>
+                <span className="text-base sm:text-lg font-extrabold text-purple-800 uppercase tracking-wider leading-snug block">Core Values</span>
                 <p className="text-sm text-slate-700 font-medium">
                   {currentSettings?.aboutPageContent?.coreValues || 'Excellence, Continuous Growth, Integrity, Student-Centric Empathy'}
                 </p>

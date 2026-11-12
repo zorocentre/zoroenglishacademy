@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Save, Globe, Info, Loader2, HardDrive, Trash2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUp, ArrowDown, UploadCloud, Eye } from 'lucide-react';
+import { Check, Save, Globe, Info, Loader2, HardDrive, Trash2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUp, ArrowDown, UploadCloud, Eye, MessageSquare } from 'lucide-react';
 import { getWebsiteSettings, saveWebsiteSettings, getAllHeroImages, createHeroImage, updateHeroImageOrder, updateHeroImage, deleteHeroImage } from '../../api/websiteSettingsApi';
 import { getStorageMetrics, triggerStorageCleanup, updateStorageSettings } from '../../api/storageApi';
 import { uploadFile, resolveFileUrl } from '../../api/fileApi';
 import { compressHeroImage } from '../../utils/imageCompressor';
 import HeroCarousel from '../public/HeroCarousel';
+import AdminFeedbackSectionTab from './AdminFeedbackSectionTab';
 import { useDialog } from '../../context/DialogContext';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
@@ -12,6 +13,7 @@ export default function AdminSettingsPage() {
   const { showSuccess, showError, confirm } = useDialog();
   const { isOfflineFallback, offlineMessage, reloadSettings } = useWebsiteSettings();
   const [activeTab, setActiveTab] = useState('landing_content');
+  const [feedbackHasUnsavedOrder, setFeedbackHasUnsavedOrder] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -230,6 +232,20 @@ export default function AdminSettingsPage() {
     }
   }, [activeTab]);
 
+  const handleTabClick = async (newTab) => {
+    if (activeTab === 'feedback_section' && feedbackHasUnsavedOrder && newTab !== 'feedback_section') {
+      const confirmDiscard = await confirm({
+        title: 'Unsaved Order Changes',
+        message: 'You have unsaved changes to the Feedback gallery order. Switching tabs will discard these changes. Continue?',
+        confirmText: 'Discard & Switch',
+        danger: true
+      });
+      if (!confirmDiscard) return;
+      setFeedbackHasUnsavedOrder(false);
+    }
+    setActiveTab(newTab);
+  };
+
   const handleHeroUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -363,7 +379,7 @@ export default function AdminSettingsPage() {
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6 flex-wrap font-bold">
         <button
-          onClick={() => setActiveTab('landing_content')}
+          onClick={() => handleTabClick('landing_content')}
           className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'landing_content' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
@@ -373,7 +389,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('about_contact')}
+          onClick={() => handleTabClick('about_contact')}
           className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'about_contact' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
@@ -383,7 +399,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('storage')}
+          onClick={() => handleTabClick('storage')}
           className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'storage' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
@@ -393,13 +409,23 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('hero_images')}
+          onClick={() => handleTabClick('hero_images')}
           className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'hero_images' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <ImageIcon className="w-4 h-4" />
           Hero Background Images
+        </button>
+
+        <button
+          onClick={() => handleTabClick('feedback_section')}
+          className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'feedback_section' ? 'border-[#0F52BA] text-[#0F52BA] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Feedback Section
         </button>
       </div>
 
@@ -1093,6 +1119,10 @@ export default function AdminSettingsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {activeTab === 'feedback_section' && (
+        <AdminFeedbackSectionTab onUnsavedChange={setFeedbackHasUnsavedOrder} />
       )}
 
     </div>
