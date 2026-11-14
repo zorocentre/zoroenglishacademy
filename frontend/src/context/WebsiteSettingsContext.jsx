@@ -36,6 +36,10 @@ export function WebsiteSettingsProvider({ children }) {
   const address = settings?.contactPageContent?.contactAddress || settings?.generalInfo?.address || '';
   const currency = settings?.generalInfo?.currency || 'INR (₹)';
 
+  if (typeof document !== 'undefined' && academyName) {
+    document.title = tagline ? `${academyName} - ${tagline}` : academyName;
+  }
+
   useEffect(() => {
     if (academyName) {
       document.title = tagline ? `${academyName} - ${tagline}` : academyName;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { resolveFileUrl } from '../../api/fileApi';
 
 /**
  * Public Hero Background Component with 0, 1, or >1 image handling:
@@ -58,7 +59,7 @@ export default function HeroCarousel({
       if (!img?.url || failedUrls.has(img.url)) return;
       try {
         const tester = new Image();
-        tester.src = img.url;
+        tester.src = resolveFileUrl(img.url);
         tester.onerror = () => {
           setFailedUrls((prev) => {
             const next = new Set(prev);
@@ -182,9 +183,16 @@ export default function HeroCarousel({
       <section className="relative text-white overflow-hidden py-16 md:py-24 min-h-[500px] flex items-center">
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img
-            src={single.url}
+            src={resolveFileUrl(single.url)}
             alt={single.altText || 'Zoro Academy Hero'}
             className="w-full h-full object-cover object-center"
+            onError={() => {
+              setFailedUrls((prev) => {
+                const next = new Set(prev);
+                next.add(single.url);
+                return next;
+              });
+            }}
           />
         </div>
         <div className="absolute inset-0 z-10 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/30" />
@@ -216,10 +224,17 @@ export default function HeroCarousel({
               aria-hidden={!isCurrent}
             >
               <img
-                src={image.url}
+                src={resolveFileUrl(image.url)}
                 alt={image.altText || `Zoro Academy Hero Slide ${idx + 1}`}
                 className="w-full h-full object-cover object-center"
                 loading={idx === 0 ? 'eager' : 'lazy'}
+                onError={() => {
+                  setFailedUrls((prev) => {
+                    const next = new Set(prev);
+                    next.add(image.url);
+                    return next;
+                  });
+                }}
               />
             </div>
           );

@@ -3,7 +3,7 @@ import { apiGet, apiPost, apiPut, apiDelete, apiResponse } from './client';
 export const DEFAULT_WEBSITE_SETTINGS = {
   landingPageContent: {
     academyName: 'Zoro English Academy',
-    tagline: 'Small Steps Big Communication',
+    tagline: '',
     heroBadge: '',
     heroHeading: '',
     heroDescription: '',
@@ -33,7 +33,7 @@ export const DEFAULT_WEBSITE_SETTINGS = {
   },
   generalInfo: {
     academyName: 'Zoro English Academy',
-    tagline: 'Small Steps Big Communication',
+    tagline: '',
     contactEmail: '',
     contactPhone: '',
     address: '',

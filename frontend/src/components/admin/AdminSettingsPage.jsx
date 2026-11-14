@@ -1083,7 +1083,7 @@ export default function AdminSettingsPage() {
                         <div className="text-[11px] text-slate-400 flex items-center gap-2 truncate max-w-xs">
                           <span>Order: {index + 1}</span>
                           <span>•</span>
-                          <a href={img.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
+                          <a href={resolveFileUrl(img.url)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
                             Open CDN URL
                           </a>
                         </div>

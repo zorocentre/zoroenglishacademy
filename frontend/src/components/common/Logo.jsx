@@ -17,8 +17,9 @@ export default function Logo({
   src = '/assets/logo.png',
   showText = false,
   textClassName = '',
-  academyName = 'Zoro English Academy',
-  tagline = ''
+  academyName = '',
+  tagline = '',
+  loading = false
 }) {
   const sizeClasses = SIZE_MAP[size] || (typeof size === 'string' && (size.includes('w-') || size.includes('h-')) ? size : 'w-10 h-10');
 
@@ -34,13 +35,24 @@ export default function Logo({
       </div>
       {showText && (
         <div className={textClassName}>
-          <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 leading-none">
-            {academyName}
-          </div>
-          {tagline && (
-            <div className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase tracking-wider mt-0.5">
-              {tagline}
+          {loading ? (
+            <div data-testid="logo-text-placeholder" className="space-y-1" aria-hidden="true">
+              <div className="h-[18px] sm:h-[20px] w-32 sm:w-40 bg-slate-200/70 rounded-md animate-pulse" />
+              <div className="h-[10px] sm:h-[12px] w-24 sm:w-28 bg-slate-100 rounded-md animate-pulse" />
             </div>
+          ) : (
+            <>
+              {academyName && (
+                <div data-testid="logo-academy-name" className="text-base sm:text-lg font-black tracking-tight text-slate-900 leading-none">
+                  {academyName}
+                </div>
+              )}
+              {tagline && (
+                <div data-testid="logo-tagline" className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase tracking-wider mt-0.5">
+                  {tagline}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -3,8 +3,8 @@ import { apiResponse } from './client';
 
 const DEFAULT_SETTINGS = {
   generalInfo: {
-    academyName: 'Zoro English Academy',
-    tagline: 'Small Steps Big Communication',
+    academyName: '',
+    tagline: '',
     contactEmail: 'contact@zoroacademy.com',
     contactPhone: '+91 98765 43210',
     address: 'No. 12, Main Road, Skill Nagar, Chennai - 600001',

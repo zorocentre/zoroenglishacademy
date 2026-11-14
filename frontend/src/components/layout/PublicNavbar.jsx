@@ -4,13 +4,14 @@ import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import Logo from '../common/Logo';
 
 export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogin, onOpenEnquire, siteSettings: propSettings }) {
-  const { settings: contextSettings } = useWebsiteSettings();
+  const { settings: contextSettings, loading: contextLoading } = useWebsiteSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const isManualScrollingRef = useRef(false);
   const manualScrollTimerRef = useRef(null);
 
   const siteSettings = propSettings || contextSettings;
+  const isLoading = propSettings ? false : Boolean(contextLoading);
   const isLandingPage = activeScreen === 'public-home';
 
   useEffect(() => {
@@ -123,8 +124,9 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
             size="w-10 h-10 sm:w-11 sm:h-11"
             className="group-hover:scale-105 transition-transform"
             showText={true}
-            academyName={siteSettings?.generalInfo?.academyName || 'Zoro English Academy'}
-            tagline={siteSettings?.generalInfo?.tagline || ''}
+            academyName={siteSettings?.generalInfo?.academyName || siteSettings?.landingPageContent?.academyName || ''}
+            tagline={siteSettings?.generalInfo?.tagline || siteSettings?.landingPageContent?.tagline || ''}
+            loading={isLoading}
             textClassName="ml-2.5 sm:ml-3"
           />
         </div>
