@@ -86,6 +86,19 @@ public class AssignmentController {
         return ApiResponse.ok(assignmentService.getAllSubmissions());
     }
 
+    // --- TRAINER PORTAL: ENROLLED TRAINER-COURSE ASSIGNMENTS ---
+
+    @GetMapping("/api/trainer/assignments")
+    public ApiResponse<List<AssignmentSubmission>> getTrainerAssignments(
+            @RequestParam(required = false) String courseId,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.zoroacademy.security.UserPrincipal principal) {
+        if (principal == null || (!"TRAINER".equalsIgnoreCase(principal.getRole()) && !"ADMIN".equalsIgnoreCase(principal.getRole()))) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "Only trainers can access trainer assignments");
+        }
+        return ApiResponse.ok(assignmentService.getTrainerCourseAssignments(principal.getId(), principal.getEmail(), courseId));
+    }
+
     // --- ADMIN TRAINER ASSIGNMENTS ENDPOINTS ---
 
     @GetMapping("/api/admin/trainer-submissions")

@@ -150,9 +150,9 @@ public class TrainerSessionsWorkflowTest {
         assertThat(list).anyMatch(s -> s.getId().equals(testScheduleUpcomingId));
         assertThat(list).anyMatch(s -> s.getId().equals(testScheduleEndedId));
 
-        // Check enrichment
+        // Check enrichment (Task I1 computes Ongoing during active session window)
         Schedule liveItem = list.stream().filter(s -> s.getId().equals(testScheduleLiveId)).findFirst().orElseThrow();
-        assertThat(liveItem.getStatus()).isEqualTo("Live now");
+        assertThat(liveItem.getStatus()).isEqualTo("Ongoing");
         assertThat(liveItem.getStudentsCount()).isGreaterThanOrEqualTo(0);
 
         Schedule upcomingItem = list.stream().filter(s -> s.getId().equals(testScheduleUpcomingId)).findFirst().orElseThrow();

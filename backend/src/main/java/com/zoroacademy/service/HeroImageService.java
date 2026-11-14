@@ -44,6 +44,15 @@ public class HeroImageService {
         return heroImageRepository.findAllByOrderBySortOrderAscCreatedAtAsc();
     }
 
+    private String normalizeHostFreeUrl(String url) {
+        if (url == null || url.isBlank()) return url;
+        String trimmed = url.trim();
+        if (trimmed.contains("/api/files/")) {
+            return trimmed.substring(trimmed.indexOf("/api/files/"));
+        }
+        return trimmed;
+    }
+
     @Transactional
     public HeroImage createHeroImage(HeroImageRequest request) {
         if (request == null || request.getUrl() == null || request.getUrl().isBlank()) {
@@ -58,9 +67,10 @@ public class HeroImageService {
         }
 
         String id = "hero_" + UUID.randomUUID().toString();
+        String effectiveUrl = normalizeHostFreeUrl(request.getUrl());
         HeroImage heroImage = new HeroImage(
                 id,
-                request.getUrl().trim(),
+                effectiveUrl,
                 request.getStorageKey(),
                 sortOrder,
                 request.getAltText(),
@@ -76,7 +86,7 @@ public class HeroImageService {
                 .orElseThrow(() -> new ResourceNotFoundException("Hero image not found with id: " + id));
 
         if (request.getUrl() != null && !request.getUrl().isBlank()) {
-            heroImage.setUrl(request.getUrl().trim());
+            heroImage.setUrl(normalizeHostFreeUrl(request.getUrl()));
         }
         if (request.getStorageKey() != null) {
             heroImage.setStorageKey(request.getStorageKey());

@@ -4,9 +4,9 @@ import {
   CheckCircle2, Clock, AlertCircle, File, Eye, Award, MessageSquare, BookOpen, Layers, Check, Plus, Lock, Send, X, ExternalLink
 } from 'lucide-react';
 import { getStudentEnrolledCourses } from '../../api/enrollmentApi';
-import { getCourseById } from '../../api/courseApi';
+import { getCourseById, getMyTrainerCourses } from '../../api/courseApi';
 import { getSchedules } from '../../api/scheduleApi';
-import { getSubmissions, getCreatedAssignments, createSubmission } from '../../api/assignmentApi';
+import { getSubmissions, getCreatedAssignments, createSubmission, getMyTrainerSubmissions } from '../../api/assignmentApi';
 import { uploadFile as uploadFileApi, openFileWithSignedLink, resolveFileUrl } from '../../api/fileApi';
 import { useAuth } from '../../context/AuthContext';
 import UniversalFileViewerModal from '../common/UniversalFileViewerModal';
@@ -15,9 +15,11 @@ import { useDialog } from '../../context/DialogContext';
 import { getSessionStartDateTime, getNowInKolkata, syncServerTime } from '../../utils/scheduleSortUtil';
 import { formatSubmissionTime } from '../../utils/dateFormatter';
 
-export default function AssignmentPage({ setActiveScreen }) {
+export default function AssignmentPage({ setActiveScreen, role = 'STUDENT' }) {
   const { user } = useAuth();
   const { showError } = useDialog();
+
+  const isTrainer = role === 'TRAINER';
 
   const [loading, setLoading] = useState(true);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
@@ -39,59 +41,84 @@ export default function AssignmentPage({ setActiveScreen }) {
 
   const studentIdentifier = user?.email || user?.id || '';
   const studentName = user?.name || '';
-  const studentBatch = user?.batch || (user?.courseBatches?.[0]?.batch) || '';
+  const studentBatch = isTrainer ? 'Trainer Course' : (user?.batch || (user?.courseBatches?.[0]?.batch) || '');
 
   useEffect(() => {
     loadData();
-  }, [studentIdentifier, studentName]);
+  }, [studentIdentifier, studentName, role]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       await syncServerTime();
-      // 1. Fetch real enrolled courses for student
-      const enrolledRaw = await getStudentEnrolledCourses(studentIdentifier);
-      const fullCourses = await Promise.all(
-        enrolledRaw.map(async (e) => {
-          try {
-            const cRes = await getCourseById(e.id);
-            if (cRes.success && cRes.data) {
-              return {
-                ...cRes.data,
-                batchName: e.batch || cRes.data.batchName || 'Unassigned',
-                assignedTrainer: cRes.data.assignedTrainer || 'Course Trainer'
-              };
-            }
-          } catch (err) {}
-          return {
-            ...e,
-            batchName: e.batch || 'Unassigned',
-            assignedTrainer: 'Course Trainer'
-          };
-        })
-      );
-      setEnrolledCourses(fullCourses);
 
-      // 2. Fetch schedules for student
-      const schRes = await getSchedules();
-      setSchedules(schRes.data || []);
+      if (isTrainer) {
+        // 1. Fetch trainer-audience courses trainer is enrolled in
+        const trainerCoursesRes = await getMyTrainerCourses();
+        const fullCourses = trainerCoursesRes.data?.enrolled || [];
+        setEnrolledCourses(fullCourses);
 
-      // 3. Fetch submissions for student
-      const subsRes = await getSubmissions();
-      const allSubs = subsRes.data || [];
-      const studentSubs = allSubs.filter(s => 
-        (s.studentEmail && studentIdentifier && s.studentEmail.toLowerCase() === studentIdentifier.toLowerCase()) ||
-        (s.studentId && user?.id && s.studentId === user?.id) ||
-        (s.studentName && studentName && s.studentName.toLowerCase() === studentName.toLowerCase())
-      );
-      setSubmissions(studentSubs);
+        // 2. Fetch schedules for enrolled trainer courses
+        const schRes = await getSchedules();
+        const allSch = schRes.data || [];
+        const enrolledCourseIds = new Set(fullCourses.map(c => c.id));
+        const enrolledCourseTitles = new Set(fullCourses.map(c => c.title?.toLowerCase()));
+        const trainerSch = allSch.filter(s => 
+          (s.audience === 'TRAINER' || s.audience === 'trainer') &&
+          ((s.courseId && enrolledCourseIds.has(s.courseId)) || (s.course && enrolledCourseTitles.has(s.course.toLowerCase())))
+        );
+        setSchedules(trainerSch);
 
-      // 4. Fetch extra assignments targeted to student
-      const asgRes = await getCreatedAssignments(user?.id || user?.email);
-      const targetedAsgs = asgRes.data || [];
-      setCreatedAssignments(targetedAsgs);
+        // 3. Fetch trainer's submissions for trainer courses
+        const trainerSubsRes = await getMyTrainerSubmissions();
+        setSubmissions(trainerSubsRes.data || []);
+
+        setCreatedAssignments([]);
+      } else {
+        // 1. Fetch real enrolled courses for student
+        const enrolledRaw = await getStudentEnrolledCourses(studentIdentifier);
+        const fullCourses = await Promise.all(
+          enrolledRaw.map(async (e) => {
+            try {
+              const cRes = await getCourseById(e.id);
+              if (cRes.success && cRes.data) {
+                return {
+                  ...cRes.data,
+                  batchName: e.batch || cRes.data.batchName || 'Unassigned',
+                  assignedTrainer: cRes.data.assignedTrainer || 'Course Trainer'
+                };
+              }
+            } catch (err) {}
+            return {
+              ...e,
+              batchName: e.batch || 'Unassigned',
+              assignedTrainer: 'Course Trainer'
+            };
+          })
+        );
+        setEnrolledCourses(fullCourses);
+
+        // 2. Fetch schedules for student
+        const schRes = await getSchedules();
+        setSchedules(schRes.data || []);
+
+        // 3. Fetch submissions for student
+        const subsRes = await getSubmissions();
+        const allSubs = subsRes.data || [];
+        const studentSubs = allSubs.filter(s => 
+          (s.studentEmail && studentIdentifier && s.studentEmail.toLowerCase() === studentIdentifier.toLowerCase()) ||
+          (s.studentId && user?.id && s.studentId === user?.id) ||
+          (s.studentName && studentName && s.studentName.toLowerCase() === studentName.toLowerCase())
+        );
+        setSubmissions(studentSubs);
+
+        // 4. Fetch extra assignments targeted to student
+        const asgRes = await getCreatedAssignments(user?.id || user?.email);
+        const targetedAsgs = asgRes.data || [];
+        setCreatedAssignments(targetedAsgs);
+      }
     } catch (err) {
-      console.error('Error loading student assignments:', err);
+      console.error('Error loading assignments:', err);
     } finally {
       setLoading(false);
     }
@@ -296,7 +323,7 @@ export default function AssignmentPage({ setActiveScreen }) {
       await createSubmission({
         mode: submittingItem.courseMode || 'Online',
         courseTitle: submittingItem.courseTitle,
-        batchName: submittingItem.batchName || 'Unassigned',
+        batchName: submittingItem.batchName || (isTrainer ? 'Trainer Course' : 'Unassigned'),
         studentName: studentName,
         studentEmail: studentIdentifier,
         studentId: user?.id,
@@ -306,10 +333,12 @@ export default function AssignmentPage({ setActiveScreen }) {
         courseId: submittingItem.courseId,
         attachment: submissionFile || null,
         answerText: submissionNotes.trim() || 'Completed assignment solution.',
-        assignedTrainer: submittingItem.assignedTrainer || 'Course Trainer'
+        assignedTrainer: isTrainer ? 'Admin' : (submittingItem.assignedTrainer || 'Course Trainer'),
+        submitterRole: isTrainer ? 'TRAINER' : 'STUDENT',
+        reviewer: isTrainer ? 'ADMIN' : undefined
       });
 
-      setSuccessMsg(`Assignment "${submittingItem.title}" submitted successfully! Trainer will review and assign score.`);
+      setSuccessMsg(`Assignment "${submittingItem.title}" submitted successfully! ${isTrainer ? 'Admin' : 'Trainer'} will review and assign score.`);
       setTimeout(() => setSuccessMsg(''), 4500);
 
       setSubmittingItem(null);
@@ -330,19 +359,23 @@ export default function AssignmentPage({ setActiveScreen }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <button 
-            onClick={() => setActiveScreen ? setActiveScreen('student-dash') : window.history.back()}
+            onClick={() => setActiveScreen ? setActiveScreen(isTrainer ? 'trainer-dash' : 'student-dash') : window.history.back()}
             className="inline-flex items-center space-x-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer mb-2"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Dashboard</span>
           </button>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Course Assignments</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            {isTrainer ? "Trainer's Assignments" : "My Course Assignments"}
+          </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            Complete your module tasks, check homework deadlines, and view trainer evaluation scores.
+            {isTrainer
+              ? "Complete your trainer module tasks, check live session homework, and view admin evaluation scores."
+              : "Complete your module tasks, check homework deadlines, and view trainer evaluation scores."}
           </p>
         </div>
 
-        {/* Real Filter Dropdown: Only student's enrolled courses */}
+        {/* Real Filter Dropdown: Only enrolled courses */}
         <div className="flex items-center space-x-2 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
           <BookOpen className="w-4 h-4 text-blue-600" />
           <span className="text-xs font-bold text-slate-500">Course:</span>
@@ -412,16 +445,18 @@ export default function AssignmentPage({ setActiveScreen }) {
           Evaluated ({evaluatedCount})
         </button>
 
-        <button
-          onClick={() => setActiveTab('extra')}
-          className={`pb-3 px-1 transition-colors border-b-2 cursor-pointer ${
-            activeTab === 'extra'
-              ? 'border-indigo-600 text-indigo-600 font-black'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          Extra Assignments ({extraCount})
-        </button>
+        {!isTrainer && (
+          <button
+            onClick={() => setActiveTab('extra')}
+            className={`pb-3 px-1 transition-colors border-b-2 cursor-pointer ${
+              activeTab === 'extra'
+                ? 'border-indigo-600 text-indigo-600 font-black'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Extra Assignments ({extraCount})
+          </button>
+        )}
       </div>
 
       {/* Success Notification Alert */}

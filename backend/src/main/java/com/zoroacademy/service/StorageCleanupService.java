@@ -43,6 +43,8 @@ public class StorageCleanupService {
     private final VideoRepository videoRepository;
     private final BunnyStreamService bunnyStreamService;
     private final SystemSettingRepository systemSettingRepository;
+    private final HeroImageRepository heroImageRepository;
+    private final FeedbackMediaRepository feedbackMediaRepository;
 
     @Value("${storage.cleanup.enabled:true}")
     private boolean cleanupEnabled;
@@ -71,7 +73,9 @@ public class StorageCleanupService {
             WebsiteSettingsRepository websiteSettingsRepository,
             VideoRepository videoRepository,
             BunnyStreamService bunnyStreamService,
-            SystemSettingRepository systemSettingRepository
+            SystemSettingRepository systemSettingRepository,
+            @Autowired(required = false) HeroImageRepository heroImageRepository,
+            @Autowired(required = false) FeedbackMediaRepository feedbackMediaRepository
     ) {
         this.storedFileRepository = storedFileRepository;
         this.storageProvider = storageProvider;
@@ -87,6 +91,8 @@ public class StorageCleanupService {
         this.videoRepository = videoRepository;
         this.bunnyStreamService = bunnyStreamService;
         this.systemSettingRepository = systemSettingRepository;
+        this.heroImageRepository = heroImageRepository;
+        this.feedbackMediaRepository = feedbackMediaRepository;
     }
 
     @Scheduled(cron = "${storage.cleanup.cron:0 0 2 * * ?}")
@@ -360,6 +366,24 @@ public class StorageCleanupService {
             extractRefs(ws.getHeroHeadline(), refs);
             extractRefs(ws.getBannerAnnouncement(), refs);
         });
+
+        // Hero Background Images (Requirement I6)
+        if (heroImageRepository != null) {
+            heroImageRepository.findAll().forEach(hero -> {
+                extractRefs(hero.getUrl(), refs);
+                extractRefs(hero.getStorageKey(), refs);
+            });
+        }
+
+        // Feedback Media (Requirement I6)
+        if (feedbackMediaRepository != null) {
+            feedbackMediaRepository.findAll().forEach(fm -> {
+                extractRefs(fm.getUrl(), refs);
+                extractRefs(fm.getThumbnailUrl(), refs);
+                extractRefs(fm.getStoredFileId(), refs);
+                extractRefs(fm.getBunnyVideoId(), refs);
+            });
+        }
 
         return refs;
     }

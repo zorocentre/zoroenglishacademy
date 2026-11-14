@@ -46,6 +46,7 @@ export default function DashboardSidebar({ role, activeScreen, setActiveScreen, 
     menuItems = [
       { id: 'trainer-dash', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'trainer-courses', label: "Trainer's Courses", icon: BookOpen },
+      { id: 'trainer-learner-assignments', label: "Trainer's Assignments", icon: FileCheck },
       { id: 'trainer-competitions', label: 'Competitions', icon: Trophy },
       { id: 'trainer-students', label: 'Students', icon: Users },
       { id: 'trainer-schedule', label: 'Schedule', icon: Calendar },

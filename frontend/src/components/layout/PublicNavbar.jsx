@@ -124,7 +124,7 @@ export default function PublicNavbar({ activeScreen, setActiveScreen, onOpenLogi
             className="group-hover:scale-105 transition-transform"
             showText={true}
             academyName={siteSettings?.generalInfo?.academyName || 'Zoro English Academy'}
-            tagline={siteSettings?.generalInfo?.tagline || 'Learn | Practice | Grow'}
+            tagline={siteSettings?.generalInfo?.tagline || ''}
             textClassName="ml-2.5 sm:ml-3"
           />
         </div>

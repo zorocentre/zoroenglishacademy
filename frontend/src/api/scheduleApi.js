@@ -30,7 +30,8 @@ export function sortSchedulesByTime(schedulesList) {
 }
 
 export function computeDynamicStatus(schedule, now = new Date()) {
-  if (schedule.status === 'Completed' || schedule.status === 'Rescheduled' || schedule.status === 'Postponed') {
+  if (!schedule) return 'Upcoming';
+  if (schedule.status === 'Completed' || schedule.status === 'Rescheduled' || schedule.status === 'Cancelled' || schedule.status === 'Canceled' || schedule.status === 'Postponed') {
     return schedule.status;
   }
 
@@ -53,10 +54,10 @@ export function computeDynamicStatus(schedule, now = new Date()) {
 
   if (now < startDate) {
     return 'Upcoming';
-  } else if (now > endDate && schedule.date < new Date().toISOString().split('T')[0]) {
-    return 'Completed';
+  } else if (now < endDate) {
+    return 'Ongoing';
   } else {
-    return schedule.status || 'Upcoming';
+    return 'Completed';
   }
 }
 

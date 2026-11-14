@@ -513,6 +513,40 @@ public class AssignmentService {
         return list;
     }
 
+    @Transactional(readOnly = true)
+    public List<AssignmentSubmission> getTrainerCourseAssignments(String trainerId, String trainerEmail, String courseId) {
+        java.util.Set<String> enrolledCourseIds = new java.util.HashSet<>();
+        if (trainerCourseRequestRepository != null) {
+            if (trainerId != null) {
+                trainerCourseRequestRepository.findByTrainerId(trainerId).stream()
+                        .filter(r -> "Approved".equalsIgnoreCase(r.getStatus()))
+                        .forEach(r -> enrolledCourseIds.add(r.getCourseId()));
+            }
+            if (trainerEmail != null) {
+                trainerCourseRequestRepository.findByTrainerEmailIgnoreCase(trainerEmail).stream()
+                        .filter(r -> "Approved".equalsIgnoreCase(r.getStatus()))
+                        .forEach(r -> enrolledCourseIds.add(r.getCourseId()));
+            }
+        }
+
+        if (courseId != null && !courseId.isBlank() && !"All".equalsIgnoreCase(courseId.trim())) {
+            String targetId = courseId.trim();
+            if (!enrolledCourseIds.contains(targetId)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        "Access denied: trainer is not enrolled in course " + targetId
+                );
+            }
+            return getTrainerOwnSubmissions(trainerId).stream()
+                    .filter(s -> targetId.equalsIgnoreCase(s.getCourseId()))
+                    .collect(java.util.stream.Collectors.toList());
+        }
+
+        return getTrainerOwnSubmissions(trainerId).stream()
+                .filter(s -> s.getCourseId() == null || enrolledCourseIds.contains(s.getCourseId()))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     @Transactional
     public AssignmentSubmission createSubmission(AssignmentSubmission submission) {
         if (submission.getAttachment() == null || submission.getAttachment().isBlank() || "null".equalsIgnoreCase(submission.getAttachment().trim())) {

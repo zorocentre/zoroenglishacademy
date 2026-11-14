@@ -51,6 +51,7 @@ const AdminSettingsPage = lazy(() => import('./components/admin/AdminSettingsPag
 
 const TrainerDashboard = lazy(() => import('./components/trainer/TrainerDashboard'));
 const TrainerCoursesPage = lazy(() => import('./components/trainer/TrainerCoursesPage'));
+const TrainerLearnerAssignmentsPage = lazy(() => import('./components/trainer/TrainerLearnerAssignmentsPage'));
 const TrainerCompetitionsPage = lazy(() => import('./components/trainer/TrainerCompetitionsPage'));
 const TrainerStudentsPage = lazy(() => import('./components/trainer/TrainerStudentsPage'));
 const TrainerSchedulePage = lazy(() => import('./components/trainer/TrainerSchedulePage'));
@@ -132,6 +133,7 @@ function getActiveScreenFromPath(path) {
 
   if (path === '/trainer' || path === '/trainer/') return 'trainer-dash';
   if (path === '/trainer/courses') return 'trainer-courses';
+  if (path === '/trainer/trainer-assignments' || path === '/trainer/my-assignments' || path === '/trainer/course-assignments') return 'trainer-learner-assignments';
   if (path === '/trainer/competitions') return 'trainer-competitions';
   if (path === '/trainer/students') return 'trainer-students';
   if (path === '/trainer/schedules' || path === '/trainer/schedule') return 'trainer-schedule';
@@ -194,6 +196,7 @@ function screenToPath(screen, params = {}) {
     // Trainer
     case 'trainer-dash': return '/trainer';
     case 'trainer-courses': return '/trainer/courses';
+    case 'trainer-learner-assignments': return '/trainer/trainer-assignments';
     case 'trainer-competitions': return '/trainer/competitions';
     case 'trainer-students': return '/trainer/students';
     case 'trainer-schedule': return '/trainer/schedules';
@@ -670,6 +673,8 @@ function AppRoutes() {
         }>
           <Route index element={<TrainerDashboard setActiveScreen={(s) => navigate(screenToPath(s))} />} />
           <Route path="courses" element={<TrainerCoursesPage />} />
+          <Route path="trainer-assignments" element={<TrainerLearnerAssignmentsPage setActiveScreen={(s) => navigate(screenToPath(s))} />} />
+          <Route path="my-assignments" element={<TrainerLearnerAssignmentsPage setActiveScreen={(s) => navigate(screenToPath(s))} />} />
           <Route path="competitions" element={<TrainerCompetitionsPage />} />
           <Route path="students" element={<TrainerStudentsPage />} />
           <Route path="schedules" element={<TrainerSchedulePage setActiveScreen={(s) => navigate(screenToPath(s))} />} />

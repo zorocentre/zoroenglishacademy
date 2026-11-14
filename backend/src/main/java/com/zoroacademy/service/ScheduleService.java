@@ -24,6 +24,11 @@ public class ScheduleService {
     private final com.zoroacademy.repository.EnrollmentRepository enrollmentRepository;
     private final NotificationService notificationService;
     private final com.zoroacademy.repository.TrainerCourseRequestRepository trainerCourseRequestRepository;
+    private java.time.Clock clock = java.time.Clock.system(com.zoroacademy.util.ScheduleTimeUtil.KOLKATA_ZONE);
+
+    public void setClock(java.time.Clock clock) {
+        this.clock = clock;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.zoroacademy.repository.NotificationRepository notificationRepository;
@@ -82,17 +87,35 @@ public class ScheduleService {
         this(scheduleRepository, courseRepository, batchRepository, userRepository, null, null, null, null, null, null, null);
     }
 
-    private void enrichSchedule(Schedule s) {
+    public void enrichSchedule(Schedule s) {
+        enrichSchedule(s, null);
+    }
+
+    public void enrichSchedule(Schedule s, java.time.ZonedDateTime mockNow) {
         if (s == null) return;
-        java.time.ZonedDateTime now = com.zoroacademy.util.ScheduleTimeUtil.nowInKolkata();
+        java.time.ZonedDateTime now = mockNow != null ? mockNow :
+                (this.clock != null ? java.time.ZonedDateTime.now(this.clock.withZone(com.zoroacademy.util.ScheduleTimeUtil.KOLKATA_ZONE))
+                        : com.zoroacademy.util.ScheduleTimeUtil.nowInKolkata());
         s.setServerNow(now.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+
+        // Priority to non-time statuses explicitly set by admin workflow (Rescheduled, Cancelled, etc.)
+        if (s.getStatus() != null) {
+            String currentStatus = s.getStatus().trim();
+            if ("Rescheduled".equalsIgnoreCase(currentStatus)
+                    || "Cancelled".equalsIgnoreCase(currentStatus)
+                    || "Canceled".equalsIgnoreCase(currentStatus)
+                    || "Postponed".equalsIgnoreCase(currentStatus)) {
+                return;
+            }
+        }
+
         java.time.ZonedDateTime start = com.zoroacademy.util.ScheduleTimeUtil.getSessionStart(s.getDate(), s.getTime());
         java.time.ZonedDateTime end = com.zoroacademy.util.ScheduleTimeUtil.getSessionEnd(s.getDate(), s.getTime());
         if (start != null && end != null) {
             if (now.isBefore(start)) {
                 s.setStatus("Upcoming");
-            } else if (!now.isAfter(end)) {
-                s.setStatus("Live");
+            } else if (now.isBefore(end)) {
+                s.setStatus("Ongoing");
             } else {
                 s.setStatus("Completed");
             }
@@ -930,20 +953,8 @@ public class ScheduleService {
             copy.setAudience("TRAINER");
             copy.setServerNow(now.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
 
-            // Status: Upcoming / Live now / Completed
+            enrichSchedule(copy);
             java.time.ZonedDateTime start = com.zoroacademy.util.ScheduleTimeUtil.getSessionStart(s.getDate(), s.getTime());
-            java.time.ZonedDateTime end = com.zoroacademy.util.ScheduleTimeUtil.getSessionEnd(s.getDate(), s.getTime());
-            if (start != null && end != null) {
-                if (now.isBefore(start)) {
-                    copy.setStatus("Upcoming");
-                } else if (!now.isAfter(end)) {
-                    copy.setStatus("Live now");
-                } else {
-                    copy.setStatus("Completed");
-                }
-            } else {
-                copy.setStatus(s.getStatus() != null ? s.getStatus() : "Upcoming");
-            }
 
             // Enrolled trainers count
             int enrolledCount = 0;

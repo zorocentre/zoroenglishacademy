@@ -214,6 +214,19 @@ export const getMyTrainerSubmissions = async () => {
   };
 };
 
+export const getTrainerCourseAssignments = async (courseId = null) => {
+  const query = courseId && courseId !== 'All' ? `?courseId=${encodeURIComponent(courseId)}` : '';
+  const res = await apiGet(`/trainer/assignments${query}`);
+  if (res && res.success && Array.isArray(res.data)) {
+    return apiResponse(res.data.map(normalizeSubmission));
+  }
+  return {
+    success: false,
+    message: res?.message || 'Failed to fetch trainer assignments',
+    data: []
+  };
+};
+
 export const getCreatedAssignments = getAssignments;
 export const createExtraAssignment = createAssignment;
 

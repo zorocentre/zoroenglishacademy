@@ -118,25 +118,23 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
     { title: 'Expert Trainers', desc: 'Certified & passionate educators', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { title: 'Interactive Learning', desc: 'Live small-group online classes', icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600' },
     { title: 'Global Competitions', desc: 'National & international leagues', icon: Globe, color: 'bg-purple-50 text-purple-600' },
-    { title: 'Certified Programs', desc: 'Govt. recognized skill certificates', icon: Award, color: 'bg-amber-50 text-amber-600' },
+    { title: 'Certified Programs', desc: 'Zoro Certified Programme', icon: Award, color: 'bg-amber-50 text-amber-600' },
   ];
 
   const defaultThumbnailFallback = '/assets/course-placeholder.svg';
 
   const currentSettings = siteSettings || globalSettings;
-  const landingContent = currentSettings?.landingPageContent || {
-    heroBadge: 'Learn Today. Grow Tomorrow.',
-    heroHeading: 'Skills for a Brighter Tomorrow',
-    heroDescription: 'Build skills. Boost confidence. Unlock potential through world-class interactive live classes tailored for children aged 5 to 16.',
-    heroPrimaryBtnText: 'Explore Courses',
-    heroSecondaryBtnText: 'Join a Competition',
-    featuresTitle: 'Featured Learning Programs',
-    featuresSubtitle: 'Empowering children with lifelong cognitive abilities and practical skills.',
-    spotlightTitle: 'National Championship & Competitions Spotlight',
-    spotlightSubtitle: 'Participate in nationwide academic showdowns and win certificates and badges.'
-  };
+  const landingContent = currentSettings?.landingPageContent || {};
 
   const showCourses = true;
+
+  if (loadingData) {
+    return (
+      <div className="bg-slate-50 min-h-screen flex items-center justify-center py-32">
+        <PageLoader text="Loading Zoro English Academy..." minHeight="min-h-[400px]" />
+      </div>
+    );
+  }
 
   return (
     <div id="home" className="bg-slate-50 min-h-screen scroll-mt-20">
@@ -146,25 +144,31 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             
             <div className="lg:col-span-7 space-y-6">
-              <div className="inline-flex items-center space-x-2 bg-blue-600/30 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-blue-400/40 text-xs font-semibold text-blue-200">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>{landingContent.heroBadge}</span>
-              </div>
+              {landingContent.heroBadge && (
+                <div className="inline-flex items-center space-x-2 bg-blue-600/30 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-blue-400/40 text-xs font-semibold text-blue-200">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{landingContent.heroBadge}</span>
+                </div>
+              )}
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight text-white">
-                {landingContent.heroHeading}
-              </h1>
+              {landingContent.heroHeading && (
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight text-white">
+                  {landingContent.heroHeading}
+                </h1>
+              )}
 
-              <p className="text-slate-200 text-base max-w-xl leading-relaxed">
-                {landingContent.heroDescription}
-              </p>
+              {landingContent.heroDescription && (
+                <p className="text-slate-200 text-base max-w-xl leading-relaxed">
+                  {landingContent.heroDescription}
+                </p>
+              )}
 
               <div className="pt-2 flex flex-wrap items-center gap-4">
                 <button
                   onClick={() => setActiveScreen('public-course')}
                   className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-extrabold text-sm shadow-xl hover:shadow-blue-500/30 transition-all flex items-center space-x-2 group cursor-pointer"
                 >
-                  <span>{landingContent.heroPrimaryBtnText}</span>
+                  <span>{landingContent.heroPrimaryBtnText || 'Explore Courses'}</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
 
@@ -172,7 +176,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
                   onClick={() => setActiveScreen('public-competition')}
                   className="bg-white/10 hover:bg-white/20 text-white px-7 py-3.5 rounded-xl font-bold text-sm border border-white/30 backdrop-blur-md transition-all cursor-pointer"
                 >
-                  {landingContent.heroSecondaryBtnText}
+                  {landingContent.heroSecondaryBtnText || 'Join a Competition'}
                 </button>
               </div>
             </div>
@@ -209,15 +213,13 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
       {showCourses && (
         <section id="courses" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-mt-20">
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{landingContent.featuresTitle}</h2>
-            <p className="text-slate-500 text-sm mt-2">{landingContent.featuresSubtitle}</p>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{landingContent.featuresTitle || 'Featured Learning Programs'}</h2>
+            {landingContent.featuresSubtitle && (
+              <p className="text-slate-500 text-sm mt-2">{landingContent.featuresSubtitle}</p>
+            )}
           </div>
 
-        {loadingData ? (
-          <div className="py-12">
-            <PageLoader text="Loading academy courses..." minHeight="min-h-[220px]" />
-          </div>
-        ) : courses.length === 0 ? (
+        {courses.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center max-w-lg mx-auto shadow-sm">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <BookOpen className="w-8 h-8" />
@@ -495,34 +497,34 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
               {currentSettings?.aboutPageContent?.heading || 'About Zoro English Academy'}
             </h2>
             <p className="text-base text-slate-600 font-medium">
-              {currentSettings?.aboutPageContent?.subtitle || 'Nurturing Young Minds Through Small Steps and Big Communication.'}
+              {currentSettings?.aboutPageContent?.subtitle || ''}
             </p>
           </div>
 
           <div className="bg-white p-8 sm:p-12 rounded-3xl border border-slate-200 shadow-sm space-y-8">
             <p className="text-slate-700 leading-relaxed text-base font-normal">
-              {currentSettings?.aboutPageContent?.introParagraph || 'Zoro English Academy is dedicated to empowering students with exceptional communication, phonics, grammar, public speaking, and analytical skills. Our structured curriculum and passionate educators ensure every child steps forward with confidence.'}
+              {currentSettings?.aboutPageContent?.introParagraph || ''}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
               <div className="p-6 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
-                <span className="text-base sm:text-lg font-extrabold text-blue-800 uppercase tracking-wider leading-snug block">Our Mission</span>
-                <p className="text-sm text-slate-700 font-medium">
-                  {currentSettings?.aboutPageContent?.missionStatement || 'To make world-class skill development accessible, engaging, and transformative for every child.'}
+                <span className="text-base sm:text-lg font-extrabold text-blue-800 uppercase tracking-wider leading-snug block text-center">Our Mission</span>
+                <p className="text-sm text-slate-700 font-medium text-justify [text-justify:inter-word] hyphens-auto">
+                  {currentSettings?.aboutPageContent?.missionStatement || ''}
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-2">
-                <span className="text-base sm:text-lg font-extrabold text-emerald-800 uppercase tracking-wider leading-snug block">Our Vision</span>
-                <p className="text-sm text-slate-700 font-medium">
-                  {currentSettings?.aboutPageContent?.visionStatement || 'Creating a global generation of articulate, confident, and empathetic leaders of tomorrow.'}
+                <span className="text-base sm:text-lg font-extrabold text-emerald-800 uppercase tracking-wider leading-snug block text-center">Our Vision</span>
+                <p className="text-sm text-slate-700 font-medium text-justify [text-justify:inter-word] hyphens-auto">
+                  {currentSettings?.aboutPageContent?.visionStatement || ''}
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-2">
-                <span className="text-base sm:text-lg font-extrabold text-purple-800 uppercase tracking-wider leading-snug block">Core Values</span>
-                <p className="text-sm text-slate-700 font-medium">
-                  {currentSettings?.aboutPageContent?.coreValues || 'Excellence, Continuous Growth, Integrity, Student-Centric Empathy'}
+                <span className="text-base sm:text-lg font-extrabold text-purple-800 uppercase tracking-wider leading-snug block text-center">Core Values</span>
+                <p className="text-sm text-slate-700 font-medium text-justify [text-justify:inter-word] hyphens-auto">
+                  {currentSettings?.aboutPageContent?.coreValues || ''}
                 </p>
               </div>
             </div>
@@ -541,7 +543,7 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
               {siteSettings?.contactPageContent?.heading || 'Contact Us'}
             </h2>
             <p className="text-base text-slate-600 font-medium">
-              {siteSettings?.contactPageContent?.subtitle || "We are here to support your child's learning journey. Get in touch with our team."}
+              {siteSettings?.contactPageContent?.subtitle || ''}
             </p>
           </div>
 
@@ -551,20 +553,20 @@ export default function HomePage({ setActiveScreen, onOpenEnquire }) {
               <div className="space-y-4 text-sm">
                 <div>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Phone</span>
-                  <a href={`tel:${(siteSettings?.contactPageContent?.contactPhone || siteSettings?.generalInfo?.contactPhone || '+919876543210').replace(/\s+/g, '')}`} className="font-extrabold text-blue-600 hover:underline">
-                    {siteSettings?.contactPageContent?.contactPhone || siteSettings?.generalInfo?.contactPhone || '+91 98765 43210'}
+                  <a href={`tel:${(siteSettings?.contactPageContent?.contactPhone || siteSettings?.generalInfo?.contactPhone || '').replace(/\s+/g, '')}`} className="font-extrabold text-blue-600 hover:underline">
+                    {siteSettings?.contactPageContent?.contactPhone || siteSettings?.generalInfo?.contactPhone || ''}
                   </a>
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email</span>
-                  <a href={`mailto:${siteSettings?.contactPageContent?.contactEmail || siteSettings?.generalInfo?.contactEmail || 'contact@zoroacademy.com'}`} className="font-extrabold text-blue-600 hover:underline">
-                    {siteSettings?.contactPageContent?.contactEmail || siteSettings?.generalInfo?.contactEmail || 'contact@zoroacademy.com'}
+                  <a href={`mailto:${siteSettings?.contactPageContent?.contactEmail || siteSettings?.generalInfo?.contactEmail || ''}`} className="font-extrabold text-blue-600 hover:underline">
+                    {siteSettings?.contactPageContent?.contactEmail || siteSettings?.generalInfo?.contactEmail || ''}
                   </a>
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Address</span>
                   <p className="font-semibold text-slate-800">
-                    {siteSettings?.contactPageContent?.contactAddress || siteSettings?.generalInfo?.address || 'No. 12, Main Road, Skill Nagar, Chennai - 600001, Tamil Nadu, India'}
+                    {siteSettings?.contactPageContent?.contactAddress || siteSettings?.generalInfo?.address || ''}
                   </p>
                 </div>
                 <div>
