@@ -57,6 +57,14 @@ app:
       password: ${BUNNY_STORAGE_PASSWORD:${BUNNY_STORAGE_ACCESS_KEY:}}
       cdn-host: ${BUNNY_STORAGE_CDN_HOST:}
 
+storage:
+  cleanup:
+    enabled: ${STORAGE_CLEANUP_ENABLED:false}
+    dry-run: ${STORAGE_CLEANUP_DRY_RUN:true}
+    orphan-retention-hours: ${STORAGE_CLEANUP_ORPHAN_RETENTION_HOURS:168}
+    cron: ${STORAGE_CLEANUP_CRON:0 0 2 * * ?}
+    live-purge-allowed: ${STORAGE_CLEANUP_LIVE_PURGE_ALLOWED:false}
+
 bunny:
   stream:
     library-id: ${BUNNY_STREAM_LIBRARY_ID:${BUNNY_LIBRARY_ID:}}

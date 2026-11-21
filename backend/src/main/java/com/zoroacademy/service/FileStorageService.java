@@ -34,6 +34,24 @@ public class FileStorageService {
     private final DocumentConversionService documentConversionService;
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FileStorageService.class);
 
+    @Autowired(required = false)
+    private com.zoroacademy.repository.AssessmentQuestionRepository assessmentQuestionRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.AttemptAnswerRepository attemptAnswerRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.CompetitionStudyMaterialRepository studyMaterialRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.CompetitionSyllabusRepository syllabusRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.AssignmentSubmissionRepository submissionRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.CourseResourceRepository courseResourceRepository;
+
     @Value("${jwt.secret:defaultSecretForFileLinksOnlyNotForJwtAuthKey123}")
     private String linkSecret;
 
@@ -346,6 +364,12 @@ public class FileStorageService {
             return;
         }
 
+        // Objective D: Safe reference-aware deletion across application entities
+        if (isReferencedInApplicationEntities(id, storedFile.getStoragePath())) {
+            log.info("Preserving stored file {}: actively referenced across application entities", id);
+            return;
+        }
+
         String storagePath = storedFile.getStoragePath();
         storedFileRepository.delete(storedFile);
 
@@ -359,6 +383,33 @@ public class FileStorageService {
                 } catch (Exception ignored) {}
             }
         }
+    }
+
+    public boolean isReferencedInApplicationEntities(String fileId, String storagePath) {
+        if (fileId == null || fileId.isBlank()) return false;
+        try {
+            if (assessmentQuestionRepository != null && !assessmentQuestionRepository.findByMediaRefContaining(fileId).isEmpty()) {
+                return true;
+            }
+            if (studyMaterialRepository != null && !studyMaterialRepository.findByStoredFileId(fileId).isEmpty()) {
+                return true;
+            }
+            if (syllabusRepository != null && !syllabusRepository.findByStoredFileId(fileId).isEmpty()) {
+                return true;
+            }
+            if (attemptAnswerRepository != null && !attemptAnswerRepository.findByVoiceFileIdOrAudioFileId(fileId, fileId).isEmpty()) {
+                return true;
+            }
+            if (submissionRepository != null && !submissionRepository.findByAnyFileUrlContaining(fileId).isEmpty()) {
+                return true;
+            }
+            if (courseResourceRepository != null && !courseResourceRepository.findByFileUrlContaining(fileId).isEmpty()) {
+                return true;
+            }
+        } catch (Exception e) {
+            log.debug("Error checking entity references for {}: {}", fileId, e.getMessage());
+        }
+        return false;
     }
 
     /**

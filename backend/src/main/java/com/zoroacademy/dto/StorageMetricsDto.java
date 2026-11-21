@@ -15,6 +15,12 @@ public class StorageMetricsDto {
     private int submissionRetentionMonths;
     private boolean dryRunDefault;
 
+    // Safety status fields (Objective C)
+    private boolean cleanupEnabled;
+    private int orphanRetentionHours;
+    private boolean livePurgeAllowed;
+    private boolean isCurrentlyRunning;
+
     public StorageMetricsDto() {}
 
     public long getTotalFiles() {
@@ -103,5 +109,37 @@ public class StorageMetricsDto {
 
     public void setDryRunDefault(boolean dryRunDefault) {
         this.dryRunDefault = dryRunDefault;
+    }
+
+    public boolean isCleanupEnabled() {
+        return cleanupEnabled;
+    }
+
+    public void setCleanupEnabled(boolean cleanupEnabled) {
+        this.cleanupEnabled = cleanupEnabled;
+    }
+
+    public int getOrphanRetentionHours() {
+        return orphanRetentionHours;
+    }
+
+    public void setOrphanRetentionHours(int orphanRetentionHours) {
+        this.orphanRetentionHours = orphanRetentionHours;
+    }
+
+    public boolean isLivePurgeAllowed() {
+        return livePurgeAllowed;
+    }
+
+    public void setLivePurgeAllowed(boolean livePurgeAllowed) {
+        this.livePurgeAllowed = livePurgeAllowed;
+    }
+
+    public boolean isCurrentlyRunning() {
+        return isCurrentlyRunning;
+    }
+
+    public void setCurrentlyRunning(boolean currentlyRunning) {
+        isCurrentlyRunning = currentlyRunning;
     }
 }
