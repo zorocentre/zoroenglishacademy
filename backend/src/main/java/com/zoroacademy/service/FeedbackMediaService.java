@@ -216,6 +216,7 @@ public class FeedbackMediaService {
         String mediaType = media.getMediaType();
         String storedFileId = media.getStoredFileId();
         String bunnyVideoId = media.getBunnyVideoId();
+        String originalFileName = media.getOriginalFileName();
 
         feedbackMediaRepository.delete(media);
 
@@ -239,10 +240,10 @@ public class FeedbackMediaService {
         } else if ("VIDEO".equals(mediaType) && bunnyVideoId != null && !bunnyVideoId.isBlank()) {
             try {
                 if (bunnyStreamService != null) {
-                    bunnyStreamService.deleteVideo(bunnyVideoId);
+                    bunnyStreamService.recordOrphan(bunnyVideoId, "FEEDBACK", originalFileName, id);
                 }
             } catch (Exception e) {
-                log.warn("Failed to delete Bunny Stream video {}: {}", bunnyVideoId, e.getMessage());
+                log.warn("Failed to track orphaned Bunny Stream video {}: {}", bunnyVideoId, e.getMessage());
             }
         }
     }

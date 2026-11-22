@@ -4,10 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zoroacademy.dto.CleanupResultDto;
 import com.zoroacademy.dto.StorageMetricsDto;
-import com.zoroacademy.entity.AssignmentSubmission;
-import com.zoroacademy.entity.StoredFile;
-import com.zoroacademy.entity.SystemSetting;
-import com.zoroacademy.entity.Video;
+import com.zoroacademy.entity.*;
 import com.zoroacademy.repository.*;
 import com.zoroacademy.service.storage.StorageProvider;
 import org.slf4j.Logger;
@@ -24,6 +21,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class StorageCleanupService {
@@ -60,6 +58,17 @@ public class StorageCleanupService {
     private final CompetitionModuleRepository competitionModuleRepository;
     private final DoubtRepository doubtRepository;
     private final NotificationRepository notificationRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.repository.OrphanedBunnyVideoRepository orphanedBunnyVideoRepository;
+
+    public void setOrphanedBunnyVideoRepository(com.zoroacademy.repository.OrphanedBunnyVideoRepository orphanedBunnyVideoRepository) {
+        this.orphanedBunnyVideoRepository = orphanedBunnyVideoRepository;
+    }
+
+    public com.zoroacademy.repository.OrphanedBunnyVideoRepository getOrphanedBunnyVideoRepository() {
+        return this.orphanedBunnyVideoRepository;
+    }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AtomicBoolean isCleanupRunning = new AtomicBoolean(false);
@@ -408,33 +417,109 @@ public class StorageCleanupService {
             }
         }
 
-        // 3. Evaluate Orphaned Video Records (Bunny Stream)
+        // 3. Evaluate Orphaned Video Records (Bunny Stream 1-Year Retention Policy: 8760 Hours)
         long orphanedVideosFound = 0;
         long orphanedVideosDeleted = 0;
-        List<Video> allVideos = videoRepository.findAll();
-        Set<String> activeModuleIds = new HashSet<>(courseModuleRepository.findAll().stream().map(m -> m.getId()).toList());
 
-        for (Video v : allVideos) {
-            if (v.getCreatedAt() != null && v.getCreatedAt().isAfter(LocalDateTime.now().minusHours(cutoffHours))) {
-                continue;
+        int videoRetentionHours = 8760;
+        OffsetDateTime videoCutoff = OffsetDateTime.now().minusHours(videoRetentionHours);
+
+        // A. Discover unreferenced Video records in videos table and register newly orphaned videos
+        if (videoRepository != null) {
+            try {
+                List<Video> allVideos = videoRepository.findAll();
+                for (Video v : allVideos) {
+                    String bId = v.getBunnyVideoId();
+                    if (bId == null || bId.isBlank()) continue;
+
+                    FileStorageService.ReferenceCheckResult refCheck = checkStreamVideoReferences(bId, referencedStreamVideoIds);
+                    if (refCheck == FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+                        if (orphanedBunnyVideoRepository != null && !orphanedBunnyVideoRepository.existsByBunnyVideoId(bId)) {
+                            com.zoroacademy.entity.OrphanedBunnyVideo newOrphan = new com.zoroacademy.entity.OrphanedBunnyVideo(
+                                    bId,
+                                    "COURSE_MODULE",
+                                    v.getTitle(),
+                                    v.getModuleId(),
+                                    OffsetDateTime.now()
+                            );
+                            orphanedBunnyVideoRepository.save(newOrphan);
+                            log.info("Discovered and recorded newly orphaned Bunny Stream video: {}", bId);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to scan videos repository for newly orphaned videos: {}", e.getMessage());
             }
+        }
 
-            boolean hasModule = v.getModuleId() != null && activeModuleIds.contains(v.getModuleId());
-            boolean isReferencedInStream = (v.getBunnyVideoId() != null && referencedStreamVideoIds.contains(v.getBunnyVideoId()));
+        // B. Process tracked orphaned videos from orphanedBunnyVideoRepository
+        if (orphanedBunnyVideoRepository != null) {
+            List<com.zoroacademy.entity.OrphanedBunnyVideo> trackedOrphans = orphanedBunnyVideoRepository.findAll();
+            for (com.zoroacademy.entity.OrphanedBunnyVideo orphan : trackedOrphans) {
+                String bId = orphan.getBunnyVideoId();
+                if (bId == null || bId.isBlank()) continue;
 
-            if (!hasModule && !isReferencedInStream) {
+                // 1. Check current references across all relevant entities
+                FileStorageService.ReferenceCheckResult refCheck = checkStreamVideoReferences(bId, referencedStreamVideoIds);
+                if (refCheck == FileStorageService.ReferenceCheckResult.REFERENCED) {
+                    // Video is referenced by an active record -> Never delete!
+                    log.info("Orphaned video {} is active/referenced by an application entity; unmarking orphan status", bId);
+                    orphanedBunnyVideoRepository.delete(orphan);
+                    continue;
+                }
+                if (refCheck == FileStorageService.ReferenceCheckResult.UNKNOWN) {
+                    // Unknown reference status -> Retain!
+                    log.warn("Orphaned video {} reference verification returned UNKNOWN; retaining video", bId);
+                    skippedUncertain++;
+                    continue;
+                }
+
+                // 2. Reference status is definitively NOT_REFERENCED. Check orphan retention period (365 days / 8760 hours)
+                OffsetDateTime orphanedAt = orphan.getOrphanedAt();
+                if (orphanedAt != null && orphanedAt.isAfter(videoCutoff)) {
+                    // Orphaned for less than 365 days -> Retain!
+                    skippedRecent++;
+                    continue;
+                }
+
+                // 3. Confirmed orphaned for at least 365 days -> Eligible for cleanup!
                 orphanedVideosFound++;
+
                 if (!effectiveDryRun) {
                     try {
-                        if (v.getBunnyVideoId() != null) {
-                            bunnyStreamService.deleteVideo(v.getBunnyVideoId());
+                        // Delete Bunny Stream object
+                        if (bunnyStreamService != null) {
+                            bunnyStreamService.deleteVideo(bId);
                         }
-                        videoRepository.delete(v);
+                        // Also remove any corresponding Video row if exists
+                        if (videoRepository != null) {
+                            videoRepository.findByBunnyVideoId(bId).ifPresent(videoRepository::delete);
+                        }
+                        // Only after successful deletion, remove orphan-tracking metadata!
+                        orphanedBunnyVideoRepository.delete(orphan);
+                        if (systemSettingRepository != null) {
+                            String key = "cleanup.failed.video." + bId;
+                            if (systemSettingRepository.existsById(key)) {
+                                systemSettingRepository.deleteById(key);
+                            }
+                        }
                         orphanedVideosDeleted++;
+                        log.info("Successfully purged expired orphaned Bunny Stream video: {}", bId);
                     } catch (Exception e) {
                         failedDeletions++;
-                        failureReasons.add("Video " + v.getBunnyVideoId() + " deletion failed: " + sanitizeError(e.getMessage()));
-                        log.warn("Failed to delete orphaned video {}: {}", v.getBunnyVideoId(), sanitizeError(e.getMessage()));
+                        String reason = "Video " + bId + " deletion failed: " + sanitizeError(e.getMessage());
+                        failureReasons.add(reason);
+                        log.warn("Failed to delete orphaned video {}: {}", bId, sanitizeError(e.getMessage()));
+
+                        // Preserve metadata and record durable failure for retry
+                        if (systemSettingRepository != null) {
+                            try {
+                                String key = "cleanup.failed.video." + bId;
+                                String val = (orphan.getCategory() != null ? orphan.getCategory() : "VIDEO")
+                                        + "|" + e.getMessage() + "|" + OffsetDateTime.now();
+                                systemSettingRepository.save(new SystemSetting(key, val));
+                            } catch (Exception ignored) {}
+                        }
                     }
                 }
             }
@@ -605,58 +690,106 @@ public class StorageCleanupService {
         }
 
         // 9. Course Modules (thumbnails, notes, worksheets, assignments)
-        courseModuleRepository.findAll().forEach(m -> {
-            extractStorageRefs(m.getThumbnailUrl(), refs);
-            extractStorageRefs(m.getNotesFileUrl(), refs);
-            extractStorageRefs(m.getWorksheetFileUrl(), refs);
-            extractStorageRefs(m.getAssignmentFileUrl(), refs);
-        });
+        if (courseModuleRepository != null) {
+            try {
+                courseModuleRepository.findAll().forEach(m -> {
+                    extractStorageRefs(m.getThumbnailUrl(), refs);
+                    extractStorageRefs(m.getNotesFileUrl(), refs);
+                    extractStorageRefs(m.getWorksheetFileUrl(), refs);
+                    extractStorageRefs(m.getAssignmentFileUrl(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query courseModuleRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 10. Courses (thumbnail, previewVideoUrl if storage file)
-        courseRepository.findAll().forEach(c -> {
-            extractStorageRefs(c.getThumbnail(), refs);
-            if (c.getPreviewVideoUrl() != null && !c.getPreviewVideoUrl().contains(".m3u8") && !c.getPreviewVideoUrl().contains("video.bunnycdn.com")) {
-                extractStorageRefs(c.getPreviewVideoUrl(), refs);
+        if (courseRepository != null) {
+            try {
+                courseRepository.findAll().forEach(c -> {
+                    extractStorageRefs(c.getThumbnail(), refs);
+                    if (c.getPreviewVideoUrl() != null && !c.getPreviewVideoUrl().contains(".m3u8") && !c.getPreviewVideoUrl().contains("video.bunnycdn.com")) {
+                        extractStorageRefs(c.getPreviewVideoUrl(), refs);
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Failed to query courseRepository during storage reference collection: {}", e.getMessage());
             }
-        });
+        }
 
         // 11. Schedules (notes, worksheets, assignments)
-        scheduleRepository.findAll().forEach(s -> {
-            extractStorageRefs(s.getNotesFileUrl(), refs);
-            extractStorageRefs(s.getWorksheetFileUrl(), refs);
-            extractStorageRefs(s.getAssignmentFileUrl(), refs);
-        });
+        if (scheduleRepository != null) {
+            try {
+                scheduleRepository.findAll().forEach(s -> {
+                    extractStorageRefs(s.getNotesFileUrl(), refs);
+                    extractStorageRefs(s.getWorksheetFileUrl(), refs);
+                    extractStorageRefs(s.getAssignmentFileUrl(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query scheduleRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 12. Submissions (attachments, correction attachments, corrected file urls)
-        submissionRepository.findAll().forEach(sub -> {
-            extractJsonRefs(sub.getAttachment(), refs);
-            extractJsonRefs(sub.getCorrectionAttachment(), refs);
-            extractStorageRefs(sub.getCorrectedFileUrl(), refs);
-        });
+        if (submissionRepository != null) {
+            try {
+                submissionRepository.findAll().forEach(sub -> {
+                    extractJsonRefs(sub.getAttachment(), refs);
+                    extractJsonRefs(sub.getCorrectionAttachment(), refs);
+                    extractStorageRefs(sub.getCorrectedFileUrl(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query submissionRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 13. Assignments (attachments)
-        assignmentRepository.findAll().forEach(a -> {
-            extractStorageRefs(a.getAttachment(), refs);
-        });
+        if (assignmentRepository != null) {
+            try {
+                assignmentRepository.findAll().forEach(a -> {
+                    extractStorageRefs(a.getAttachment(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query assignmentRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 14. Users (avatars)
-        userRepository.findAll().forEach(u -> {
-            extractStorageRefs(u.getAvatar(), refs);
-        });
+        if (userRepository != null) {
+            try {
+                userRepository.findAll().forEach(u -> {
+                    extractStorageRefs(u.getAvatar(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query userRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 15. Competitions (rules PDF, banners, rules text)
-        competitionRepository.findAll().forEach(comp -> {
-            extractStorageRefs(comp.getRulesPdfUrl(), refs);
-            extractStorageRefs(comp.getBannerUrl(), refs);
-            extractStorageRefs(comp.getRules(), refs);
-        });
+        if (competitionRepository != null) {
+            try {
+                competitionRepository.findAll().forEach(comp -> {
+                    extractStorageRefs(comp.getRulesPdfUrl(), refs);
+                    extractStorageRefs(comp.getBannerUrl(), refs);
+                    extractStorageRefs(comp.getRules(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query competitionRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 16. Website Settings
-        websiteSettingsRepository.findAll().forEach(ws -> {
-            extractJsonRefs(ws.getSettingsJson(), refs);
-            extractStorageRefs(ws.getHeroHeadline(), refs);
-            extractStorageRefs(ws.getBannerAnnouncement(), refs);
-        });
+        if (websiteSettingsRepository != null) {
+            try {
+                websiteSettingsRepository.findAll().forEach(ws -> {
+                    extractJsonRefs(ws.getSettingsJson(), refs);
+                    extractStorageRefs(ws.getHeroHeadline(), refs);
+                    extractStorageRefs(ws.getBannerAnnouncement(), refs);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query websiteSettingsRepository during storage reference collection: {}", e.getMessage());
+            }
+        }
 
         // 17. Hero Background Images
         if (heroImageRepository != null) {
@@ -710,51 +843,152 @@ public class StorageCleanupService {
         Set<String> videoIds = new HashSet<>();
 
         // 1. Course Modules (videoStorageRef JSON)
-        courseModuleRepository.findAll().forEach(m -> {
-            String ref = m.getVideoStorageRef();
-            if (ref != null && !ref.isBlank()) {
-                videoIds.add(ref.trim());
-                try {
-                    JsonNode node = objectMapper.readTree(ref);
-                    if (node.has("videoId")) {
-                        videoIds.add(node.get("videoId").asText());
+        if (courseModuleRepository != null) {
+            try {
+                courseModuleRepository.findAll().forEach(m -> {
+                    String ref = m.getVideoStorageRef();
+                    if (ref != null && !ref.isBlank()) {
+                        videoIds.add(ref.trim());
+                        try {
+                            JsonNode node = objectMapper.readTree(ref);
+                            if (node.has("videoId")) {
+                                videoIds.add(node.get("videoId").asText());
+                            }
+                            if (node.has("guid")) {
+                                videoIds.add(node.get("guid").asText());
+                            }
+                            if (node.has("storageKey")) {
+                                videoIds.add(node.get("storageKey").asText().replace("bunny_", ""));
+                            }
+                        } catch (Exception ignored) {}
                     }
-                    if (node.has("guid")) {
-                        videoIds.add(node.get("guid").asText());
-                    }
-                    if (node.has("storageKey")) {
-                        videoIds.add(node.get("storageKey").asText().replace("bunny_", ""));
-                    }
-                } catch (Exception ignored) {}
+                });
+            } catch (Exception e) {
+                log.error("Failed to query courseModuleRepository during stream reference collection: {}", e.getMessage());
             }
-        });
+        }
 
         // 2. Competition Guidance Videos (bunnyVideoId, embedUrl, playbackUrl)
         if (guidanceVideoRepository != null) {
-            guidanceVideoRepository.findAll().forEach(gv -> {
-                if (gv.getBunnyVideoId() != null && !gv.getBunnyVideoId().isBlank()) {
-                    videoIds.add(gv.getBunnyVideoId().trim());
-                }
-                extractStreamRefs(gv.getEmbedUrl(), videoIds);
-                extractStreamRefs(gv.getPlaybackUrl(), videoIds);
-            });
+            try {
+                guidanceVideoRepository.findAll().forEach(gv -> {
+                    if (gv.getBunnyVideoId() != null && !gv.getBunnyVideoId().isBlank()) {
+                        videoIds.add(gv.getBunnyVideoId().trim());
+                    }
+                    extractStreamRefs(gv.getEmbedUrl(), videoIds);
+                    extractStreamRefs(gv.getPlaybackUrl(), videoIds);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query guidanceVideoRepository during stream reference collection: {}", e.getMessage());
+            }
         }
 
         // 3. Feedback Media (bunnyVideoId)
         if (feedbackMediaRepository != null) {
-            feedbackMediaRepository.findAll().forEach(fm -> {
-                if (fm.getBunnyVideoId() != null && !fm.getBunnyVideoId().isBlank()) {
-                    videoIds.add(fm.getBunnyVideoId().trim());
-                }
-            });
+            try {
+                feedbackMediaRepository.findAll().forEach(fm -> {
+                    if (fm.getBunnyVideoId() != null && !fm.getBunnyVideoId().isBlank()) {
+                        videoIds.add(fm.getBunnyVideoId().trim());
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Failed to query feedbackMediaRepository during stream reference collection: {}", e.getMessage());
+            }
         }
 
         // 4. Course Preview Videos (if HLS stream URL)
-        courseRepository.findAll().forEach(c -> {
-            extractStreamRefs(c.getPreviewVideoUrl(), videoIds);
-        });
+        if (courseRepository != null) {
+            try {
+                courseRepository.findAll().forEach(c -> {
+                    extractStreamRefs(c.getPreviewVideoUrl(), videoIds);
+                });
+            } catch (Exception e) {
+                log.error("Failed to query courseRepository during stream reference collection: {}", e.getMessage());
+            }
+        }
 
         return videoIds;
+    }
+
+    /**
+     * Verifies whether a Bunny Stream video is referenced across all relevant application entities.
+     * Follows the fail-closed pattern: repository exceptions return UNKNOWN (which protects the video).
+     */
+    public FileStorageService.ReferenceCheckResult checkStreamVideoReferences(String bunnyVideoId, Set<String> referencedStreamVideoIds) {
+        if (bunnyVideoId == null || bunnyVideoId.isBlank()) {
+            return FileStorageService.ReferenceCheckResult.NOT_REFERENCED;
+        }
+        String cleanId = bunnyVideoId.trim();
+        try {
+            // Check pre-collected in-memory referenced stream video IDs
+            if (referencedStreamVideoIds != null && referencedStreamVideoIds.contains(cleanId)) {
+                return FileStorageService.ReferenceCheckResult.REFERENCED;
+            }
+
+            // Direct check across course modules
+            if (courseModuleRepository != null) {
+                for (CourseModule m : courseModuleRepository.findAll()) {
+                    String ref = m.getVideoStorageRef();
+                    if (ref != null && ref.contains(cleanId)) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                }
+            }
+
+            // Direct check across competition guidance videos
+            if (guidanceVideoRepository != null) {
+                for (CompetitionGuidanceVideo gv : guidanceVideoRepository.findAll()) {
+                    if (cleanId.equals(gv.getBunnyVideoId())) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                    if (gv.getEmbedUrl() != null && gv.getEmbedUrl().contains(cleanId)) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                    if (gv.getPlaybackUrl() != null && gv.getPlaybackUrl().contains(cleanId)) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                }
+            }
+
+            // Direct check across feedback media
+            if (feedbackMediaRepository != null) {
+                for (FeedbackMedia fm : feedbackMediaRepository.findAll()) {
+                    if (cleanId.equals(fm.getBunnyVideoId())) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                }
+            }
+
+            // Direct check across courses (preview videos)
+            if (courseRepository != null) {
+                for (Course c : courseRepository.findAll()) {
+                    if (c.getPreviewVideoUrl() != null && c.getPreviewVideoUrl().contains(cleanId)) {
+                        return FileStorageService.ReferenceCheckResult.REFERENCED;
+                    }
+                }
+            }
+
+            // Direct check across videos table: if video has active module
+            if (videoRepository != null && courseModuleRepository != null) {
+                List<Video> videos = videoRepository.findAll();
+                Set<String> activeModuleIds = courseModuleRepository.findAll().stream()
+                        .map(CourseModule::getId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                for (Video v : videos) {
+                    if (cleanId.equals(v.getBunnyVideoId())) {
+                        if (v.getModuleId() != null && activeModuleIds.contains(v.getModuleId())) {
+                            return FileStorageService.ReferenceCheckResult.REFERENCED;
+                        }
+                    }
+                }
+            }
+
+            return FileStorageService.ReferenceCheckResult.NOT_REFERENCED;
+        } catch (Exception e) {
+            log.error("Failed to check stream video references for {}: {}", cleanId, e.getMessage());
+            return FileStorageService.ReferenceCheckResult.UNKNOWN;
+        }
     }
 
     private void extractStorageRefs(String text, Set<String> refs) {
@@ -827,7 +1061,7 @@ public class StorageCleanupService {
         if (systemSettingRepository == null) return;
         try {
             List<SystemSetting> failedSettings = systemSettingRepository.findAll().stream()
-                    .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.failed."))
+                    .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.failed.") && !s.getSettingKey().startsWith("cleanup.failed.video."))
                     .toList();
 
             for (SystemSetting setting : failedSettings) {
@@ -893,6 +1127,7 @@ public class StorageCleanupService {
                 }
             }
 
+            // Section 6 Fix: Reconcile tombstones safely with reference checking
             List<SystemSetting> tombstoneSettings = systemSettingRepository.findAll().stream()
                     .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.tombstone."))
                     .toList();
@@ -901,12 +1136,81 @@ public class StorageCleanupService {
                 String fileId = tombstone.getSettingKey().replace("cleanup.tombstone.", "");
                 try {
                     if (storedFileRepository != null && storedFileRepository.existsById(fileId)) {
-                        storedFileRepository.deleteById(fileId);
+                        StoredFile sf = storedFileRepository.findById(fileId).orElse(null);
+                        if (sf != null) {
+                            String storagePath = sf.getStoragePath();
+                            // Section 6: Check references before deleting metadata
+                            if (fileStorageService == null) {
+                                log.info("Tombstone reconciliation skipped for file {}: fileStorageService is null (UNKNOWN)", fileId);
+                                continue;
+                            }
+                            FileStorageService.ReferenceCheckResult refCheck = fileStorageService.checkEntityReferences(fileId, storagePath);
+                            if (refCheck == FileStorageService.ReferenceCheckResult.REFERENCED) {
+                                log.info("Tombstone reconciliation refused for file {}: reference status is REFERENCED (protected)", fileId);
+                                systemSettingRepository.delete(tombstone);
+                                continue;
+                            }
+                            if (refCheck == FileStorageService.ReferenceCheckResult.UNKNOWN) {
+                                log.info("Tombstone reconciliation refused for file {}: reference status is UNKNOWN (protected)", fileId);
+                                continue; // preserve tombstone and metadata for retry
+                            }
+                            // NOT_REFERENCED: continue only after checking shared storage paths
+                            if (storagePath != null && storedFileRepository.countByStoragePath(storagePath) > 1) {
+                                log.info("Tombstone reconciliation for file {}: storage path is shared (count > 1); deleting only DB record", fileId);
+                            }
+                            storedFileRepository.deleteById(fileId);
+                        }
                     }
                     systemSettingRepository.delete(tombstone);
-                    log.info("Reconciled tombstone for file {}", fileId);
+                    log.info("Successfully reconciled tombstone for file {}", fileId);
                 } catch (Exception ex) {
                     log.warn("Failed to reconcile tombstone for file {}: {}", fileId, sanitizeError(ex.getMessage()));
+                    // On errors: preserve tombstone and metadata for retry
+                }
+            }
+
+            // Retry failed Bunny Stream video deletions
+            List<SystemSetting> videoFailedSettings = systemSettingRepository.findAll().stream()
+                    .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.failed.video."))
+                    .toList();
+
+            for (SystemSetting setting : videoFailedSettings) {
+                String bId = setting.getSettingKey().replace("cleanup.failed.video.", "");
+                try {
+                    FileStorageService.ReferenceCheckResult refCheck = checkStreamVideoReferences(bId, null);
+                    if (refCheck == FileStorageService.ReferenceCheckResult.REFERENCED) {
+                        log.info("Retry video deletion refused for {}: actively referenced", bId);
+                        systemSettingRepository.delete(setting);
+                        if (orphanedBunnyVideoRepository != null) {
+                            orphanedBunnyVideoRepository.findByBunnyVideoId(bId).ifPresent(orphanedBunnyVideoRepository::delete);
+                        }
+                        continue;
+                    }
+                    if (refCheck == FileStorageService.ReferenceCheckResult.UNKNOWN) {
+                        log.info("Retry video deletion refused for {}: reference status is UNKNOWN", bId);
+                        continue;
+                    }
+                    if (orphanedBunnyVideoRepository != null) {
+                        Optional<com.zoroacademy.entity.OrphanedBunnyVideo> orphanOpt = orphanedBunnyVideoRepository.findByBunnyVideoId(bId);
+                        if (orphanOpt.isPresent()) {
+                            com.zoroacademy.entity.OrphanedBunnyVideo orphan = orphanOpt.get();
+                            if (orphan.getOrphanedAt() != null && orphan.getOrphanedAt().isAfter(OffsetDateTime.now().minusHours(8760))) {
+                                log.info("Retry video deletion deferred for {}: orphaned less than 365 days", bId);
+                                continue;
+                            }
+                            if (bunnyStreamService != null) {
+                                bunnyStreamService.deleteVideo(bId);
+                            }
+                            if (videoRepository != null) {
+                                videoRepository.findByBunnyVideoId(bId).ifPresent(videoRepository::delete);
+                            }
+                            orphanedBunnyVideoRepository.delete(orphan);
+                        }
+                    }
+                    systemSettingRepository.delete(setting);
+                    log.info("Successfully retried and reconciled failed video deletion for {}", bId);
+                } catch (Exception ex) {
+                    log.warn("Retry failed video deletion for {} still unsuccessful: {}", bId, sanitizeError(ex.getMessage()));
                 }
             }
         } catch (Exception e) {

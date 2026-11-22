@@ -85,10 +85,12 @@ public class StoragePurgeListener {
             return;
         }
         try {
-            log.info("Executing post-commit Bunny video purge for: {}", event.getVideoId());
-            bunnyStreamService.deleteVideo(event.getVideoId());
+            log.info("Immediate Bunny video physical deletion disabled by 1-year retention policy. Recording orphan tracking for: {}", event.getVideoId());
+            if (bunnyStreamService != null) {
+                bunnyStreamService.recordOrphan(event.getVideoId(), "COURSE_MODULE", "Event-tracked video", null);
+            }
         } catch (Exception e) {
-            log.error("Failed to delete video from Bunny Stream after transaction commit {}: {}",
+            log.error("Failed to record video orphan tracking after transaction commit for {}: {}",
                     event.getVideoId(), e.getMessage());
         }
     }

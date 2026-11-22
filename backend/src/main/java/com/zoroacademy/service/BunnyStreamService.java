@@ -52,6 +52,17 @@ public class BunnyStreamService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.zoroacademy.repository.UserRepository userRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.zoroacademy.repository.OrphanedBunnyVideoRepository orphanedBunnyVideoRepository;
+
+    public void setOrphanedBunnyVideoRepository(com.zoroacademy.repository.OrphanedBunnyVideoRepository orphanedBunnyVideoRepository) {
+        this.orphanedBunnyVideoRepository = orphanedBunnyVideoRepository;
+    }
+
+    public com.zoroacademy.repository.OrphanedBunnyVideoRepository getOrphanedBunnyVideoRepository() {
+        return this.orphanedBunnyVideoRepository;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public BunnyStreamService(BunnyStreamProperties properties,
                               BunnyTokenService tokenService,
@@ -367,6 +378,36 @@ public class BunnyStreamService {
     }
 
     @Transactional
+    public void recordOrphan(String bunnyVideoId, String category, String title, String sourceEntityId) {
+        recordOrphan(bunnyVideoId, category, title, sourceEntityId, java.time.OffsetDateTime.now());
+    }
+
+    @Transactional
+    public void recordOrphan(String bunnyVideoId, String category, String title, String sourceEntityId, java.time.OffsetDateTime orphanedAt) {
+        if (bunnyVideoId == null || bunnyVideoId.isBlank()) return;
+        String cleanId = bunnyVideoId.trim();
+        try {
+            if (orphanedBunnyVideoRepository != null) {
+                if (!orphanedBunnyVideoRepository.existsByBunnyVideoId(cleanId)) {
+                    com.zoroacademy.entity.OrphanedBunnyVideo orphan = new com.zoroacademy.entity.OrphanedBunnyVideo(
+                            cleanId,
+                            category,
+                            title,
+                            sourceEntityId,
+                            orphanedAt != null ? orphanedAt : java.time.OffsetDateTime.now()
+                    );
+                    orphanedBunnyVideoRepository.save(orphan);
+                    log.info("Recorded Bunny Stream video orphan: id={} category={} source={}", cleanId, category, sourceEntityId);
+                } else {
+                    log.info("Bunny Stream video orphan already tracked: id={}", cleanId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to record Bunny Stream video orphan for {}: {}", cleanId, e.getMessage());
+        }
+    }
+
+    @Transactional
     public void deleteVideo(String videoId) {
         if (videoId == null || videoId.isBlank()) return;
         Optional<Video> videoOpt = videoRepository.findById(videoId)
@@ -390,6 +431,12 @@ public class BunnyStreamService {
                 headers.set("AccessKey", properties.getApiKey());
                 HttpEntity<Void> entity = new HttpEntity<>(headers);
                 restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE, entity, Void.class);
+            } catch (Exception ignored) {}
+        }
+        // Clean up orphan tracking record if present upon explicit administrative deletion
+        if (orphanedBunnyVideoRepository != null) {
+            try {
+                orphanedBunnyVideoRepository.findByBunnyVideoId(videoId).ifPresent(orphanedBunnyVideoRepository::delete);
             } catch (Exception ignored) {}
         }
     }

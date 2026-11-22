@@ -839,10 +839,8 @@ public class CourseService {
     private void purgeVideo(String videoId) {
         if (videoId == null || videoId.isBlank()) return;
         try {
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new com.zoroacademy.event.StorageVideoPurgeEvent(videoId));
-            } else {
-                bunnyStreamService.deleteVideo(videoId);
+            if (bunnyStreamService != null) {
+                bunnyStreamService.recordOrphan(videoId, "COURSE_MODULE", "Unlinked course video", null);
             }
         } catch (Exception ignored) {}
     }
@@ -859,11 +857,13 @@ public class CourseService {
 
     private void cleanupModuleFilesAndVideos(CourseModule module) {
         if (module == null) return;
-        java.util.Set<String> deletedVideoIds = new java.util.HashSet<>();
+        java.util.Set<String> trackedVideoIds = new java.util.HashSet<>();
         List<Video> videos = videoRepository.findByModuleId(module.getId());
         for (Video v : videos) {
-            if (deletedVideoIds.add(v.getBunnyVideoId())) {
-                purgeVideo(v.getBunnyVideoId());
+            if (v.getBunnyVideoId() != null && trackedVideoIds.add(v.getBunnyVideoId())) {
+                if (bunnyStreamService != null) {
+                    bunnyStreamService.recordOrphan(v.getBunnyVideoId(), "COURSE_MODULE", v.getTitle(), module.getId());
+                }
             }
         }
         if (module.getVideoStorageRef() != null) {
@@ -871,8 +871,10 @@ public class CourseService {
                 com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(module.getVideoStorageRef());
                 if (node.has("videoId")) {
                     String vid = node.get("videoId").asText();
-                    if (deletedVideoIds.add(vid)) {
-                        purgeVideo(vid);
+                    if (vid != null && !vid.isBlank() && trackedVideoIds.add(vid)) {
+                        if (bunnyStreamService != null) {
+                            bunnyStreamService.recordOrphan(vid, "COURSE_MODULE", module.getTitle(), module.getId());
+                        }
                     }
                 }
             } catch (Exception ignored) {}
@@ -1049,7 +1051,9 @@ public class CourseService {
             }
             List<Video> courseVideos = videoRepository.findByCourseId(courseId);
             for (Video v : courseVideos) {
-                purgeVideo(v.getBunnyVideoId());
+                if (v.getBunnyVideoId() != null && bunnyStreamService != null) {
+                    bunnyStreamService.recordOrphan(v.getBunnyVideoId(), "COURSE_MODULE", v.getTitle(), courseId);
+                }
             }
             cleanupStoredFilesFromText(course.getThumbnail());
             cleanupStoredFilesFromText(course.getPreviewVideoUrl());
@@ -1117,10 +1121,12 @@ public class CourseService {
                 if (newNode.has("videoId")) newVid = newNode.get("videoId").asText();
             } catch (Exception ignored) {}
 
-            // ONLY purge old video if a distinct new video is explicitly replacing it
+            // Track old video as orphan if a distinct new video is explicitly replacing it
             if (oldVid != null && !oldVid.isBlank() && newVid != null && !newVid.isBlank() && !oldVid.equals(newVid)) {
                 try {
-                    purgeVideo(oldVid);
+                    if (bunnyStreamService != null) {
+                        bunnyStreamService.recordOrphan(oldVid, "COURSE_MODULE", "Replaced module video", moduleId);
+                    }
                 } catch (Exception ignored) {}
             }
 

@@ -1180,12 +1180,14 @@ public class CompetitionService {
             newBunnyId = uploadResult.get("id") != null ? uploadResult.get("id").toString() : null;
         }
 
-        // Delete old video from Bunny Stream
+        // Track old replaced video as orphan (1-year retention)
         if (oldBunnyId != null && !oldBunnyId.isBlank() && !oldBunnyId.equals(newBunnyId)) {
             try {
-                bunnyStreamService.deleteVideo(oldBunnyId);
+                if (bunnyStreamService != null) {
+                    bunnyStreamService.recordOrphan(oldBunnyId, "COMPETITION_GUIDANCE", effectiveCaption, v.getId());
+                }
             } catch (Exception e) {
-                log.warn("Failed to delete old replaced video from Bunny Stream: {}", e.getMessage());
+                log.warn("Failed to track old replaced video as orphan: {}", e.getMessage());
             }
         }
 
@@ -1210,9 +1212,9 @@ public class CompetitionService {
             CompetitionGuidanceVideo v = videoOpt.get();
             if (bunnyStreamService != null && v.getBunnyVideoId() != null && !v.getBunnyVideoId().isBlank()) {
                 try {
-                    bunnyStreamService.deleteVideo(v.getBunnyVideoId());
+                    bunnyStreamService.recordOrphan(v.getBunnyVideoId(), "COMPETITION_GUIDANCE", v.getTitle(), v.getId());
                 } catch (Exception e) {
-                    log.warn("Failed to delete video from Bunny Stream: {}", e.getMessage());
+                    log.warn("Failed to track deleted guidance video as orphan: {}", e.getMessage());
                 }
             }
             guidanceVideoRepository.delete(v);

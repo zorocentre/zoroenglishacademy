@@ -459,21 +459,23 @@ public class FileStorageService {
         }
 
         if (eventPublisher != null) {
+            StoredFile snapshot = new StoredFile(
+                    storedFile.getId(),
+                    storedFile.getOriginalName(),
+                    storedFile.getContentType(),
+                    storedFile.getSizeBytes(),
+                    storedFile.getCategory(),
+                    storedFile.getOwnerId(),
+                    storedFile.getStoragePath(),
+                    storedFile.getIsPublic(),
+                    storedFile.getSha256Hash(),
+                    storedFile.getRefCount()
+            );
+            snapshot.setCreatedAt(storedFile.getCreatedAt());
             StorageFilePurgeEvent event = new StorageFilePurgeEvent(
                     storedFile.getId(),
                     storagePath,
-                    new StoredFile(
-                            storedFile.getId(),
-                            storedFile.getOriginalName(),
-                            storedFile.getContentType(),
-                            storedFile.getSizeBytes(),
-                            storedFile.getCategory(),
-                            storedFile.getOwnerId(),
-                            storedFile.getStoragePath(),
-                            storedFile.getIsPublic(),
-                            storedFile.getSha256Hash(),
-                            storedFile.getRefCount()
-                    )
+                    snapshot
             );
             storedFileRepository.delete(storedFile);
             eventPublisher.publishEvent(event);
