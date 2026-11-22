@@ -58,6 +58,8 @@ public class StorageCleanupService {
     private final ExpenseRepository expenseRepository;
     private final CompetitionRegistrationRepository registrationRepository;
     private final CompetitionModuleRepository competitionModuleRepository;
+    private final DoubtRepository doubtRepository;
+    private final NotificationRepository notificationRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AtomicBoolean isCleanupRunning = new AtomicBoolean(false);
@@ -104,7 +106,9 @@ public class StorageCleanupService {
             @Autowired(required = false) CourseResourceRepository courseResourceRepository,
             @Autowired(required = false) ExpenseRepository expenseRepository,
             @Autowired(required = false) CompetitionRegistrationRepository registrationRepository,
-            @Autowired(required = false) CompetitionModuleRepository competitionModuleRepository
+            @Autowired(required = false) CompetitionModuleRepository competitionModuleRepository,
+            @Autowired(required = false) DoubtRepository doubtRepository,
+            @Autowired(required = false) NotificationRepository notificationRepository
     ) {
         this.storedFileRepository = storedFileRepository;
         this.storageProvider = storageProvider;
@@ -131,6 +135,47 @@ public class StorageCleanupService {
         this.expenseRepository = expenseRepository;
         this.registrationRepository = registrationRepository;
         this.competitionModuleRepository = competitionModuleRepository;
+        this.doubtRepository = doubtRepository;
+        this.notificationRepository = notificationRepository;
+    }
+
+    // 25-arg constructor for tests
+    public StorageCleanupService(
+            StoredFileRepository storedFileRepository,
+            StorageProvider storageProvider,
+            FileStorageService fileStorageService,
+            CourseRepository courseRepository,
+            CourseModuleRepository courseModuleRepository,
+            ScheduleRepository scheduleRepository,
+            AssignmentRepository assignmentRepository,
+            AssignmentSubmissionRepository submissionRepository,
+            UserRepository userRepository,
+            CompetitionRepository competitionRepository,
+            WebsiteSettingsRepository websiteSettingsRepository,
+            VideoRepository videoRepository,
+            BunnyStreamService bunnyStreamService,
+            SystemSettingRepository systemSettingRepository,
+            HeroImageRepository heroImageRepository,
+            FeedbackMediaRepository feedbackMediaRepository,
+            AssessmentQuestionRepository assessmentQuestionRepository,
+            AttemptAnswerRepository attemptAnswerRepository,
+            CompetitionStudyMaterialRepository competitionStudyMaterialRepository,
+            CompetitionSyllabusRepository competitionSyllabusRepository,
+            CompetitionGuidanceVideoRepository guidanceVideoRepository,
+            CourseResourceRepository courseResourceRepository,
+            ExpenseRepository expenseRepository,
+            CompetitionRegistrationRepository registrationRepository,
+            CompetitionModuleRepository competitionModuleRepository
+    ) {
+        this(storedFileRepository, storageProvider, fileStorageService,
+                courseRepository, courseModuleRepository, scheduleRepository,
+                assignmentRepository, submissionRepository, userRepository,
+                competitionRepository, websiteSettingsRepository, videoRepository,
+                bunnyStreamService, systemSettingRepository, heroImageRepository,
+                feedbackMediaRepository, assessmentQuestionRepository, attemptAnswerRepository,
+                competitionStudyMaterialRepository, competitionSyllabusRepository,
+                guidanceVideoRepository, courseResourceRepository, expenseRepository,
+                registrationRepository, competitionModuleRepository, null, null);
     }
 
     // Overloaded backwards-compatible constructor for existing tests
@@ -157,7 +202,7 @@ public class StorageCleanupService {
                 assignmentRepository, submissionRepository, userRepository,
                 competitionRepository, websiteSettingsRepository, videoRepository,
                 bunnyStreamService, systemSettingRepository, heroImageRepository,
-                feedbackMediaRepository, null, null, null, null, null, null, null, null, null);
+                feedbackMediaRepository, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Scheduled(cron = "${storage.cleanup.cron:0 0 2 * * ?}")
@@ -264,6 +309,11 @@ public class StorageCleanupService {
                 .filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
 
+        // Reconcile / retry any previously failed deletions recorded in durable storage
+        if (!effectiveDryRun) {
+            retryFailedDeletions();
+        }
+
         for (StoredFile file : allFiles) {
             // Check file age
             if (file.getCreatedAt() != null && file.getCreatedAt().isAfter(cutoff)) {
@@ -295,18 +345,65 @@ public class StorageCleanupService {
 
             if (!effectiveDryRun) {
                 try {
-                    // Safe deletion: delete DB metadata first, then purge physical storage if no other row uses it
-                    storedFileRepository.delete(file);
-                    if (storagePath != null && storedFileRepository.countByStoragePath(storagePath) == 0) {
-                        storageProvider.delete(storagePath);
+                    // Safety check 1: Re-verify all references immediately before deletion
+                    FileStorageService.ReferenceCheckResult refCheck = (fileStorageService != null)
+                            ? fileStorageService.checkEntityReferences(file.getId(), storagePath)
+                            : FileStorageService.ReferenceCheckResult.NOT_REFERENCED;
+
+                    if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+                        skippedActiveRef++;
+                        log.info("Aborting cleanup deletion of file {}: re-verification detected reference status {}", file.getId(), refCheck);
+                        continue;
                     }
-                    orphanedFilesDeleted++;
-                    log.info("Cleaned orphaned file id={}, path={}, size={}", file.getId(), storagePath, fileSize);
+
+                    // Safety check 2: Check for shared storage paths
+                    if (storagePath != null && (pathCounts.getOrDefault(storagePath, 0L) > 1 || storedFileRepository.countByStoragePath(storagePath) > 1)) {
+                        skippedUncertain++;
+                        log.info("Aborting cleanup deletion of file {}: physical storage path {} is shared", file.getId(), storagePath);
+                        continue;
+                    }
+
+                    // STEP 1: PHYSICAL DELETION FIRST (Section 4: Do not delete metadata before physical deletion is confirmed)
+                    boolean physicalConfirmed = false;
+                    if (storagePath != null && !storagePath.isBlank()) {
+                        try {
+                            if (storageProvider.exists(storagePath)) {
+                                storageProvider.delete(storagePath);
+                            }
+                            physicalConfirmed = true;
+                        } catch (Exception storageEx) {
+                            failedDeletions++;
+                            String reason = "Bunny Storage deletion failed for file " + file.getId() + " at " + storagePath + ": " + sanitizeError(storageEx.getMessage());
+                            failureReasons.add(reason);
+                            log.error("Failed to delete physical file from Bunny Storage id={}, path={}: {}", file.getId(), storagePath, sanitizeError(storageEx.getMessage()), storageEx);
+                            recordFailedDeletion(file.getId(), storagePath, sanitizeError(storageEx.getMessage()));
+                            // METADATA IS PRESERVED in database for retry/reconciliation!
+                            continue;
+                        }
+                    } else {
+                        physicalConfirmed = true;
+                    }
+
+                    // STEP 2: METADATA DELETION ONLY AFTER PHYSICAL DELETION IS CONFIRMED
+                    if (physicalConfirmed) {
+                        try {
+                            storedFileRepository.delete(file);
+                            orphanedFilesDeleted++;
+                            clearFailedDeletion(file.getId());
+                            log.info("Cleaned orphaned file id={}, path={}, size={}", file.getId(), storagePath, fileSize);
+                        } catch (Exception dbEx) {
+                            failedDeletions++;
+                            String reason = "Database record deletion failed for file " + file.getId() + " after physical purge: " + sanitizeError(dbEx.getMessage());
+                            failureReasons.add(reason);
+                            log.error("Database deletion failed for file id={}: {}", file.getId(), sanitizeError(dbEx.getMessage()), dbEx);
+                            recordTombstone(file.getId(), storagePath, "PHYSICAL_PURGED_DB_REMAINING");
+                        }
+                    }
                 } catch (Exception e) {
                     failedDeletions++;
-                    String reason = "File " + file.getId() + " deletion failed: " + sanitizeError(e.getMessage());
+                    String reason = "File " + file.getId() + " cleanup failed: " + sanitizeError(e.getMessage());
                     failureReasons.add(reason);
-                    log.warn("Failed to delete orphaned file {}: {}", file.getId(), sanitizeError(e.getMessage()));
+                    log.warn("Failed to process orphan file {}: {}", file.getId(), sanitizeError(e.getMessage()));
                 }
             }
         }
@@ -343,7 +440,7 @@ public class StorageCleanupService {
             }
         }
 
-        // 4. Student Submission Retention (Requirement C5)
+        // 4. Student Submission Retention (Section 5)
         long submissionsPurged = 0;
         int retentionMonths = getSubmissionRetentionMonths();
         if (retentionMonths > 0) {
@@ -355,19 +452,7 @@ public class StorageCleanupService {
                     if (sub.getAttachment() != null || sub.getCorrectionAttachment() != null || sub.getCorrectedFileUrl() != null) {
                         submissionsPurged++;
                         if (!effectiveDryRun) {
-                            if (sub.getAttachment() != null) {
-                                purgeFileFromText(sub.getAttachment());
-                                sub.setAttachment(null);
-                            }
-                            if (sub.getCorrectionAttachment() != null) {
-                                purgeFileFromText(sub.getCorrectionAttachment());
-                                sub.setCorrectionAttachment(null);
-                            }
-                            if (sub.getCorrectedFileUrl() != null) {
-                                purgeFileFromText(sub.getCorrectedFileUrl());
-                                sub.setCorrectedFileUrl(null);
-                            }
-                            submissionRepository.save(sub);
+                            processSubmissionRetention(sub, referencedStorageItems);
                         }
                     }
                 }
@@ -456,18 +541,24 @@ public class StorageCleanupService {
     public Set<String> collectAllReferencedStorageItems() {
         Set<String> refs = new HashSet<>();
 
-        // 1. Assessment Questions (mediaRef) - Root Cause Fix
+        // 1. Assessment Questions (mediaRef, text, explanation, guidance) - Root Cause Fix
         if (assessmentQuestionRepository != null) {
             assessmentQuestionRepository.findAll().forEach(q -> {
                 extractStorageRefs(q.getMediaRef(), refs);
+                extractStorageRefs(q.getQuestionText(), refs);
+                extractStorageRefs(q.getExplanation(), refs);
+                extractStorageRefs(q.getGuidanceText(), refs);
             });
         }
 
-        // 2. Candidate Exam Attempt Answers (voiceFileId, audioFileId)
+        // 2. Candidate Exam Attempt Answers (voiceFileId, audioFileId, textAnswer, feedback)
         if (attemptAnswerRepository != null) {
             attemptAnswerRepository.findAll().forEach(ans -> {
                 extractStorageRefs(ans.getAudioFileId(), refs);
                 extractStorageRefs(ans.getVoiceFileId(), refs);
+                extractStorageRefs(ans.getTextAnswer(), refs);
+                extractStorageRefs(ans.getTrainerFeedback(), refs);
+                extractStorageRefs(ans.getFeedback(), refs);
             });
         }
 
@@ -553,10 +644,11 @@ public class StorageCleanupService {
             extractStorageRefs(u.getAvatar(), refs);
         });
 
-        // 15. Competitions (rules PDF, banners)
+        // 15. Competitions (rules PDF, banners, rules text)
         competitionRepository.findAll().forEach(comp -> {
             extractStorageRefs(comp.getRulesPdfUrl(), refs);
             extractStorageRefs(comp.getBannerUrl(), refs);
+            extractStorageRefs(comp.getRules(), refs);
         });
 
         // 16. Website Settings
@@ -580,6 +672,30 @@ public class StorageCleanupService {
                 extractStorageRefs(fm.getUrl(), refs);
                 extractStorageRefs(fm.getThumbnailUrl(), refs);
                 extractStorageRefs(fm.getStoredFileId(), refs);
+            });
+        }
+
+        // 19. Doubts
+        if (doubtRepository != null) {
+            doubtRepository.findAll().forEach(d -> {
+                extractStorageRefs(d.getQuestion(), refs);
+                extractStorageRefs(d.getReply(), refs);
+            });
+        }
+
+        // 20. Notifications
+        if (notificationRepository != null) {
+            notificationRepository.findAll().forEach(n -> {
+                extractStorageRefs(n.getMessage(), refs);
+            });
+        }
+
+        // 21. System Settings (excluding cleanup tracking keys)
+        if (systemSettingRepository != null) {
+            systemSettingRepository.findAll().forEach(s -> {
+                if (s.getSettingKey() != null && !s.getSettingKey().startsWith("cleanup.failed.") && !s.getSettingKey().startsWith("cleanup.tombstone.")) {
+                    extractStorageRefs(s.getSettingValue(), refs);
+                }
             });
         }
 
@@ -707,12 +823,227 @@ public class StorageCleanupService {
         }
     }
 
-    private void purgeFileFromText(String text) {
-        if (text == null || text.isBlank()) return;
+    public void retryFailedDeletions() {
+        if (systemSettingRepository == null) return;
+        try {
+            List<SystemSetting> failedSettings = systemSettingRepository.findAll().stream()
+                    .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.failed."))
+                    .toList();
+
+            for (SystemSetting setting : failedSettings) {
+                String fileId = setting.getSettingKey().replace("cleanup.failed.", "");
+                String val = setting.getSettingValue();
+                String storagePath = (val != null && val.contains("|")) ? val.split("\\|")[0] : val;
+
+                try {
+                    boolean physicalDeleted = false;
+                    if (storagePath != null && !storagePath.isBlank() && storageProvider.exists(storagePath)) {
+                        storageProvider.delete(storagePath);
+                        physicalDeleted = true;
+                    } else {
+                        physicalDeleted = true;
+                    }
+
+                    if (physicalDeleted) {
+                        if (storedFileRepository.existsById(fileId)) {
+                            storedFileRepository.deleteById(fileId);
+                        }
+                        systemSettingRepository.delete(setting);
+                        log.info("Successfully retried and reconciled failed deletion for file {}", fileId);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Retry failed deletion for file {} still unsuccessful: {}", fileId, sanitizeError(ex.getMessage()));
+                }
+            }
+
+            List<SystemSetting> tombstoneSettings = systemSettingRepository.findAll().stream()
+                    .filter(s -> s.getSettingKey() != null && s.getSettingKey().startsWith("cleanup.tombstone."))
+                    .toList();
+
+            for (SystemSetting tombstone : tombstoneSettings) {
+                String fileId = tombstone.getSettingKey().replace("cleanup.tombstone.", "");
+                try {
+                    if (storedFileRepository.existsById(fileId)) {
+                        storedFileRepository.deleteById(fileId);
+                    }
+                    systemSettingRepository.delete(tombstone);
+                    log.info("Reconciled tombstone for file {}", fileId);
+                } catch (Exception ex) {
+                    log.warn("Failed to reconcile tombstone for file {}: {}", fileId, sanitizeError(ex.getMessage()));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error during retryFailedDeletions: {}", sanitizeError(e.getMessage()));
+        }
+    }
+
+    public void recordFailedDeletion(String fileId, String storagePath, String error) {
+        if (systemSettingRepository == null || fileId == null) return;
+        try {
+            String key = "cleanup.failed." + fileId;
+            String value = (storagePath != null ? storagePath : "") + "|" + error + "|" + OffsetDateTime.now();
+            systemSettingRepository.save(new SystemSetting(key, value));
+        } catch (Exception e) {
+            log.error("Failed to record failed deletion setting for file {}: {}", fileId, sanitizeError(e.getMessage()));
+        }
+    }
+
+    public void clearFailedDeletion(String fileId) {
+        if (systemSettingRepository == null || fileId == null) return;
+        try {
+            String key = "cleanup.failed." + fileId;
+            if (systemSettingRepository.existsById(key)) {
+                systemSettingRepository.deleteById(key);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public void recordTombstone(String fileId, String storagePath, String reason) {
+        if (systemSettingRepository == null || fileId == null) return;
+        try {
+            String key = "cleanup.tombstone." + fileId;
+            String value = (storagePath != null ? storagePath : "") + "|" + reason + "|" + OffsetDateTime.now();
+            systemSettingRepository.save(new SystemSetting(key, value));
+        } catch (Exception e) {
+            log.error("Failed to record tombstone for file {}: {}", fileId, sanitizeError(e.getMessage()));
+        }
+    }
+
+    public void processSubmissionRetention(AssignmentSubmission sub, Set<String> activeRefs) {
+        if (sub == null) return;
+        boolean modified = false;
+
+        if (sub.getAttachment() != null && !sub.getAttachment().isBlank()) {
+            boolean handled = handleSubmissionAttachmentRetention(sub.getAttachment(), sub.getId(), activeRefs);
+            if (handled) {
+                sub.setAttachment(null);
+                modified = true;
+            }
+        }
+
+        if (sub.getCorrectionAttachment() != null && !sub.getCorrectionAttachment().isBlank()) {
+            boolean handled = handleSubmissionAttachmentRetention(sub.getCorrectionAttachment(), sub.getId(), activeRefs);
+            if (handled) {
+                sub.setCorrectionAttachment(null);
+                modified = true;
+            }
+        }
+
+        if (sub.getCorrectedFileUrl() != null && !sub.getCorrectedFileUrl().isBlank()) {
+            boolean handled = handleSubmissionAttachmentRetention(sub.getCorrectedFileUrl(), sub.getId(), activeRefs);
+            if (handled) {
+                sub.setCorrectedFileUrl(null);
+                modified = true;
+            }
+        }
+
+        if (modified) {
+            submissionRepository.save(sub);
+        }
+    }
+
+    private boolean handleSubmissionAttachmentRetention(String attachmentRef, String submissionId, Set<String> activeRefs) {
+        if (attachmentRef == null || attachmentRef.isBlank()) return true;
+
+        List<String> fileIds = extractUuidsFromText(attachmentRef);
+        if (fileIds.isEmpty()) {
+            String trimmed = attachmentRef.trim();
+            if (storedFileRepository != null && storedFileRepository.existsById(trimmed)) {
+                fileIds = List.of(trimmed);
+            } else {
+                return true;
+            }
+        }
+
+        boolean allHandled = true;
+        for (String fileId : fileIds) {
+            Optional<StoredFile> fileOpt = storedFileRepository.findById(fileId);
+            if (fileOpt.isEmpty()) {
+                continue;
+            }
+            StoredFile file = fileOpt.get();
+            String storagePath = file.getStoragePath();
+
+            // Section 5: Check whether the file is referenced anywhere else in the application
+            boolean sharedWithOtherEntities = isFileSharedOutsideSubmission(fileId, submissionId, storagePath, activeRefs);
+
+            if (sharedWithOtherEntities) {
+                log.info("Retention policy: File {} from submission {} is shared with other entities; retaining physical asset and unlinking submission reference.", fileId, submissionId);
+                continue;
+            }
+
+            // Not referenced elsewhere: Attempt physical deletion FIRST from Bunny Storage
+            boolean physicalDeleted = false;
+            try {
+                if (storagePath != null && !storagePath.isBlank() && storageProvider.exists(storagePath)) {
+                    storageProvider.delete(storagePath);
+                }
+                physicalDeleted = true;
+            } catch (Exception e) {
+                log.error("Retention policy: Failed to physically delete file {} for submission {}: {}", fileId, submissionId, sanitizeError(e.getMessage()));
+                recordFailedDeletion(fileId, storagePath, sanitizeError(e.getMessage()));
+                allHandled = false;
+            }
+
+            if (physicalDeleted) {
+                try {
+                    storedFileRepository.delete(file);
+                    clearFailedDeletion(fileId);
+                    log.info("Retention policy: Deleted unreferenced submission file {} (path: {})", fileId, storagePath);
+                } catch (Exception dbEx) {
+                    log.error("Retention policy: Database metadata deletion failed for file {} after physical purge: {}", fileId, sanitizeError(dbEx.getMessage()));
+                    recordTombstone(fileId, storagePath, "SUBMISSION_PURGED_PHYSICAL_DB_FAILED");
+                }
+            }
+        }
+
+        return allHandled;
+    }
+
+    private boolean isFileSharedOutsideSubmission(String fileId, String submissionId, String storagePath, Set<String> activeRefs) {
+        if (submissionRepository != null) {
+            boolean sharedInSubmissions = submissionRepository.findAll().stream()
+                    .filter(s -> !Objects.equals(s.getId(), submissionId))
+                    .anyMatch(s -> (s.getAttachment() != null && s.getAttachment().contains(fileId))
+                            || (s.getCorrectionAttachment() != null && s.getCorrectionAttachment().contains(fileId))
+                            || (s.getCorrectedFileUrl() != null && s.getCorrectedFileUrl().contains(fileId)));
+            if (sharedInSubmissions) return true;
+        }
+
+        if (fileStorageService != null) {
+            FileStorageService.ReferenceCheckResult refCheck = fileStorageService.checkEntityReferences(fileId, storagePath);
+            if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+                return true;
+            }
+        }
+
+        if (activeRefs != null && (activeRefs.contains(fileId) || (storagePath != null && activeRefs.contains(storagePath)))) {
+            return true;
+        }
+
+        if (storagePath != null && storedFileRepository.countByStoragePath(storagePath) > 1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public List<String> extractUuidsFromText(String text) {
+        if (text == null || text.isBlank()) return Collections.emptyList();
+        List<String> list = new ArrayList<>();
         Matcher matcher = UUID_PATTERN.matcher(text);
         while (matcher.find()) {
+            list.add(matcher.group(1));
+        }
+        return list;
+    }
+
+    private void purgeFileFromText(String text) {
+        if (text == null || text.isBlank()) return;
+        List<String> ids = extractUuidsFromText(text);
+        for (String id : ids) {
             try {
-                fileStorageService.deleteFile(matcher.group(1));
+                fileStorageService.deleteFile(id);
             } catch (Exception ignored) {}
         }
     }

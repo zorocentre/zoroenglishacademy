@@ -102,19 +102,33 @@ public class BunnyMigrationServiceTest {
         assertEquals(1, plan.getTotalVideos());
         assertTrue(plan.getExistingVideoGuids().contains("old-guid-1"));
 
+        String validOldId = "11111111-1111-1111-1111-111111111111";
+        String validNewId = "22222222-2222-2222-2222-222222222222";
+        v1.setBunnyVideoId(validOldId);
+        when(videoRepository.findByBunnyVideoId(validOldId)).thenReturn(Optional.of(v1));
+
+        // Validation test: invalid UUID is rejected before partial updates
+        Map<String, String> invalidMapping = Map.of("not-a-uuid", "also-not-a-uuid");
+        StreamMigrationResultDto invalidResult = migrationService.executeStreamMigration(false, invalidMapping);
+        assertEquals(1, invalidResult.getFailedCount());
+        assertTrue(invalidResult.getReconciliationSummary().contains("Validation failed"));
+        verify(videoRepository, never()).save(any());
+
         // Dry-run simulation of re-mapping old GUID to new GUID
-        Map<String, String> guidMapping = Map.of("old-guid-1", "new-guid-1");
+        Map<String, String> guidMapping = Map.of(validOldId, validNewId);
         StreamMigrationResultDto resultDryRun = migrationService.executeStreamMigration(true, guidMapping);
 
         assertTrue(resultDryRun.isDryRun());
         assertEquals(1, resultDryRun.getUpdatedCourseVideosCount());
+        assertNotNull(resultDryRun.getPhysicalTransferNotice());
+        assertTrue(resultDryRun.getReconciliationSummary().contains("Physical video files must be transferred"));
         // In dry run, repository save should NOT have been called
         verify(videoRepository, never()).save(any());
 
         // Actual execution
         StreamMigrationResultDto resultReal = migrationService.executeStreamMigration(false, guidMapping);
         assertFalse(resultReal.isDryRun());
-        assertEquals("new-guid-1", v1.getBunnyVideoId());
+        assertEquals(validNewId, v1.getBunnyVideoId());
         verify(videoRepository, times(1)).save(v1);
     }
 
@@ -132,9 +146,11 @@ public class BunnyMigrationServiceTest {
         when(storedFileRepository.existsById(missingMediaId)).thenReturn(false);
 
         // Mock existence of physical asset in Bunny Storage
-        String physicalPath = "public/question-media/" + missingMediaId + ".png";
+        String physicalPath = "public/question-media/" + missingMediaId;
         when(storageProvider.exists(physicalPath)).thenReturn(true);
-        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(new byte[]{1, 2, 3});
+        // Mock PNG magic bytes: 89 50 4E 47
+        byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0, 0, 0};
+        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(pngBytes);
         when(storageProvider.loadAsResource(physicalPath)).thenReturn(resource);
 
         // Dry run mode
@@ -151,7 +167,28 @@ public class BunnyMigrationServiceTest {
         verify(storedFileRepository, times(1)).save(argThat(sf ->
                 sf.getId().equals(missingMediaId) &&
                 sf.getCategory().equals("question-media") &&
-                sf.getStoragePath().contains(missingMediaId)
+                sf.getContentType().equals("image/png") &&
+                sf.getStoragePath().equals(physicalPath)
         ));
+    }
+
+    @Test
+    @DisplayName("Metadata Recovery: Handles study materials and missing physical files gracefully")
+    void testRecoverStudyMaterialAndMissingPhysical() {
+        String missingDocId = "88888888-8888-8888-8888-888888888888";
+        com.zoroacademy.entity.CompetitionStudyMaterial sm = new com.zoroacademy.entity.CompetitionStudyMaterial();
+        sm.setId("sm_1");
+        sm.setStoredFileId(missingDocId);
+        when(competitionStudyMaterialRepository.findAll()).thenReturn(List.of(sm));
+        when(storedFileRepository.existsById(missingDocId)).thenReturn(false);
+
+        // Physical asset does NOT exist in storage
+        when(storageProvider.exists(anyString())).thenReturn(false);
+
+        MetadataRecoveryResultDto result = migrationService.recoverUnindexedMediaMetadata(false);
+        assertEquals(1, result.getUnindexedReferencesScanned());
+        assertEquals(0, result.getRecoveredCount());
+        assertEquals(1, result.getUnrecoverableCount());
+        verify(storedFileRepository, never()).save(any());
     }
 }

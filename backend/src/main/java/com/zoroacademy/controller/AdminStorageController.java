@@ -7,12 +7,14 @@ import com.zoroacademy.dto.migration.*;
 import com.zoroacademy.service.StorageCleanupService;
 import com.zoroacademy.service.migration.BunnyMigrationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/storage")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminStorageController {
 
     private final StorageCleanupService storageCleanupService;

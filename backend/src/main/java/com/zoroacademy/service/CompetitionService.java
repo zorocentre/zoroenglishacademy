@@ -231,7 +231,7 @@ public class CompetitionService {
     }
 
     private boolean isPaid(String status) {
-        return status != null && ("PAID".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status));
+        return status != null && ("PAID".equalsIgnoreCase(status.trim()) || "SUCCESS".equalsIgnoreCase(status.trim()));
     }
 
     /**
@@ -1844,7 +1844,7 @@ public class CompetitionService {
         CompetitionRegistration reg = regs.stream()
                 .filter(r -> (r.getCompetition() != null && compId.equals(r.getCompetition().getId()))
                         || compId.equals(r.getCompetitionId()))
-                .filter(r -> "PAID".equalsIgnoreCase(r.getPaymentStatus()))
+                .filter(r -> isPaid(r.getPaymentStatus()))
                 .findFirst()
                 .orElse(null);
 

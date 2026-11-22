@@ -20,9 +20,15 @@ RUN mvn clean package -DskipTests -B
 # =============================================================================
 FROM eclipse-temurin:21-jre-jammy
 
-# Install curl and ca-certificates for health checks and outbound HTTPS APIs
+# Install curl, ca-certificates, and LibreOffice for document conversion (DOC/DOCX/XLS/PPT to PDF)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        libreoffice-writer \
+        libreoffice-calc \
+        libreoffice-impress \
+        fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 # Create dedicated non-root application user and group (UID 1001)

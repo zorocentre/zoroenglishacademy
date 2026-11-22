@@ -298,4 +298,104 @@ public class StorageCleanupComprehensiveAuditTest {
         verify(storageProvider, never()).delete(any());
         verify(storedFileRepository, never()).delete(any());
     }
+
+    @Test
+    @DisplayName("Section 4 Fix: Physical deletion failure preserves database metadata and records failure")
+    void testPhysicalDeletionFailurePreservesMetadata() throws Exception {
+        // Enable live purge allowance via reflection for this test
+        java.lang.reflect.Field purgeAllowed = StorageCleanupService.class.getDeclaredField("livePurgeAllowed");
+        purgeAllowed.setAccessible(true);
+        purgeAllowed.set(storageCleanupService, true);
+
+        OffsetDateTime oldDate = OffsetDateTime.now().minusHours(200);
+        StoredFile orphan = createStoredFile("orphan-fail-id", "private/tmp/fail.dat", oldDate);
+        when(storedFileRepository.findAll()).thenReturn(List.of(orphan));
+        when(storedFileRepository.countByStoragePath("private/tmp/fail.dat")).thenReturn(1L);
+        when(storageProvider.exists("private/tmp/fail.dat")).thenReturn(true);
+        when(fileStorageService.checkEntityReferences(eq("orphan-fail-id"), eq("private/tmp/fail.dat")))
+                .thenReturn(FileStorageService.ReferenceCheckResult.NOT_REFERENCED);
+
+        // Simulate Bunny Storage exception during physical deletion
+        doThrow(new RuntimeException("Bunny Storage 503 Service Unavailable"))
+                .when(storageProvider).delete("private/tmp/fail.dat");
+
+        CleanupResultDto result = storageCleanupService.runCleanup(false, 168, true);
+
+        assertEquals(1, result.getFailedDeletions());
+        assertEquals(0, result.getOrphanedFilesDeleted());
+        // Verify database metadata was NOT deleted
+        verify(storedFileRepository, never()).delete(orphan);
+        // Verify failure was recorded in SystemSettings
+        verify(systemSettingRepository, times(1)).save(argThat(s ->
+                s.getSettingKey().equals("cleanup.failed.orphan-fail-id")
+        ));
+    }
+
+    @Test
+    @DisplayName("Section 4 Fix: retryFailedDeletions reconciles durable failure records")
+    void testRetryFailedDeletionsReconciles() {
+        SystemSetting failedSetting = new SystemSetting("cleanup.failed.f-1", "private/tmp/f-1.dat|error|date");
+        when(systemSettingRepository.findAll()).thenReturn(List.of(failedSetting));
+        when(storageProvider.exists("private/tmp/f-1.dat")).thenReturn(true);
+        when(storedFileRepository.existsById("f-1")).thenReturn(true);
+
+        storageCleanupService.retryFailedDeletions();
+
+        verify(storageProvider, times(1)).delete("private/tmp/f-1.dat");
+        verify(storedFileRepository, times(1)).deleteById("f-1");
+        verify(systemSettingRepository, times(1)).delete(failedSetting);
+    }
+
+    @Test
+    @DisplayName("Section 5 Fix: Shared submission attachment is NOT physically deleted on retention purge")
+    void testSharedSubmissionAttachmentNotPhysicallyDeleted() {
+        String sharedFileId = "11111111-2222-3333-4444-555555555555";
+        AssignmentSubmission sub1 = new AssignmentSubmission();
+        sub1.setId("sub_1");
+        sub1.setAttachment(sharedFileId);
+
+        StoredFile sf = createStoredFile(sharedFileId, "private/submissions/work.pdf", OffsetDateTime.now().minusHours(500));
+        when(storedFileRepository.findById(sharedFileId)).thenReturn(Optional.of(sf));
+        when(storedFileRepository.existsById(sharedFileId)).thenReturn(true);
+
+        // File is shared with another entity (e.g. checkEntityReferences returns REFERENCED)
+        when(fileStorageService.checkEntityReferences(eq(sharedFileId), eq("private/submissions/work.pdf")))
+                .thenReturn(FileStorageService.ReferenceCheckResult.REFERENCED);
+
+        // Invoke processSubmissionRetention
+        storageCleanupService.processSubmissionRetention(sub1, Collections.emptySet());
+
+        // Submission reference unlinked, but physical asset and metadata MUST be retained
+        assertNull(sub1.getAttachment(), "Submission reference should be unlinked/cleared");
+        verify(submissionRepository, times(1)).save(sub1);
+        verify(storageProvider, never()).delete(anyString());
+        verify(storedFileRepository, never()).delete(any(StoredFile.class));
+    }
+
+    @Test
+    @DisplayName("Section 5 Fix: Submission reference is preserved if physical deletion fails")
+    void testSubmissionReferencePreservedOnPhysicalDeletionFailure() {
+        String fileId = "22222222-3333-4444-5555-666666666666";
+        AssignmentSubmission sub = new AssignmentSubmission();
+        sub.setId("sub_2");
+        sub.setAttachment(fileId);
+
+        StoredFile sf = createStoredFile(fileId, "private/submissions/work2.pdf", OffsetDateTime.now().minusHours(500));
+        when(storedFileRepository.findById(fileId)).thenReturn(Optional.of(sf));
+        when(storedFileRepository.existsById(fileId)).thenReturn(true);
+        when(storedFileRepository.countByStoragePath("private/submissions/work2.pdf")).thenReturn(1L);
+        when(submissionRepository.findAll()).thenReturn(List.of(sub));
+        when(fileStorageService.checkEntityReferences(eq(fileId), eq("private/submissions/work2.pdf")))
+                .thenReturn(FileStorageService.ReferenceCheckResult.NOT_REFERENCED);
+        when(storageProvider.exists("private/submissions/work2.pdf")).thenReturn(true);
+
+        // Simulate physical deletion failure
+        doThrow(new RuntimeException("Connection timeout")).when(storageProvider).delete("private/submissions/work2.pdf");
+
+        storageCleanupService.processSubmissionRetention(sub, Collections.emptySet());
+
+        // Since physical deletion failed, submission reference and metadata MUST be preserved!
+        assertEquals(fileId, sub.getAttachment(), "Submission attachment reference must NOT be cleared if physical deletion fails");
+        verify(storedFileRepository, never()).delete(any(StoredFile.class));
+    }
 }

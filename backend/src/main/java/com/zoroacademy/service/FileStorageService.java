@@ -52,6 +52,15 @@ public class FileStorageService {
     @Autowired(required = false)
     private com.zoroacademy.repository.CourseResourceRepository courseResourceRepository;
 
+    @Autowired(required = false)
+    private com.zoroacademy.repository.ExpenseRepository expenseRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.CompetitionRegistrationRepository registrationRepository;
+
+    @Autowired(required = false)
+    private com.zoroacademy.repository.CompetitionModuleRepository competitionModuleRepository;
+
     @Value("${jwt.secret:defaultSecretForFileLinksOnlyNotForJwtAuthKey123}")
     private String linkSecret;
 
@@ -72,6 +81,12 @@ public class FileStorageService {
             "question-media", "audio", "audio-prompt", "competition", "syllabus", "guidance", "feedback"
     );
 
+    public enum ReferenceCheckResult {
+        REFERENCED,
+        NOT_REFERENCED,
+        UNKNOWN
+    }
+
     @Autowired
     public FileStorageService(
             StoredFileRepository storedFileRepository,
@@ -85,6 +100,63 @@ public class FileStorageService {
         this.bunnyTokenService = bunnyTokenService;
         this.eventPublisher = eventPublisher;
         this.documentConversionService = documentConversionService;
+    }
+
+    public FileStorageService(
+            StoredFileRepository storedFileRepository,
+            StorageProvider storageProvider,
+            BunnyTokenService bunnyTokenService,
+            ApplicationEventPublisher eventPublisher,
+            DocumentConversionService documentConversionService,
+            com.zoroacademy.repository.AssessmentQuestionRepository assessmentQuestionRepository,
+            com.zoroacademy.repository.AttemptAnswerRepository attemptAnswerRepository,
+            com.zoroacademy.repository.CompetitionStudyMaterialRepository studyMaterialRepository,
+            com.zoroacademy.repository.CompetitionSyllabusRepository syllabusRepository,
+            com.zoroacademy.repository.AssignmentSubmissionRepository submissionRepository,
+            com.zoroacademy.repository.CourseResourceRepository courseResourceRepository
+    ) {
+        this(storedFileRepository, storageProvider, bunnyTokenService, eventPublisher, documentConversionService);
+        this.assessmentQuestionRepository = assessmentQuestionRepository;
+        this.attemptAnswerRepository = attemptAnswerRepository;
+        this.studyMaterialRepository = studyMaterialRepository;
+        this.syllabusRepository = syllabusRepository;
+        this.submissionRepository = submissionRepository;
+        this.courseResourceRepository = courseResourceRepository;
+    }
+
+    public FileStorageService(
+            StoredFileRepository storedFileRepository,
+            StorageProvider storageProvider,
+            com.zoroacademy.repository.AssessmentQuestionRepository assessmentQuestionRepository,
+            com.zoroacademy.repository.CompetitionStudyMaterialRepository studyMaterialRepository,
+            com.zoroacademy.repository.CompetitionSyllabusRepository syllabusRepository,
+            com.zoroacademy.repository.AttemptAnswerRepository attemptAnswerRepository,
+            com.zoroacademy.repository.AssignmentSubmissionRepository submissionRepository,
+            com.zoroacademy.repository.CourseResourceRepository courseResourceRepository
+    ) {
+        this(storedFileRepository, storageProvider, null, null, null,
+                assessmentQuestionRepository, attemptAnswerRepository, studyMaterialRepository,
+                syllabusRepository, submissionRepository, courseResourceRepository);
+    }
+
+    public FileStorageService(
+            StoredFileRepository storedFileRepository,
+            StorageProvider storageProvider,
+            com.zoroacademy.repository.AssessmentQuestionRepository assessmentQuestionRepository,
+            com.zoroacademy.repository.CompetitionStudyMaterialRepository studyMaterialRepository,
+            com.zoroacademy.repository.CompetitionSyllabusRepository syllabusRepository,
+            com.zoroacademy.repository.AttemptAnswerRepository attemptAnswerRepository,
+            com.zoroacademy.repository.AssignmentSubmissionRepository submissionRepository,
+            com.zoroacademy.repository.CourseResourceRepository courseResourceRepository,
+            com.zoroacademy.repository.ExpenseRepository expenseRepository,
+            com.zoroacademy.repository.CompetitionRegistrationRepository registrationRepository,
+            com.zoroacademy.repository.CompetitionModuleRepository competitionModuleRepository
+    ) {
+        this(storedFileRepository, storageProvider, assessmentQuestionRepository, studyMaterialRepository,
+                syllabusRepository, attemptAnswerRepository, submissionRepository, courseResourceRepository);
+        this.expenseRepository = expenseRepository;
+        this.registrationRepository = registrationRepository;
+        this.competitionModuleRepository = competitionModuleRepository;
     }
 
     public StoredFile storeFile(MultipartFile file, String category, String ownerId) {
@@ -364,9 +436,10 @@ public class FileStorageService {
             return;
         }
 
-        // Objective D: Safe reference-aware deletion across application entities
-        if (isReferencedInApplicationEntities(id, storedFile.getStoragePath())) {
-            log.info("Preserving stored file {}: actively referenced across application entities", id);
+        // Section 3: Safe reference-aware deletion across application entities
+        ReferenceCheckResult refCheck = checkEntityReferences(id, storedFile.getStoragePath());
+        if (refCheck != ReferenceCheckResult.NOT_REFERENCED) {
+            log.info("Preserving stored file {}: reference check status is {} (protected)", id, refCheck);
             return;
         }
 
@@ -385,31 +458,107 @@ public class FileStorageService {
         }
     }
 
-    public boolean isReferencedInApplicationEntities(String fileId, String storagePath) {
-        if (fileId == null || fileId.isBlank()) return false;
+    /**
+     * Section 3: Comprehensive Reference Check.
+     * Distinguishes REFERENCED, NOT_REFERENCED, and UNKNOWN (query failed or repository unavailable).
+     * Any failure/exception results in UNKNOWN. UNKNOWN is strictly treated as PROTECTED.
+     */
+    public ReferenceCheckResult checkEntityReferences(String fileId, String storagePath) {
+        if (fileId == null || fileId.isBlank()) {
+            return ReferenceCheckResult.NOT_REFERENCED;
+        }
+
+        // 1. Assessment Questions
+        if (assessmentQuestionRepository == null) {
+            log.error("Reference check failed: AssessmentQuestionRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
         try {
-            if (assessmentQuestionRepository != null && !assessmentQuestionRepository.findByMediaRefContaining(fileId).isEmpty()) {
-                return true;
-            }
-            if (studyMaterialRepository != null && !studyMaterialRepository.findByStoredFileId(fileId).isEmpty()) {
-                return true;
-            }
-            if (syllabusRepository != null && !syllabusRepository.findByStoredFileId(fileId).isEmpty()) {
-                return true;
-            }
-            if (attemptAnswerRepository != null && !attemptAnswerRepository.findByVoiceFileIdOrAudioFileId(fileId, fileId).isEmpty()) {
-                return true;
-            }
-            if (submissionRepository != null && !submissionRepository.findByAnyFileUrlContaining(fileId).isEmpty()) {
-                return true;
-            }
-            if (courseResourceRepository != null && !courseResourceRepository.findByFileUrlContaining(fileId).isEmpty()) {
-                return true;
+            if (!assessmentQuestionRepository.findByMediaRefContaining(fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
             }
         } catch (Exception e) {
-            log.debug("Error checking entity references for {}: {}", fileId, e.getMessage());
+            log.error("Database query failed in AssessmentQuestionRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
         }
-        return false;
+
+        // 2. Competition Study Materials
+        if (studyMaterialRepository == null) {
+            log.error("Reference check failed: CompetitionStudyMaterialRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+        try {
+            if (!studyMaterialRepository.findByStoredFileId(fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
+            }
+        } catch (Exception e) {
+            log.error("Database query failed in CompetitionStudyMaterialRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+
+        // 3. Competition Syllabus
+        if (syllabusRepository == null) {
+            log.error("Reference check failed: CompetitionSyllabusRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+        try {
+            if (!syllabusRepository.findByStoredFileId(fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
+            }
+        } catch (Exception e) {
+            log.error("Database query failed in CompetitionSyllabusRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+
+        // 4. Attempt Answers (Voice/Audio)
+        if (attemptAnswerRepository == null) {
+            log.error("Reference check failed: AttemptAnswerRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+        try {
+            if (!attemptAnswerRepository.findByVoiceFileIdOrAudioFileId(fileId, fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
+            }
+        } catch (Exception e) {
+            log.error("Database query failed in AttemptAnswerRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+
+        // 5. Assignment Submissions
+        if (submissionRepository == null) {
+            log.error("Reference check failed: AssignmentSubmissionRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+        try {
+            if (!submissionRepository.findByAnyFileUrlContaining(fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
+            }
+        } catch (Exception e) {
+            log.error("Database query failed in AssignmentSubmissionRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+
+        // 6. Course Resources
+        if (courseResourceRepository == null) {
+            log.error("Reference check failed: CourseResourceRepository is unavailable (null) for fileId={}", fileId);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+        try {
+            if (!courseResourceRepository.findByFileUrlContaining(fileId).isEmpty()) {
+                return ReferenceCheckResult.REFERENCED;
+            }
+        } catch (Exception e) {
+            log.error("Database query failed in CourseResourceRepository for fileId={}: {}", fileId, e.getMessage(), e);
+            return ReferenceCheckResult.UNKNOWN;
+        }
+
+        return ReferenceCheckResult.NOT_REFERENCED;
+    }
+
+    public boolean isReferencedInApplicationEntities(String fileId, String storagePath) {
+        ReferenceCheckResult result = checkEntityReferences(fileId, storagePath);
+        // UNKNOWN must always mean PROTECTED
+        return result == ReferenceCheckResult.REFERENCED || result == ReferenceCheckResult.UNKNOWN;
     }
 
     /**

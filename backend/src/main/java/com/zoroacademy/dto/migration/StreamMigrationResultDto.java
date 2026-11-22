@@ -13,8 +13,17 @@ public class StreamMigrationResultDto {
     private Map<String, String> idMappingTable = new HashMap<>();
     private String executionTime;
     private String reconciliationSummary;
+    private String physicalTransferNotice = "Video remapping updates database references. Physical video assets must be copied between Bunny Stream libraries via Bunny Stream API or dashboard before or after this step.";
 
     public StreamMigrationResultDto() {}
+
+    public String getPhysicalTransferNotice() {
+        return physicalTransferNotice;
+    }
+
+    public void setPhysicalTransferNotice(String physicalTransferNotice) {
+        this.physicalTransferNotice = physicalTransferNotice;
+    }
 
     public boolean isDryRun() {
         return dryRun;

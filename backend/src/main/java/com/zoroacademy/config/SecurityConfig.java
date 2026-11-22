@@ -131,14 +131,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
 
-                        // 2. ADMIN Role Specific Endpoints
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/dashboard/**").hasRole("ADMIN")
-                        .requestMatchers("/api/activity-logs/**").hasRole("ADMIN")
-                        .requestMatchers("/api/fees/**").hasRole("ADMIN")
-                        .requestMatchers("/api/expenses/**").hasRole("ADMIN")
-                        .requestMatchers("/api/salary/**").hasRole("ADMIN")
-                        .requestMatchers("/api/settings/**").hasRole("ADMIN")
+                        // 2. ADMIN & SUPER_ADMIN Role Specific Endpoints
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/dashboard/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/activity-logs/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/fees/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/expenses/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/salary/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/settings/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/enquiries/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/enquiries/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/enquiries/**").hasRole("ADMIN")

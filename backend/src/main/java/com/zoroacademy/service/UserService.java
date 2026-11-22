@@ -202,7 +202,8 @@ public class UserService {
                         }
                     }
                 }
-                hasCompetition = regs.stream().anyMatch(r -> "PAID".equalsIgnoreCase(r.getPaymentStatus()));
+                hasCompetition = regs.stream().anyMatch(r -> r.getPaymentStatus() != null &&
+                        ("PAID".equalsIgnoreCase(r.getPaymentStatus()) || "SUCCESS".equalsIgnoreCase(r.getPaymentStatus())));
             }
 
             if (!hasCourse && !hasCompetition) {
