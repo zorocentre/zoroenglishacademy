@@ -61,7 +61,7 @@ storage:
   cleanup:
     enabled: ${STORAGE_CLEANUP_ENABLED:false}
     dry-run: ${STORAGE_CLEANUP_DRY_RUN:true}
-    orphan-retention-hours: ${STORAGE_CLEANUP_ORPHAN_RETENTION_HOURS:168}
+    orphan-retention-hours: ${STORAGE_CLEANUP_ORPHAN_RETENTION_HOURS:8760}
     cron: ${STORAGE_CLEANUP_CRON:0 0 2 * * ?}
     live-purge-allowed: ${STORAGE_CLEANUP_LIVE_PURGE_ALLOWED:false}
 

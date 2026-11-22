@@ -80,7 +80,7 @@ public class StorageCleanupService {
     @Value("${storage.cleanup.dry-run:true}")
     private boolean dryRunDefault;
 
-    @Value("${storage.cleanup.orphan-retention-hours:168}")
+    @Value("${storage.cleanup.orphan-retention-hours:8760}")
     private int defaultCutoffHours;
 
     @Value("${storage.cleanup.live-purge-allowed:false}")
@@ -476,8 +476,13 @@ public class StorageCleanupService {
 
                 // 2. Reference status is definitively NOT_REFERENCED. Check orphan retention period (365 days / 8760 hours)
                 OffsetDateTime orphanedAt = orphan.getOrphanedAt();
-                if (orphanedAt != null && orphanedAt.isAfter(videoCutoff)) {
-                    // Orphaned for less than 365 days -> Retain!
+                if (orphanedAt == null || orphanedAt.isAfter(videoCutoff)) {
+                    if (orphanedAt == null) {
+                        log.warn("Orphaned video {} has null/missing orphan timestamp; preserving video and setting timestamp to now", bId);
+                        orphan.setOrphanedAt(OffsetDateTime.now());
+                        orphanedBunnyVideoRepository.save(orphan);
+                    }
+                    // Orphaned for less than 365 days (or null timestamp) -> Retain!
                     skippedRecent++;
                     continue;
                 }
@@ -919,64 +924,60 @@ public class StorageCleanupService {
             return FileStorageService.ReferenceCheckResult.NOT_REFERENCED;
         }
         String cleanId = bunnyVideoId.trim();
+
+        // Fail-closed requirement: Missing required repositories must NEVER produce NOT_REFERENCED
+        if (courseModuleRepository == null || courseRepository == null
+                || guidanceVideoRepository == null || feedbackMediaRepository == null) {
+            log.warn("checkStreamVideoReferences: One or more required repositories is missing. Returning UNKNOWN for video {}", cleanId);
+            return FileStorageService.ReferenceCheckResult.UNKNOWN;
+        }
+
         try {
             // Check pre-collected in-memory referenced stream video IDs
             if (referencedStreamVideoIds != null && referencedStreamVideoIds.contains(cleanId)) {
                 return FileStorageService.ReferenceCheckResult.REFERENCED;
             }
 
-            // Direct check across course modules
-            if (courseModuleRepository != null) {
-                for (CourseModule m : courseModuleRepository.findAll()) {
-                    String ref = m.getVideoStorageRef();
-                    if (ref != null && ref.contains(cleanId)) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
+            // Direct check across course modules (exact ID / JSON attribute matching)
+            for (CourseModule m : courseModuleRepository.findAll()) {
+                if (matchesExactVideoId(m.getVideoStorageRef(), cleanId)) {
+                    return FileStorageService.ReferenceCheckResult.REFERENCED;
                 }
             }
 
             // Direct check across competition guidance videos
-            if (guidanceVideoRepository != null) {
-                for (CompetitionGuidanceVideo gv : guidanceVideoRepository.findAll()) {
-                    if (cleanId.equals(gv.getBunnyVideoId())) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
-                    if (gv.getEmbedUrl() != null && gv.getEmbedUrl().contains(cleanId)) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
-                    if (gv.getPlaybackUrl() != null && gv.getPlaybackUrl().contains(cleanId)) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
+            for (CompetitionGuidanceVideo gv : guidanceVideoRepository.findAll()) {
+                if (cleanId.equalsIgnoreCase(gv.getBunnyVideoId())) {
+                    return FileStorageService.ReferenceCheckResult.REFERENCED;
+                }
+                if (matchesExactVideoId(gv.getEmbedUrl(), cleanId) || matchesExactVideoId(gv.getPlaybackUrl(), cleanId)) {
+                    return FileStorageService.ReferenceCheckResult.REFERENCED;
                 }
             }
 
             // Direct check across feedback media
-            if (feedbackMediaRepository != null) {
-                for (FeedbackMedia fm : feedbackMediaRepository.findAll()) {
-                    if (cleanId.equals(fm.getBunnyVideoId())) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
+            for (FeedbackMedia fm : feedbackMediaRepository.findAll()) {
+                if (cleanId.equalsIgnoreCase(fm.getBunnyVideoId())) {
+                    return FileStorageService.ReferenceCheckResult.REFERENCED;
                 }
             }
 
             // Direct check across courses (preview videos)
-            if (courseRepository != null) {
-                for (Course c : courseRepository.findAll()) {
-                    if (c.getPreviewVideoUrl() != null && c.getPreviewVideoUrl().contains(cleanId)) {
-                        return FileStorageService.ReferenceCheckResult.REFERENCED;
-                    }
+            for (Course c : courseRepository.findAll()) {
+                if (matchesExactVideoId(c.getPreviewVideoUrl(), cleanId)) {
+                    return FileStorageService.ReferenceCheckResult.REFERENCED;
                 }
             }
 
             // Direct check across videos table: if video has active module
-            if (videoRepository != null && courseModuleRepository != null) {
+            if (videoRepository != null) {
                 List<Video> videos = videoRepository.findAll();
                 Set<String> activeModuleIds = courseModuleRepository.findAll().stream()
                         .map(CourseModule::getId)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
                 for (Video v : videos) {
-                    if (cleanId.equals(v.getBunnyVideoId())) {
+                    if (cleanId.equalsIgnoreCase(v.getBunnyVideoId())) {
                         if (v.getModuleId() != null && activeModuleIds.contains(v.getModuleId())) {
                             return FileStorageService.ReferenceCheckResult.REFERENCED;
                         }
@@ -989,6 +990,38 @@ public class StorageCleanupService {
             log.error("Failed to check stream video references for {}: {}", cleanId, e.getMessage());
             return FileStorageService.ReferenceCheckResult.UNKNOWN;
         }
+    }
+
+    private boolean matchesExactVideoId(String text, String cleanId) {
+        if (text == null || text.isBlank() || cleanId == null || cleanId.isBlank()) return false;
+        String trimmed = text.trim();
+        if (trimmed.equalsIgnoreCase(cleanId)) return true;
+
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                JsonNode node = objectMapper.readTree(trimmed);
+                if (node.has("videoId") && cleanId.equalsIgnoreCase(node.get("videoId").asText().trim())) return true;
+                if (node.has("guid") && cleanId.equalsIgnoreCase(node.get("guid").asText().trim())) return true;
+                if (node.has("storageKey")) {
+                    String sk = node.get("storageKey").asText().trim();
+                    if (cleanId.equalsIgnoreCase(sk) || cleanId.equalsIgnoreCase(sk.replace("bunny_", ""))) return true;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String lowerTrimmed = trimmed.toLowerCase();
+        String lowerClean = cleanId.toLowerCase();
+        int idx = lowerTrimmed.indexOf(lowerClean);
+        while (idx >= 0) {
+            boolean startOk = (idx == 0) || (!Character.isLetterOrDigit(lowerTrimmed.charAt(idx - 1)) && lowerTrimmed.charAt(idx - 1) != '-');
+            int endIdx = idx + lowerClean.length();
+            boolean endOk = (endIdx == lowerTrimmed.length()) || (!Character.isLetterOrDigit(lowerTrimmed.charAt(endIdx)) && lowerTrimmed.charAt(endIdx) != '-');
+            if (startOk && endOk) {
+                return true;
+            }
+            idx = lowerTrimmed.indexOf(lowerClean, idx + 1);
+        }
+        return false;
     }
 
     private void extractStorageRefs(String text, Set<String> refs) {
@@ -1177,36 +1210,57 @@ public class StorageCleanupService {
             for (SystemSetting setting : videoFailedSettings) {
                 String bId = setting.getSettingKey().replace("cleanup.failed.video.", "");
                 try {
+                    // Fail-safe if required components are missing
+                    if (bunnyStreamService == null || orphanedBunnyVideoRepository == null) {
+                        log.warn("Retry video deletion skipped for {}: bunnyStreamService or orphanedBunnyVideoRepository is null", bId);
+                        continue;
+                    }
+
                     FileStorageService.ReferenceCheckResult refCheck = checkStreamVideoReferences(bId, null);
                     if (refCheck == FileStorageService.ReferenceCheckResult.REFERENCED) {
-                        log.info("Retry video deletion refused for {}: actively referenced", bId);
+                        log.info("Retry video deletion refused for {}: actively referenced; clearing failure record and unmarking orphan", bId);
                         systemSettingRepository.delete(setting);
-                        if (orphanedBunnyVideoRepository != null) {
-                            orphanedBunnyVideoRepository.findByBunnyVideoId(bId).ifPresent(orphanedBunnyVideoRepository::delete);
-                        }
+                        orphanedBunnyVideoRepository.findByBunnyVideoId(bId).ifPresent(orphanedBunnyVideoRepository::delete);
                         continue;
                     }
                     if (refCheck == FileStorageService.ReferenceCheckResult.UNKNOWN) {
-                        log.info("Retry video deletion refused for {}: reference status is UNKNOWN", bId);
+                        log.info("Retry video deletion refused for {}: reference status is UNKNOWN (protected)", bId);
+                        continue; // Preserve setting and metadata
+                    }
+
+                    // refCheck is NOT_REFERENCED
+                    Optional<com.zoroacademy.entity.OrphanedBunnyVideo> orphanOpt = orphanedBunnyVideoRepository.findByBunnyVideoId(bId);
+                    if (orphanOpt.isEmpty()) {
+                        // Missing tracking records must NEVER bypass retention! Reconstruct orphan record and preserve failure setting
+                        log.warn("Missing orphan tracking record for failed video {}; reconstructing orphan record and preserving failure setting", bId);
+                        com.zoroacademy.entity.OrphanedBunnyVideo reconstructed = new com.zoroacademy.entity.OrphanedBunnyVideo(
+                                bId,
+                                "RECONSTRUCTED",
+                                "Reconstructed from retry failure",
+                                null,
+                                OffsetDateTime.now()
+                        );
+                        orphanedBunnyVideoRepository.save(reconstructed);
                         continue;
                     }
-                    if (orphanedBunnyVideoRepository != null) {
-                        Optional<com.zoroacademy.entity.OrphanedBunnyVideo> orphanOpt = orphanedBunnyVideoRepository.findByBunnyVideoId(bId);
-                        if (orphanOpt.isPresent()) {
-                            com.zoroacademy.entity.OrphanedBunnyVideo orphan = orphanOpt.get();
-                            if (orphan.getOrphanedAt() != null && orphan.getOrphanedAt().isAfter(OffsetDateTime.now().minusHours(8760))) {
-                                log.info("Retry video deletion deferred for {}: orphaned less than 365 days", bId);
-                                continue;
-                            }
-                            if (bunnyStreamService != null) {
-                                bunnyStreamService.deleteVideo(bId);
-                            }
-                            if (videoRepository != null) {
-                                videoRepository.findByBunnyVideoId(bId).ifPresent(videoRepository::delete);
-                            }
-                            orphanedBunnyVideoRepository.delete(orphan);
+
+                    com.zoroacademy.entity.OrphanedBunnyVideo orphan = orphanOpt.get();
+                    OffsetDateTime orphanedAt = orphan.getOrphanedAt();
+                    if (orphanedAt == null || orphanedAt.isAfter(OffsetDateTime.now().minusHours(8760))) {
+                        if (orphanedAt == null) {
+                            orphan.setOrphanedAt(OffsetDateTime.now());
+                            orphanedBunnyVideoRepository.save(orphan);
                         }
+                        log.info("Retry video deletion deferred for {}: orphaned less than 365 days (or null timestamp)", bId);
+                        continue;
                     }
+
+                    // Confirmed orphaned for at least 8760 hours and NOT_REFERENCED
+                    bunnyStreamService.deleteVideo(bId);
+                    if (videoRepository != null) {
+                        videoRepository.findByBunnyVideoId(bId).ifPresent(videoRepository::delete);
+                    }
+                    orphanedBunnyVideoRepository.delete(orphan);
                     systemSettingRepository.delete(setting);
                     log.info("Successfully retried and reconciled failed video deletion for {}", bId);
                 } catch (Exception ex) {

@@ -90,8 +90,17 @@ public class StoragePurgeListener {
                 bunnyStreamService.recordOrphan(event.getVideoId(), "COURSE_MODULE", "Event-tracked video", null);
             }
         } catch (Exception e) {
-            log.error("Failed to record video orphan tracking after transaction commit for {}: {}",
-                    event.getVideoId(), e.getMessage());
+            log.error("Failed to record video orphan tracking after transaction commit for videoId={}: {}",
+                    event.getVideoId(), e.getMessage(), e);
+            if (systemSettingRepository != null) {
+                try {
+                    String key = "cleanup.failed.video." + event.getVideoId();
+                    String val = "EVENT_ORPHAN_FAILED|" + e.getMessage() + "|" + java.time.OffsetDateTime.now();
+                    systemSettingRepository.save(new com.zoroacademy.entity.SystemSetting(key, val));
+                } catch (Exception recEx) {
+                    log.error("Failed to record durable failure for video orphan tracking {}: {}", event.getVideoId(), recEx.getMessage());
+                }
+            }
         }
     }
 }

@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class CourseService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CourseService.class);
 
     private final CourseRepository courseRepository;
     private final CourseModuleRepository moduleRepository;
@@ -1121,13 +1122,14 @@ public class CourseService {
                 if (newNode.has("videoId")) newVid = newNode.get("videoId").asText();
             } catch (Exception ignored) {}
 
-            // Track old video as orphan if a distinct new video is explicitly replacing it
             if (oldVid != null && !oldVid.isBlank() && newVid != null && !newVid.isBlank() && !oldVid.equals(newVid)) {
                 try {
                     if (bunnyStreamService != null) {
                         bunnyStreamService.recordOrphan(oldVid, "COURSE_MODULE", "Replaced module video", moduleId);
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    log.error("Failed to record orphan for replaced module video {}: {}", oldVid, e.getMessage());
+                }
             }
 
             existing.setVideoStorageRef(updated.getVideoStorageRef());

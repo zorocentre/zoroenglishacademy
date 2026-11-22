@@ -386,58 +386,79 @@ public class BunnyStreamService {
     public void recordOrphan(String bunnyVideoId, String category, String title, String sourceEntityId, java.time.OffsetDateTime orphanedAt) {
         if (bunnyVideoId == null || bunnyVideoId.isBlank()) return;
         String cleanId = bunnyVideoId.trim();
+
+        if (orphanedBunnyVideoRepository == null) {
+            log.error("OrphanedBunnyVideoRepository is required but unavailable to record orphan for video {}", cleanId);
+            throw new IllegalStateException("OrphanedBunnyVideoRepository is unavailable to record video orphan: " + cleanId);
+        }
+
         try {
-            if (orphanedBunnyVideoRepository != null) {
-                if (!orphanedBunnyVideoRepository.existsByBunnyVideoId(cleanId)) {
-                    com.zoroacademy.entity.OrphanedBunnyVideo orphan = new com.zoroacademy.entity.OrphanedBunnyVideo(
-                            cleanId,
-                            category,
-                            title,
-                            sourceEntityId,
-                            orphanedAt != null ? orphanedAt : java.time.OffsetDateTime.now()
-                    );
-                    orphanedBunnyVideoRepository.save(orphan);
-                    log.info("Recorded Bunny Stream video orphan: id={} category={} source={}", cleanId, category, sourceEntityId);
-                } else {
-                    log.info("Bunny Stream video orphan already tracked: id={}", cleanId);
+            Optional<com.zoroacademy.entity.OrphanedBunnyVideo> existingOpt = orphanedBunnyVideoRepository.findByBunnyVideoId(cleanId);
+            if (existingOpt.isEmpty()) {
+                com.zoroacademy.entity.OrphanedBunnyVideo orphan = new com.zoroacademy.entity.OrphanedBunnyVideo(
+                        cleanId,
+                        category != null ? category : "OTHER",
+                        title,
+                        sourceEntityId,
+                        orphanedAt != null ? orphanedAt : java.time.OffsetDateTime.now()
+                );
+                orphanedBunnyVideoRepository.save(orphan);
+                log.info("Recorded Bunny Stream video orphan: id={} category={} source={}", cleanId, category, sourceEntityId);
+            } else {
+                com.zoroacademy.entity.OrphanedBunnyVideo existing = existingOpt.get();
+                // Preserve original orphanedAt timestamp; do not reset retention period
+                if (existing.getOrphanedAt() == null) {
+                    existing.setOrphanedAt(orphanedAt != null ? orphanedAt : java.time.OffsetDateTime.now());
+                    orphanedBunnyVideoRepository.save(existing);
                 }
+                log.info("Bunny Stream video orphan already tracked: id={}, preserving original orphanedAt={}", cleanId, existing.getOrphanedAt());
             }
         } catch (Exception e) {
             log.error("Failed to record Bunny Stream video orphan for {}: {}", cleanId, e.getMessage());
+            throw new RuntimeException("Failed to record Bunny Stream video orphan for " + cleanId + ": " + e.getMessage(), e);
         }
     }
 
     @Transactional
     public void deleteVideo(String videoId) {
         if (videoId == null || videoId.isBlank()) return;
-        Optional<Video> videoOpt = videoRepository.findById(videoId)
-                .or(() -> videoRepository.findByBunnyVideoId(videoId));
-        if (videoOpt.isPresent()) {
-            Video v = videoOpt.get();
-            try {
-                String url = String.format("https://video.bunnycdn.com/library/%d/videos/%s", v.getLibraryId(), v.getBunnyVideoId());
-                HttpHeaders headers = new HttpHeaders();
-                headers.set("AccessKey", properties.getApiKey());
-                HttpEntity<Void> entity = new HttpEntity<>(headers);
-                restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE, entity, Void.class);
-            } catch (Exception e) {
-                log.warn("Failed to delete video {} from Bunny Stream: {}", videoId, e.getMessage());
-            }
-            videoRepository.delete(v);
-        } else {
-            try {
-                String url = String.format("https://video.bunnycdn.com/library/%s/videos/%s", properties.getLibraryId(), videoId);
-                HttpHeaders headers = new HttpHeaders();
-                headers.set("AccessKey", properties.getApiKey());
-                HttpEntity<Void> entity = new HttpEntity<>(headers);
-                restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE, entity, Void.class);
-            } catch (Exception ignored) {}
+        String cleanId = videoId.trim();
+        Optional<Video> videoOpt = videoRepository.findById(cleanId)
+                .or(() -> videoRepository.findByBunnyVideoId(cleanId));
+
+        String bunnyVid = videoOpt.map(Video::getBunnyVideoId).orElse(cleanId);
+        Integer libId = videoOpt.map(Video::getLibraryId).orElse(null);
+        String libraryIdStr = (libId != null && libId > 0) ? String.valueOf(libId) : properties.getLibraryId();
+
+        boolean remoteDeleted = false;
+        try {
+            String url = String.format("https://video.bunnycdn.com/library/%s/videos/%s", libraryIdStr, bunnyVid);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("AccessKey", properties.getApiKey());
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE, entity, Void.class);
+            remoteDeleted = true;
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            // Already absent on Bunny Stream (404 Not Found), safe to complete local deletion
+            log.info("Video {} already deleted from Bunny Stream (404); proceeding with local metadata removal", cleanId);
+            remoteDeleted = true;
+        } catch (Exception e) {
+            log.error("Failed to delete video {} from Bunny Stream: {}", cleanId, e.getMessage());
+            // Do NOT delete local records on remote failure; propagate meaningful failure!
+            throw new RuntimeException("Bunny Stream API deletion failed for video " + cleanId + ": " + e.getMessage(), e);
         }
-        // Clean up orphan tracking record if present upon explicit administrative deletion
-        if (orphanedBunnyVideoRepository != null) {
-            try {
-                orphanedBunnyVideoRepository.findByBunnyVideoId(videoId).ifPresent(orphanedBunnyVideoRepository::delete);
-            } catch (Exception ignored) {}
+
+        if (remoteDeleted) {
+            videoOpt.ifPresent(videoRepository::delete);
+            // Clean up orphan tracking record if present upon confirmed remote deletion
+            if (orphanedBunnyVideoRepository != null) {
+                try {
+                    orphanedBunnyVideoRepository.findByBunnyVideoId(cleanId).ifPresent(orphanedBunnyVideoRepository::delete);
+                } catch (Exception e) {
+                    log.warn("Failed to remove orphan tracking record for {}: {}", cleanId, e.getMessage());
+                }
+            }
+            log.info("Successfully deleted video {} from Bunny Stream and local metadata", cleanId);
         }
     }
 

@@ -519,4 +519,212 @@ public class BunnyStreamOrphanRetentionTest {
         verify(bunnyStreamService, never()).deleteVideo(bId);
         verify(orphanedBunnyVideoRepository, never()).delete(recentVideo);
     }
+
+    @Test
+    @DisplayName("15. BunnyStreamService.deleteVideo propagates API failure and preserves local metadata")
+    void testBunnyStreamServiceDeleteVideoFailurePreservesMetadataAndThrows() throws Exception {
+        org.springframework.web.client.RestTemplate mockRest = mock(org.springframework.web.client.RestTemplate.class);
+        com.zoroacademy.config.BunnyStreamProperties props = new com.zoroacademy.config.BunnyStreamProperties();
+        props.setLibraryId("12345");
+        props.setApiKey("test-api-key");
+
+        BunnyStreamService realService = new BunnyStreamService(
+                props,
+                mock(BunnyTokenService.class),
+                videoRepository,
+                mock(EnrollmentRepository.class),
+                mock(CourseModuleRepository.class)
+        );
+        java.lang.reflect.Field restField = BunnyStreamService.class.getDeclaredField("restTemplate");
+        restField.setAccessible(true);
+        restField.set(realService, mockRest);
+        realService.setOrphanedBunnyVideoRepository(orphanedBunnyVideoRepository);
+
+        String bId = "vid-fail-123";
+        Video v = new Video();
+        v.setId("v1");
+        v.setBunnyVideoId(bId);
+        v.setLibraryId(12345);
+        when(videoRepository.findById(bId)).thenReturn(Optional.of(v));
+
+        when(mockRest.exchange(anyString(), eq(org.springframework.http.HttpMethod.DELETE), any(), eq(Void.class)))
+                .thenThrow(new RuntimeException("503 Service Unavailable"));
+
+        // Must throw and NOT swallow
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> realService.deleteVideo(bId));
+        assertTrue(thrown.getMessage().contains("Bunny Stream API deletion failed"));
+
+        // Local Video entity MUST NOT be deleted
+        verify(videoRepository, never()).delete(v);
+        // Orphan tracking MUST NOT be deleted
+        verify(orphanedBunnyVideoRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("16. BunnyStreamService.deleteVideo removes local metadata only after confirmed remote deletion")
+    void testBunnyStreamServiceDeleteVideoSuccessRemovesMetadata() throws Exception {
+        org.springframework.web.client.RestTemplate mockRest = mock(org.springframework.web.client.RestTemplate.class);
+        com.zoroacademy.config.BunnyStreamProperties props = new com.zoroacademy.config.BunnyStreamProperties();
+        props.setLibraryId("12345");
+        props.setApiKey("test-api-key");
+
+        BunnyStreamService realService = new BunnyStreamService(
+                props,
+                mock(BunnyTokenService.class),
+                videoRepository,
+                mock(EnrollmentRepository.class),
+                mock(CourseModuleRepository.class)
+        );
+        java.lang.reflect.Field restField = BunnyStreamService.class.getDeclaredField("restTemplate");
+        restField.setAccessible(true);
+        restField.set(realService, mockRest);
+        realService.setOrphanedBunnyVideoRepository(orphanedBunnyVideoRepository);
+
+        String bId = "vid-success-123";
+        Video v = new Video();
+        v.setId("v1");
+        v.setBunnyVideoId(bId);
+        v.setLibraryId(12345);
+        when(videoRepository.findById(bId)).thenReturn(Optional.of(v));
+
+        OrphanedBunnyVideo orphan = new OrphanedBunnyVideo(bId, "COURSE_MODULE", "Title", "mod1", OffsetDateTime.now());
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId(bId)).thenReturn(Optional.of(orphan));
+
+        realService.deleteVideo(bId);
+
+        // Local records deleted upon success
+        verify(videoRepository, times(1)).delete(v);
+        verify(orphanedBunnyVideoRepository, times(1)).delete(orphan);
+    }
+
+    @Test
+    @DisplayName("17. BunnyStreamService.recordOrphan preserves original timestamp on duplicate registration")
+    void testRecordOrphanPreservesOriginalTimestamp() {
+        com.zoroacademy.config.BunnyStreamProperties props = new com.zoroacademy.config.BunnyStreamProperties();
+        BunnyStreamService realService = new BunnyStreamService(
+                props,
+                mock(BunnyTokenService.class),
+                videoRepository,
+                mock(EnrollmentRepository.class),
+                mock(CourseModuleRepository.class)
+        );
+        realService.setOrphanedBunnyVideoRepository(orphanedBunnyVideoRepository);
+
+        String bId = "vid-dup-123";
+        OffsetDateTime originalDate = OffsetDateTime.now().minusDays(100);
+        OrphanedBunnyVideo existingOrphan = new OrphanedBunnyVideo(bId, "COURSE_MODULE", "Old Title", "mod1", originalDate);
+
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId(bId)).thenReturn(Optional.of(existingOrphan));
+
+        // Re-record orphan with now()
+        realService.recordOrphan(bId, "COURSE_MODULE", "New Title", "mod2", OffsetDateTime.now());
+
+        // Original date preserved, not overwritten
+        assertEquals(originalDate, existingOrphan.getOrphanedAt());
+        verify(orphanedBunnyVideoRepository, never()).save(argThat(o -> o != existingOrphan));
+    }
+
+    @Test
+    @DisplayName("18. BunnyStreamService.recordOrphan propagates repository failures and requires repository")
+    void testRecordOrphanPropagatesFailures() {
+        com.zoroacademy.config.BunnyStreamProperties props = new com.zoroacademy.config.BunnyStreamProperties();
+        BunnyStreamService realService = new BunnyStreamService(
+                props,
+                mock(BunnyTokenService.class),
+                videoRepository,
+                mock(EnrollmentRepository.class),
+                mock(CourseModuleRepository.class)
+        );
+
+        // Missing repository throws IllegalStateException
+        assertThrows(IllegalStateException.class, () ->
+                realService.recordOrphan("vid-1", "COURSE_MODULE", "Title", "mod1"));
+
+        // Repository DB failure throws RuntimeException
+        realService.setOrphanedBunnyVideoRepository(orphanedBunnyVideoRepository);
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId("vid-1")).thenThrow(new RuntimeException("DB Connection Timeout"));
+        assertThrows(RuntimeException.class, () ->
+                realService.recordOrphan("vid-1", "COURSE_MODULE", "Title", "mod1"));
+    }
+
+    @Test
+    @DisplayName("19. StorageCleanupService preserves videos with null orphanedAt timestamp")
+    void testNullOrphanTimestampIsPreservedAndNotDeleted() {
+        String bId = "bunny-null-timestamp";
+        OrphanedBunnyVideo orphan = new OrphanedBunnyVideo(
+                bId,
+                "COURSE_MODULE",
+                "Video With Null Timestamp",
+                "mod-null",
+                null
+        );
+        orphan.setOrphanedAt(null); // Explicit null timestamp
+
+        when(orphanedBunnyVideoRepository.findAll()).thenReturn(List.of(orphan));
+        when(courseModuleRepository.findAll()).thenReturn(Collections.emptyList());
+        when(courseRepository.findAll()).thenReturn(Collections.emptyList());
+        when(guidanceVideoRepository.findAll()).thenReturn(Collections.emptyList());
+        when(feedbackMediaRepository.findAll()).thenReturn(Collections.emptyList());
+        when(videoRepository.findAll()).thenReturn(Collections.emptyList());
+
+        cleanupService.runCleanup(false, 8760, true);
+
+        // Null timestamp video MUST NOT be deleted
+        verify(bunnyStreamService, never()).deleteVideo(bId);
+        verify(orphanedBunnyVideoRepository, never()).delete(orphan);
+        // Timestamp must be initialized to now
+        assertNotNull(orphan.getOrphanedAt());
+    }
+
+    @Test
+    @DisplayName("20. Retry processing enforces 365-day retention and reconstructs missing tracking records")
+    void testRetryProcessingEnforcesRetentionAndReconstructsMissingRecords() {
+        // Case A: Missing orphan tracking record -> reconstructs record and does NOT delete setting
+        String missingOrphanId = "vid-missing-tracking";
+        SystemSetting settingA = new SystemSetting("cleanup.failed.video." + missingOrphanId, "VIDEO|error|now");
+
+        when(courseModuleRepository.findAll()).thenReturn(Collections.emptyList());
+        when(courseRepository.findAll()).thenReturn(Collections.emptyList());
+        when(guidanceVideoRepository.findAll()).thenReturn(Collections.emptyList());
+        when(feedbackMediaRepository.findAll()).thenReturn(Collections.emptyList());
+        when(videoRepository.findAll()).thenReturn(Collections.emptyList());
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId(missingOrphanId)).thenReturn(Optional.empty());
+
+        when(systemSettingRepository.findAll()).thenReturn(List.of(settingA));
+
+        cleanupService.retryFailedDeletions();
+
+        // Failure setting is NOT deleted
+        verify(systemSettingRepository, never()).delete(settingA);
+        // Orphan tracking is reconstructed
+        verify(orphanedBunnyVideoRepository, times(1)).save(argThat(o ->
+                o.getBunnyVideoId().equals(missingOrphanId) && o.getCategory().equals("RECONSTRUCTED")));
+        // Video is NOT deleted
+        verify(bunnyStreamService, never()).deleteVideo(missingOrphanId);
+
+        // Case B: Video orphaned < 365 days -> deferred, setting preserved
+        String recentOrphanId = "vid-recent-retry";
+        SystemSetting settingB = new SystemSetting("cleanup.failed.video." + recentOrphanId, "VIDEO|error|now");
+        OrphanedBunnyVideo recentOrphan = new OrphanedBunnyVideo(recentOrphanId, "COURSE_MODULE", "Recent", "mod1", OffsetDateTime.now().minusDays(100));
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId(recentOrphanId)).thenReturn(Optional.of(recentOrphan));
+        when(systemSettingRepository.findAll()).thenReturn(List.of(settingB));
+
+        cleanupService.retryFailedDeletions();
+
+        verify(systemSettingRepository, never()).delete(settingB);
+        verify(bunnyStreamService, never()).deleteVideo(recentOrphanId);
+
+        // Case C: Video orphaned >= 365 days -> deleted and setting cleared
+        String expiredOrphanId = "vid-expired-retry";
+        SystemSetting settingC = new SystemSetting("cleanup.failed.video." + expiredOrphanId, "VIDEO|error|now");
+        OrphanedBunnyVideo expiredOrphan = new OrphanedBunnyVideo(expiredOrphanId, "COURSE_MODULE", "Expired", "mod1", OffsetDateTime.now().minusDays(400));
+        when(orphanedBunnyVideoRepository.findByBunnyVideoId(expiredOrphanId)).thenReturn(Optional.of(expiredOrphan));
+        when(systemSettingRepository.findAll()).thenReturn(List.of(settingC));
+
+        cleanupService.retryFailedDeletions();
+
+        verify(bunnyStreamService, times(1)).deleteVideo(expiredOrphanId);
+        verify(orphanedBunnyVideoRepository, times(1)).delete(expiredOrphan);
+        verify(systemSettingRepository, times(1)).delete(settingC);
+    }
 }
