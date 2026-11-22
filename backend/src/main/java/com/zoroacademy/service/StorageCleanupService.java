@@ -348,7 +348,7 @@ public class StorageCleanupService {
                     // Safety check 1: Re-verify all references immediately before deletion
                     FileStorageService.ReferenceCheckResult refCheck = (fileStorageService != null)
                             ? fileStorageService.checkEntityReferences(file.getId(), storagePath)
-                            : FileStorageService.ReferenceCheckResult.NOT_REFERENCED;
+                            : FileStorageService.ReferenceCheckResult.UNKNOWN;
 
                     if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
                         skippedActiveRef++;
@@ -835,6 +835,43 @@ public class StorageCleanupService {
                 String val = setting.getSettingValue();
                 String storagePath = (val != null && val.contains("|")) ? val.split("\\|")[0] : val;
 
+                // Section 4 Fix: Revalidate references before retry deletion
+                if (fileStorageService == null) {
+                    log.warn("Retry deletion skipped for file {}: fileStorageService is null (UNKNOWN).", fileId);
+                    continue;
+                }
+
+                FileStorageService.ReferenceCheckResult refCheck;
+                try {
+                    refCheck = fileStorageService.checkEntityReferences(fileId, storagePath);
+                } catch (Exception e) {
+                    log.error("Retry deletion reference check failed for file {}: {}", fileId, e.getMessage());
+                    refCheck = FileStorageService.ReferenceCheckResult.UNKNOWN;
+                }
+
+                // UNKNOWN or REFERENCED must stop retry deletion
+                if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+                    log.info("Retry deletion refused for file {}: reference status is {} (protected)", fileId, refCheck);
+                    if (refCheck == FileStorageService.ReferenceCheckResult.REFERENCED) {
+                        systemSettingRepository.delete(setting);
+                        log.info("Cleared failure record for newly referenced file {}", fileId);
+                    }
+                    continue;
+                }
+
+                // Recheck shared storage paths
+                if (storedFileRepository != null && storagePath != null) {
+                    try {
+                        if (storedFileRepository.countByStoragePath(storagePath) > 1) {
+                            log.info("Retry deletion refused for file {}: physical storage path {} is shared", fileId, storagePath);
+                            continue;
+                        }
+                    } catch (Exception e) {
+                        log.error("Retry deletion countByStoragePath failed for file {}: {}", fileId, e.getMessage());
+                        continue;
+                    }
+                }
+
                 try {
                     boolean physicalDeleted = false;
                     if (storagePath != null && !storagePath.isBlank() && storageProvider.exists(storagePath)) {
@@ -845,7 +882,7 @@ public class StorageCleanupService {
                     }
 
                     if (physicalDeleted) {
-                        if (storedFileRepository.existsById(fileId)) {
+                        if (storedFileRepository != null && storedFileRepository.existsById(fileId)) {
                             storedFileRepository.deleteById(fileId);
                         }
                         systemSettingRepository.delete(setting);
@@ -863,7 +900,7 @@ public class StorageCleanupService {
             for (SystemSetting tombstone : tombstoneSettings) {
                 String fileId = tombstone.getSettingKey().replace("cleanup.tombstone.", "");
                 try {
-                    if (storedFileRepository.existsById(fileId)) {
+                    if (storedFileRepository != null && storedFileRepository.existsById(fileId)) {
                         storedFileRepository.deleteById(fileId);
                     }
                     systemSettingRepository.delete(tombstone);
@@ -957,14 +994,17 @@ public class StorageCleanupService {
 
         boolean allHandled = true;
         for (String fileId : fileIds) {
-            Optional<StoredFile> fileOpt = storedFileRepository.findById(fileId);
+            Optional<StoredFile> fileOpt = (storedFileRepository != null) ? storedFileRepository.findById(fileId) : Optional.empty();
             if (fileOpt.isEmpty()) {
+                // Section 3: Missing StoredFile metadata does not silently clear submission references
+                log.warn("Retention policy: StoredFile metadata record missing for fileId={} in submission {}. Preserving attachment reference.", fileId, submissionId);
+                allHandled = false;
                 continue;
             }
             StoredFile file = fileOpt.get();
             String storagePath = file.getStoragePath();
 
-            // Section 5: Check whether the file is referenced anywhere else in the application
+            // Section 3: Check whether the file is referenced anywhere else in the application (excluding current submission)
             boolean sharedWithOtherEntities = isFileSharedOutsideSubmission(fileId, submissionId, storagePath, activeRefs);
 
             if (sharedWithOtherEntities) {
@@ -1000,28 +1040,57 @@ public class StorageCleanupService {
         return allHandled;
     }
 
-    private boolean isFileSharedOutsideSubmission(String fileId, String submissionId, String storagePath, Set<String> activeRefs) {
-        if (submissionRepository != null) {
-            boolean sharedInSubmissions = submissionRepository.findAll().stream()
-                    .filter(s -> !Objects.equals(s.getId(), submissionId))
-                    .anyMatch(s -> (s.getAttachment() != null && s.getAttachment().contains(fileId))
-                            || (s.getCorrectionAttachment() != null && s.getCorrectionAttachment().contains(fileId))
-                            || (s.getCorrectedFileUrl() != null && s.getCorrectedFileUrl().contains(fileId)));
-            if (sharedInSubmissions) return true;
+    public boolean isFileSharedOutsideSubmission(String fileId, String submissionId, String storagePath) {
+        return isFileSharedOutsideSubmission(fileId, submissionId, storagePath, null);
+    }
+
+    public boolean isFileSharedOutsideSubmission(String fileId, String submissionId, String storagePath, Set<String> activeRefs) {
+        // 1. Fail closed if fileStorageService is missing
+        if (fileStorageService == null) {
+            log.warn("fileStorageService is null during submission retention check for file {}. Failing closed (treating as protected).", fileId);
+            return true;
         }
 
-        if (fileStorageService != null) {
-            FileStorageService.ReferenceCheckResult refCheck = fileStorageService.checkEntityReferences(fileId, storagePath);
-            if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+        // 2. Check if shared by multiple StoredFile records
+        if (storedFileRepository != null && storagePath != null) {
+            try {
+                if (storedFileRepository.countByStoragePath(storagePath) > 1) {
+                    log.info("File {} storagePath {} is shared by multiple StoredFile records.", fileId, storagePath);
+                    return true;
+                }
+            } catch (Exception e) {
+                log.error("Failed querying countByStoragePath for {}: {}. Failing closed.", storagePath, e.getMessage());
                 return true;
             }
         }
 
-        if (activeRefs != null && (activeRefs.contains(fileId) || (storagePath != null && activeRefs.contains(storagePath)))) {
-            return true;
+        // 3. Check if referenced in any other submission (strictly excluding the current submission)
+        if (submissionRepository != null) {
+            try {
+                boolean sharedInOtherSubmissions = submissionRepository.findAll().stream()
+                        .filter(s -> !Objects.equals(s.getId(), submissionId))
+                        .anyMatch(s -> (s.getAttachment() != null && s.getAttachment().contains(fileId))
+                                || (s.getCorrectionAttachment() != null && s.getCorrectionAttachment().contains(fileId))
+                                || (s.getCorrectedFileUrl() != null && s.getCorrectedFileUrl().contains(fileId)));
+                if (sharedInOtherSubmissions) {
+                    log.info("File {} is referenced by another submission outside submission {}.", fileId, submissionId);
+                    return true;
+                }
+            } catch (Exception e) {
+                log.error("Failed querying submissionRepository for file {}: {}. Failing closed.", fileId, e.getMessage());
+                return true;
+            }
         }
 
-        if (storagePath != null && storedFileRepository.countByStoragePath(storagePath) > 1) {
+        // 4. Check all other application entities via FileStorageService (excluding the current submission)
+        try {
+            FileStorageService.ReferenceCheckResult refCheck = fileStorageService.checkEntityReferencesExcludingSubmission(fileId, storagePath, submissionId);
+            if (refCheck != FileStorageService.ReferenceCheckResult.NOT_REFERENCED) {
+                log.info("File {} is protected: entity reference check returned {}", fileId, refCheck);
+                return true;
+            }
+        } catch (Exception e) {
+            log.error("Exception checking entity references for file {}: {}. Failing closed.", fileId, e.getMessage());
             return true;
         }
 

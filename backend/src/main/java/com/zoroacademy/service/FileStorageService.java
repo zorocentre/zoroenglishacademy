@@ -61,6 +61,13 @@ public class FileStorageService {
     @Autowired(required = false)
     private com.zoroacademy.repository.CompetitionModuleRepository competitionModuleRepository;
 
+    @Autowired(required = false)
+    private com.zoroacademy.repository.SystemSettingRepository systemSettingRepository;
+
+    public void setSystemSettingRepository(com.zoroacademy.repository.SystemSettingRepository systemSettingRepository) {
+        this.systemSettingRepository = systemSettingRepository;
+    }
+
     @Value("${jwt.secret:defaultSecretForFileLinksOnlyNotForJwtAuthKey123}")
     private String linkSecret;
 
@@ -444,16 +451,54 @@ public class FileStorageService {
         }
 
         String storagePath = storedFile.getStoragePath();
-        storedFileRepository.delete(storedFile);
 
         // Check if any other records share the exact same storage path
-        if (storedFileRepository.countByStoragePath(storagePath) == 0) {
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new StorageFilePurgeEvent(storagePath));
-            } else {
-                try {
-                    storageProvider.delete(storagePath);
-                } catch (Exception ignored) {}
+        if (storedFileRepository.countByStoragePath(storagePath) > 1) {
+            storedFileRepository.delete(storedFile);
+            return;
+        }
+
+        if (eventPublisher != null) {
+            StorageFilePurgeEvent event = new StorageFilePurgeEvent(
+                    storedFile.getId(),
+                    storagePath,
+                    new StoredFile(
+                            storedFile.getId(),
+                            storedFile.getOriginalName(),
+                            storedFile.getContentType(),
+                            storedFile.getSizeBytes(),
+                            storedFile.getCategory(),
+                            storedFile.getOwnerId(),
+                            storedFile.getStoragePath(),
+                            storedFile.getIsPublic(),
+                            storedFile.getSha256Hash(),
+                            storedFile.getRefCount()
+                    )
+            );
+            storedFileRepository.delete(storedFile);
+            eventPublisher.publishEvent(event);
+        } else {
+            // Direct physical deletion fallback (non-transactional / eventPublisher unavailable)
+            // Attempt physical deletion FIRST; do NOT delete metadata if physical deletion fails!
+            try {
+                storageProvider.delete(storagePath);
+                storedFileRepository.delete(storedFile);
+                if (systemSettingRepository != null) {
+                    String key = "cleanup.failed." + id;
+                    if (systemSettingRepository.existsById(key)) {
+                        systemSettingRepository.deleteById(key);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to delete storage file {} from provider: {}", storagePath, e.getMessage());
+                if (systemSettingRepository != null) {
+                    try {
+                        String key = "cleanup.failed." + id;
+                        String val = storagePath + "|" + e.getMessage() + "|" + java.time.OffsetDateTime.now();
+                        systemSettingRepository.save(new com.zoroacademy.entity.SystemSetting(key, val));
+                    } catch (Exception ignored) {}
+                }
+                // Do NOT delete storedFile! Metadata is preserved!
             }
         }
     }
@@ -464,6 +509,10 @@ public class FileStorageService {
      * Any failure/exception results in UNKNOWN. UNKNOWN is strictly treated as PROTECTED.
      */
     public ReferenceCheckResult checkEntityReferences(String fileId, String storagePath) {
+        return checkEntityReferencesExcludingSubmission(fileId, storagePath, null);
+    }
+
+    public ReferenceCheckResult checkEntityReferencesExcludingSubmission(String fileId, String storagePath, String excludeSubmissionId) {
         if (fileId == null || fileId.isBlank()) {
             return ReferenceCheckResult.NOT_REFERENCED;
         }
@@ -524,13 +573,16 @@ public class FileStorageService {
             return ReferenceCheckResult.UNKNOWN;
         }
 
-        // 5. Assignment Submissions
+        // 5. Assignment Submissions (excluding current submission being purged)
         if (submissionRepository == null) {
             log.error("Reference check failed: AssignmentSubmissionRepository is unavailable (null) for fileId={}", fileId);
             return ReferenceCheckResult.UNKNOWN;
         }
         try {
-            if (!submissionRepository.findByAnyFileUrlContaining(fileId).isEmpty()) {
+            List<com.zoroacademy.entity.AssignmentSubmission> subs = submissionRepository.findByAnyFileUrlContaining(fileId);
+            boolean referencedInOtherSub = subs.stream()
+                    .anyMatch(sub -> excludeSubmissionId == null || !java.util.Objects.equals(sub.getId(), excludeSubmissionId));
+            if (referencedInOtherSub) {
                 return ReferenceCheckResult.REFERENCED;
             }
         } catch (Exception e) {

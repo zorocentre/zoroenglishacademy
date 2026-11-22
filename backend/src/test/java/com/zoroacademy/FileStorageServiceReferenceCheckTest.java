@@ -31,6 +31,7 @@ public class FileStorageServiceReferenceCheckTest {
     private ExpenseRepository expenseRepository;
     private CompetitionRegistrationRepository registrationRepository;
     private CompetitionModuleRepository competitionModuleRepository;
+    private SystemSettingRepository systemSettingRepository;
 
     private FileStorageService fileStorageService;
 
@@ -47,6 +48,7 @@ public class FileStorageServiceReferenceCheckTest {
         expenseRepository = mock(ExpenseRepository.class);
         registrationRepository = mock(CompetitionRegistrationRepository.class);
         competitionModuleRepository = mock(CompetitionModuleRepository.class);
+        systemSettingRepository = mock(SystemSettingRepository.class);
 
         fileStorageService = new FileStorageService(
                 storedFileRepository,
@@ -61,6 +63,7 @@ public class FileStorageServiceReferenceCheckTest {
                 registrationRepository,
                 competitionModuleRepository
         );
+        fileStorageService.setSystemSettingRepository(systemSettingRepository);
     }
 
     @Test
@@ -188,5 +191,112 @@ public class FileStorageServiceReferenceCheckTest {
         ReferenceCheckResult result = fileStorageService.checkEntityReferences(fileId, "public/course-resources/res.pdf");
         assertEquals(ReferenceCheckResult.UNKNOWN, result);
         assertTrue(fileStorageService.isReferencedInApplicationEntities(fileId, "public/course-resources/res.pdf"));
+    }
+
+    @Test
+    @DisplayName("Regression Test 1: Bunny deletion failure preserves recoverable metadata")
+    void testBunnyDeletionFailurePreservesRecoverableMetadata() {
+        String fileId = "recoverable-file-1";
+        String path = "private/docs/rec.pdf";
+        StoredFile sf = new StoredFile(fileId, "rec.pdf", "application/pdf", 1024L, "document", "user-1", path, false, "sha256", 1);
+
+        when(storedFileRepository.findById(fileId)).thenReturn(Optional.of(sf));
+        when(storedFileRepository.countByStoragePath(path)).thenReturn(1L);
+        when(assessmentQuestionRepository.findByMediaRefContaining(fileId)).thenReturn(Collections.emptyList());
+        when(studyMaterialRepository.findByStoredFileId(fileId)).thenReturn(Collections.emptyList());
+        when(syllabusRepository.findByStoredFileId(fileId)).thenReturn(Collections.emptyList());
+        when(attemptAnswerRepository.findByVoiceFileIdOrAudioFileId(fileId, fileId)).thenReturn(Collections.emptyList());
+        when(submissionRepository.findByAnyFileUrlContaining(fileId)).thenReturn(Collections.emptyList());
+        when(courseResourceRepository.findByFileUrlContaining(fileId)).thenReturn(Collections.emptyList());
+
+        // Simulate Bunny deletion failure
+        doThrow(new RuntimeException("Bunny CDN 503 Service Unavailable")).when(storageProvider).delete(path);
+
+        fileStorageService.deleteFile(fileId);
+
+        // Verification: StoredFile database record MUST NOT be deleted!
+        verify(storedFileRepository, never()).delete(any(StoredFile.class));
+        // Durable failure tracking MUST be saved in SystemSetting!
+        verify(systemSettingRepository, times(1)).save(argThat(s ->
+                s.getSettingKey().equals("cleanup.failed." + fileId) && s.getSettingValue().contains(path)));
+
+        // Also verify StoragePurgeListener on post-commit failure restores metadata
+        com.zoroacademy.listener.StoragePurgeListener listener = new com.zoroacademy.listener.StoragePurgeListener(
+                storageProvider, mock(com.zoroacademy.service.BunnyStreamService.class), storedFileRepository, systemSettingRepository
+        );
+        com.zoroacademy.event.StorageFilePurgeEvent event = new com.zoroacademy.event.StorageFilePurgeEvent(fileId, path, sf);
+        when(storedFileRepository.existsById(fileId)).thenReturn(false);
+
+        listener.onFilePurge(event);
+
+        verify(storedFileRepository, times(1)).save(sf);
+    }
+
+    @Test
+    @DisplayName("Regression Test 2: Missing FileStorageService protects files")
+    void testMissingFileStorageServiceProtectsFiles() {
+        // StorageCleanupService instantiated with null FileStorageService
+        com.zoroacademy.service.StorageCleanupService cleanupService = new com.zoroacademy.service.StorageCleanupService(
+                storedFileRepository,
+                storageProvider,
+                null, // FileStorageService is NULL
+                mock(com.zoroacademy.repository.CourseRepository.class),
+                mock(com.zoroacademy.repository.CourseModuleRepository.class),
+                mock(com.zoroacademy.repository.ScheduleRepository.class),
+                mock(com.zoroacademy.repository.AssignmentRepository.class),
+                submissionRepository,
+                mock(com.zoroacademy.repository.UserRepository.class),
+                mock(com.zoroacademy.repository.CompetitionRepository.class),
+                mock(com.zoroacademy.repository.WebsiteSettingsRepository.class),
+                mock(com.zoroacademy.repository.VideoRepository.class),
+                mock(com.zoroacademy.service.BunnyStreamService.class),
+                systemSettingRepository,
+                mock(com.zoroacademy.repository.HeroImageRepository.class),
+                mock(com.zoroacademy.repository.FeedbackMediaRepository.class),
+                assessmentQuestionRepository,
+                attemptAnswerRepository,
+                studyMaterialRepository,
+                syllabusRepository,
+                mock(com.zoroacademy.repository.CompetitionGuidanceVideoRepository.class),
+                courseResourceRepository,
+                expenseRepository,
+                registrationRepository,
+                competitionModuleRepository
+        );
+
+        StoredFile sf = new StoredFile("file-null-service", "test.png", "image/png", 500L, "image", "admin", "public/test.png", true, "hash", 1);
+        sf.setCreatedAt(OffsetDateTime.now().minusHours(500));
+        when(storedFileRepository.findAll()).thenReturn(List.of(sf));
+        when(storedFileRepository.countByStoragePath("public/test.png")).thenReturn(1L);
+
+        // When FileStorageService is null, isFileSharedOutsideSubmission must return true (protected)
+        assertTrue(cleanupService.isFileSharedOutsideSubmission("file-null-service", "sub-1", "public/test.png"));
+
+        // During cleanup scan, file is protected
+        com.zoroacademy.dto.CleanupResultDto result = cleanupService.runCleanup(false, 168, true);
+        assertEquals(0, result.getOrphanedFilesDeleted());
+        verify(storageProvider, never()).delete(anyString());
+        verify(storedFileRepository, never()).delete(any(StoredFile.class));
+    }
+
+    @Test
+    @DisplayName("Regression Test 3: UNKNOWN protects files")
+    void testUnknownProtectsFiles() {
+        String fileId = "file-unknown-status";
+        String path = "public/unknown/file.png";
+        StoredFile sf = new StoredFile(fileId, "file.png", "image/png", 100L, "image", "admin", path, true, "hash", 1);
+
+        when(storedFileRepository.findById(fileId)).thenReturn(Optional.of(sf));
+        // Force UNKNOWN via DB exception
+        when(assessmentQuestionRepository.findByMediaRefContaining(fileId)).thenThrow(new RuntimeException("DB down"));
+
+        ReferenceCheckResult result = fileStorageService.checkEntityReferences(fileId, path);
+        assertEquals(ReferenceCheckResult.UNKNOWN, result);
+        assertTrue(fileStorageService.isReferencedInApplicationEntities(fileId, path), "UNKNOWN must always mean PROTECTED");
+
+        fileStorageService.deleteFile(fileId);
+
+        verify(storageProvider, never()).delete(anyString());
+        verify(storedFileRepository, never()).delete(any(StoredFile.class));
     }
 }
